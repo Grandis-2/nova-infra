@@ -49,7 +49,7 @@ resource "random_password" "user" {
 }
 
 # ── DB ───────────────────────────────────────────────────────
-# 이미지(세대 · 엔진 버전)와 사양(타입 · vCPU · 메모리)을 NCP 목록에서 고른다
+# 이미지(세대 · 엔진 버전)와 사양(타입 · 이름)을 NCP 목록에서 고른다
 data "ncloud_mysql_image_products" "this" {
   filter {
     name   = "generation_code"
@@ -73,15 +73,14 @@ locals {
 data "ncloud_mysql_products" "this" {
   image_product_code = local.mysql_image.product_code
 
+  # 콘솔에 보이는 사양 이름과 정확히 같은 것 하나를 고른다
   filter {
     name   = "product_type"
     values = [var.server_type]
   }
-  # 사양 코드 예: SVR.VDBAS.STAND.C002.M008.NET...  (C = vCPU 수, M = 메모리 GB)
   filter {
-    name   = "product_code"
-    values = [format("\\.C%03d\\.M%03d\\.", var.vcpu, var.memory_gb)]
-    regex  = true
+    name   = "product_name"
+    values = [var.product_name]
   }
 
   lifecycle {
@@ -91,7 +90,7 @@ data "ncloud_mysql_products" "this" {
     }
     postcondition {
       condition     = length(self.product_list) == 1
-      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB 사양이 ${length(self.product_list)}개입니다 (1개여야 합니다)."
+      error_message = "사양 이름 '${var.product_name}' 에 맞는 ${var.generation} ${var.server_type} 사양이 ${length(self.product_list)}개입니다 (1개여야 합니다). 후보: ${join(", ", [for p in self.product_list : "${p.product_name} (${p.product_code})"])}"
     }
   }
 }

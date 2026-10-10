@@ -10,7 +10,7 @@ variable "zone" {
   default     = "KR-2"
 }
 
-# 서버 사양 — 세대 · 타입 · vCPU · 메모리로 NCP 사양 목록에서 고른다 (사양 코드를 손으로 적지 않는다)
+# 서버 사양 — 세대 · 타입 · 사양 이름으로 NCP 사양 목록에서 고른다 (사양 코드를 손으로 적지 않는다)
 # max_connections 가 메모리에 비례하므로 태스크 수 × Hikari 풀(기본 10)보다 커야 한다.
 variable "generation" {
   description = "서버 세대. G3 는 스토리지가 CB2 다"
@@ -24,14 +24,10 @@ variable "server_type" {
   default     = "STAND"
 }
 
-variable "vcpu" {
-  type    = number
-  default = 2
-}
-
-variable "memory_gb" {
-  type    = number
-  default = 8
+variable "product_name" {
+  description = "사양 이름. 콘솔 · ncloud_mysql_products 의 product_name 과 정확히 같아야 한다 (AMD 모델은 이름이 다르다)"
+  type        = string
+  default     = "vCPU 2EA, Memory 8GB"
 }
 
 variable "engine_version_prefix" {
