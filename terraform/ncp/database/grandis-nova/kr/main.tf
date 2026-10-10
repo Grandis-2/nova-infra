@@ -49,11 +49,11 @@ resource "random_password" "user" {
 }
 
 # ── DB ───────────────────────────────────────────────────────
-# 이미지와 사양을 NCP 목록에서 조건으로 고른다 (코드를 손으로 적지 않는다).
-#   이미지: 세대(G3) · MySQL 버전대(8.4.x) 최신 · AMD 제외
-#   사양  : 타입(STAND) · vCPU · 메모리 · AMD 제외
-# provider(ncloud 4.0.7)의 filter 블록은 여러 개면 OR 로 합쳐지고, 숫자 필드(cpu_count · memory_size)는 맞추지 못한다.
-# 그래서 provider filter 는 문자열 필드 하나만 쓰고, 나머지 조건은 아래 locals 에서 AND 로 건다.
+# NCP 목록을 조회해 조건에 맞는 첫 번째 이미지 · 사양을 쓴다 (코드를 손으로 적지 않는다).
+#   이미지: G3 · MySQL 8.4.x
+#   사양  : STAND · vCPU 2 · 메모리 8GB · AMD 아님 (AMD 모델은 이름에 "(AMD)", 코드에 ".AMD." 가 붙는다)
+# provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드를 맞추지 못한다.
+# 그래서 provider filter 는 문자열 하나만 쓰고 나머지 조건은 locals 에서 건다.
 data "ncloud_mysql_image_products" "this" {
   filter {
     name   = "generation_code"
@@ -62,17 +62,9 @@ data "ncloud_mysql_image_products" "this" {
 }
 
 locals {
-  _is_amd_image = { for i in data.ncloud_mysql_image_products.this.image_product_list : i.product_code =>
-    can(regex("(?i)amd", "${i.product_name} ${i.product_code} ${i.platform_type} ${i.os_information}"))
-  }
-  _image_candidates = [for i in data.ncloud_mysql_image_products.this.image_product_list : i
-    if startswith(i.engine_version_code, "${var.engine_version_prefix}.") && (var.allow_amd || !local._is_amd_image[i.product_code])
-  ]
-  # 버전을 자리마다 0 으로 채워 비교한다 (8.4.10 > 8.4.9)
-  _image_by_version = { for i in local._image_candidates :
-    join("", [for n in split(".", i.engine_version_code) : format("%05d", tonumber(n))]) => i...
-  }
-  mysql_image = try(local._image_by_version[reverse(sort(keys(local._image_by_version)))[0]][0], null)
+  mysql_image = try([for i in data.ncloud_mysql_image_products.this.image_product_list : i
+    if startswith(i.engine_version_code, "${var.engine_version_prefix}.")
+  ][0], null)
 }
 
 data "ncloud_mysql_products" "this" {
@@ -86,19 +78,15 @@ data "ncloud_mysql_products" "this" {
   lifecycle {
     precondition {
       condition     = local.mysql_image != null
-      error_message = "${var.generation} 세대에 MySQL ${var.engine_version_prefix}.x 이미지${var.allow_amd ? "" : "(AMD 제외)"}가 없습니다. 이미지 목록: ${join(", ", [for i in data.ncloud_mysql_image_products.this.image_product_list : "${i.product_name} (${i.product_code}, ${i.engine_version_code})"])}"
+      error_message = "${var.generation} 세대에 MySQL ${var.engine_version_prefix}.x 이미지가 없습니다. 이미지 목록: ${join(", ", [for i in data.ncloud_mysql_image_products.this.image_product_list : "${i.product_name} (${i.engine_version_code})"])}"
     }
   }
 }
 
 locals {
-  # 실제 목록 형식: "vCPU 2EA, Memory 8GB (AMD)" / SVR.VDBAS.AMD.STAND.C002.M008.NET.SSD.B050.G003
-  # 이름 · 코드의 코어 · 메모리 · AMD 표시가 모두 맞는 것 하나를 고른다
-  mysql_products = [for p in data.ncloud_mysql_products.this.product_list : p
-    if p.product_name == "vCPU ${var.vcpu}EA, Memory ${var.memory_gb}GB"
-    && strcontains(p.product_code, format(".C%03d.M%03d.", var.vcpu, var.memory_gb))
-    && (var.allow_amd || !strcontains(p.product_code, ".AMD."))
-  ]
+  mysql_product = try([for p in data.ncloud_mysql_products.this.product_list : p
+    if p.product_name == "vCPU ${var.vcpu}EA, Memory ${var.memory_gb}GB" && !strcontains(p.product_code, ".AMD.")
+  ][0], null)
 }
 
 resource "ncloud_mysql" "this" {
@@ -107,7 +95,7 @@ resource "ncloud_mysql" "this" {
   subnet_no          = ncloud_subnet.db.id
 
   image_product_code  = local.mysql_image.product_code
-  product_code        = try(one(local.mysql_products).product_code, null) # 하나가 아니면 아래 precondition 이 후보를 보여 준다
+  product_code        = try(local.mysql_product.product_code, null) # 없으면 아래 precondition 이 사양 목록을 보여 준다
   engine_version_code = local.mysql_image.engine_version_code
   port                = var.port
 
@@ -124,8 +112,8 @@ resource "ncloud_mysql" "this" {
 
   lifecycle {
     precondition {
-      condition     = length(local.mysql_products) == 1
-      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB${var.allow_amd ? "" : "(AMD 제외)"} 사양이 ${length(local.mysql_products)}개입니다 (1개여야 합니다). 이미지 ${local.mysql_image.product_name} 의 사양 목록: ${join(", ", [for p in data.ncloud_mysql_products.this.product_list : "${p.product_name} (${p.product_code})"])}"
+      condition     = local.mysql_product != null
+      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB (AMD 아님) 사양이 없습니다. 사양 목록: ${join(", ", [for p in data.ncloud_mysql_products.this.product_list : "${p.product_name} (${p.product_code})"])}"
     }
     precondition {
       condition     = length(local.nat_ips) > 0

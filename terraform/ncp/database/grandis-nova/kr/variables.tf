@@ -10,7 +10,7 @@ variable "zone" {
   default     = "KR-2"
 }
 
-# 서버 사양 — 세대 · 타입 · vCPU · 메모리로 NCP 사양 목록에서 고른다 (사양 코드를 손으로 적지 않는다)
+# 서버 사양 — 세대 · 타입 · vCPU · 메모리로 NCP 목록을 조회해 처음 맞는 것을 쓴다 (사양 코드를 손으로 적지 않는다)
 # max_connections 가 메모리에 비례하므로 태스크 수 × Hikari 풀(기본 10)보다 커야 한다.
 variable "generation" {
   description = "서버 세대. G3 는 스토리지가 CB2 다"
@@ -36,14 +36,8 @@ variable "memory_gb" {
   default     = 8
 }
 
-variable "allow_amd" {
-  description = "false 면 AMD 이미지 · 사양을 빼고 x86 을 쓴다"
-  type        = bool
-  default     = false
-}
-
 variable "engine_version_prefix" {
-  description = "MySQL 엔진 버전. 이 접두사에 맞는 가장 최신 이미지를 쓴다 (앱은 8.4 기준)"
+  description = "MySQL 엔진 버전대. 이 접두사에 맞는 첫 번째 이미지를 쓴다 (앱은 8.4 기준)"
   type        = string
   default     = "8.4"
 }
