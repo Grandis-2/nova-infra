@@ -1,0 +1,17 @@
+.env
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+# 평문 비밀 — 암호화한 *.sops.yaml / *.sops.yml 만 커밋한다
+secrets.yaml
+*.dec.yaml
+*.dec.yml
+# 서비스 비밀 원문. 암호화한 secrets.sops.yml 만 커밋한다 (scripts/app-secrets.sh)
+terraform/application/*/secret.yml
+# validate-all 이 모듈 폴더에 만드는 잠금 파일 (모듈은 잠금 파일을 쓰지 않는다)
+terraform/**/_modules/**/.terraform.lock.hcl

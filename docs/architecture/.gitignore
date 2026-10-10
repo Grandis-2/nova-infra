@@ -1,0 +1,3 @@
+# archify 원본(json)과 인터랙티브 HTML 은 로컬에만 둔다. README 에 쓰는 img/*.png 만 올린다
+*.json
+*.html
