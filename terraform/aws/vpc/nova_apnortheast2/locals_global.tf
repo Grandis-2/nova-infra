@@ -1,0 +1,1 @@
+../../../variables/locals_global.tf
