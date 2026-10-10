@@ -28,9 +28,26 @@ if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
 fi
 echo "실행 주체: $(aws sts get-caller-identity --query Arn --output text)"
 
-# 이미 부트스트랩된 계정이면 할 일이 없다 (상태도 이미 S3 에 있다)
+migrate() {
+  terraform -chdir="$dir" init -migrate-state \
+    -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+    -backend-config="region=${TF_BACKEND_REGION:-ap-northeast-2}"
+}
+
+# 버킷과 init 스택 상태가 모두 S3 에 있으면 이미 끝난 것이다.
+# 버킷만 있으면 지난 실행이 상태 이전(2단계)에서 멈춘 것이므로 로컬 상태를 마저 옮긴다.
+state_key="$(sed -n 's/^ *key *= *"\(.*\)"/\1/p' "$dir/backend.tf")"
 if aws s3api head-bucket --bucket "$TF_BACKEND_BUCKET" 2>/dev/null; then
-  echo "상태 버킷 ${TF_BACKEND_BUCKET} 이 이미 있습니다. 이후 변경은 scripts/tf.sh aws/init/grandis-nova 로 합니다."
+  if aws s3api head-object --bucket "$TF_BACKEND_BUCKET" --key "$state_key" >/dev/null 2>&1; then
+    echo "상태 버킷 ${TF_BACKEND_BUCKET} 과 init 상태가 이미 있습니다. 이후 변경은 scripts/tf.sh aws/init/grandis-nova 로 합니다."
+    exit 0
+  fi
+  [[ -f "$dir/terraform.tfstate" ]] || {
+    echo "상태 버킷은 있는데 init 상태(${state_key})가 S3 에도 로컬에도 없습니다. 직접 확인하세요." >&2
+    exit 1
+  }
+  echo "상태 버킷은 있지만 init 상태가 S3 에 없습니다. 로컬 상태를 옮깁니다."
+  migrate
   exit 0
 fi
 
@@ -45,9 +62,7 @@ echo
 echo "2) init 스택의 상태를 S3 로 옮깁니다."
 mv "$dir/backend.tf.disabled" "$dir/backend.tf"
 trap - EXIT
-terraform -chdir="$dir" init -migrate-state \
-  -backend-config="bucket=${TF_BACKEND_BUCKET}" \
-  -backend-config="region=${TF_BACKEND_REGION:-ap-northeast-2}"
+migrate
 
 echo
 echo "완료했습니다. 이제부터는 scripts/tf.sh <스택> <명령> 을 쓰세요."
