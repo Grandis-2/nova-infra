@@ -33,7 +33,9 @@ resource "aws_secretsmanager_secret_version" "service" {
 
   secret_id = aws_secretsmanager_secret.service[each.key].id
 
-  # write-only 라 값이 상태 파일에 남지 않는다. 파일 해시로 버전을 정해 암호문이 바뀔 때만 다시 쓴다
+  # write-only 라 값이 상태 파일에 남지 않는다. 파일 해시로 버전을 정해 암호문이 바뀔 때만 다시 쓴다.
+  # 해시 앞 15자리(60비트)를 쓴다 — 정수(int64) 범위 안에서 겹칠 확률을 사실상 없앤다.
+  # sops 는 다시 암호화할 때마다 암호문이 바뀌므로, 값이 같아도 재암호화하면 한 번 다시 쓴다
   secret_string_wo         = jsonencode(ephemeral.sops_file.service[each.key].data)
-  secret_string_wo_version = parseint(substr(filesha256(each.value), 0, 8), 16)
+  secret_string_wo_version = parseint(substr(filesha256(each.value), 0, 15), 16)
 }

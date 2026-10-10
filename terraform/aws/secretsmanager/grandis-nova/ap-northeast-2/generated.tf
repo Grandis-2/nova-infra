@@ -19,6 +19,17 @@ locals {
   version_of = { for id in concat(keys(local._gen_by_type), [for n in local.shared_secrets : "shared/${n}"]) : id => lookup(var.secret_versions, id, 1) }
 }
 
+# secret_versions 에 오타 키가 있으면 아무 비밀도 바뀌지 않고 조용히 넘어간다. plan 을 멈춰 알린다.
+# (변수 validation 에서 local.version_of 를 참조하면 순환 의존이 되므로 여기서 확인한다)
+resource "terraform_data" "secret_versions_check" {
+  lifecycle {
+    precondition {
+      condition     = length(setsubtract(keys(var.secret_versions), keys(local.version_of))) == 0
+      error_message = "secret_versions 에 없는 비밀 키가 있습니다: ${join(", ", setsubtract(keys(var.secret_versions), keys(local.version_of)))}. 키는 \"<서비스>/<환경변수>\" 또는 \"shared/<이름>\" 입니다."
+    }
+  }
+}
+
 ephemeral "tls_private_key" "rsa" {
   for_each = local._rsa
 
