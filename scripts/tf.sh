@@ -42,7 +42,7 @@ fi
 # 도중에 AccessDenied 로 멈추는 일을 없앤다. 최초 구축 때만 TF_ALLOW_LOCAL_WRITE=1 로 푼다.
 case "${1:-} ${2:-}" in
   "apply "* | "destroy "* | "import "* | "taint "* | "untaint "* | "force-unlock "* | \
-    "state mv" | "state rm" | "state push" | "state replace-provider")
+    "state mv" | "state rm" | "state push" | "state replace-provider" | "workspace new" | "workspace delete")
     if [[ "${TF_ALLOW_LOCAL_WRITE:-0}" != "1" ]]; then
       echo "로컬에서는 '$1' 을 실행할 수 없습니다. PR 을 올려 Atlantis 로 적용하세요." >&2
       echo "(최초 구축 같은 예외에만 TF_ALLOW_LOCAL_WRITE=1 을 쓰세요)" >&2

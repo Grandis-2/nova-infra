@@ -260,7 +260,8 @@ resource "aws_iam_role_policy" "flow" {
         "logs:PutLogEvents",
         "logs:DescribeLogStreams",
       ]
-      Resource = "${aws_cloudwatch_log_group.flow[0].arn}:*"
+      # DescribeLogStreams 는 로그 그룹 ARN, 나머지는 스트림(:*)에 권한을 확인한다
+      Resource = [aws_cloudwatch_log_group.flow[0].arn, "${aws_cloudwatch_log_group.flow[0].arn}:*"]
     }]
   })
 }

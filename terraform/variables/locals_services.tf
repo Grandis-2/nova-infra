@@ -37,10 +37,10 @@ locals {
       contains(["sign", "verify", "none"], try(s.jwt, "none")) ? "" : "jwt 는 sign | verify | none",
       try(s.deployment, "rolling") != "blue_green" || length(try(s.routes, [])) > 0 ? "" : "blue_green 은 routes 가 필요",
       length(try(s.routes, [])) == 0 || can(tonumber(s.health.port)) ? "" : "routes 가 있으면 health(port, path) 가 필요",
-      [for r in try(s.routes, []) : length(r.paths) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
+      [for r in try(s.routes, []) : length(try(r.paths, [])) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
       [for p, to in try(s.calls, {}) : contains(keys(local._service_raw), to) ? "" : "calls 의 '${to}' 는 없는 서비스"],
       [for p, to in try(s.calls, {}) : try(tonumber(local._service_raw[to].port), 0) > 0 ? "" : "calls 의 '${to}' 는 포트가 없는 서비스(port: 0)"],
-      [for r in try(s.routes, []) : length([for x in local._all_priorities : x if x == try(r.priority, -1)]) > 1 ? "route priority ${r.priority} 가 다른 규칙과 겹침" : ""],
+      [for r in try(s.routes, []) : can(tonumber(r.priority)) && length([for x in local._all_priorities : x if x == try(r.priority, -1)]) > 1 ? "route priority ${try(r.priority, "?")} 가 다른 규칙과 겹침" : ""],
       [for e in try(local.secret_keys[k], []) : can(regex("^[A-Z_][A-Z0-9_]*$", e)) ? "" : "secrets.sops.yml 의 키 '${e}' 는 환경변수 이름(대문자, 숫자, _)이어야 함"],
       [for e, t in try(s.generated_secrets, {}) : can(regex("^[A-Z_][A-Z0-9_]*$", e)) ? "" : "generated_secrets 의 키 '${e}' 는 환경변수 이름이어야 함"],
       [for e, t in try(s.generated_secrets, {}) : can(regex("^(rsa-2048|random-48|admin-bcrypt|shared/[a-z0-9-]+)$", t)) ? "" : "generated_secrets 의 ${e}: rsa-2048 | random-48 | admin-bcrypt | shared/<이름> 중 하나여야 함"],
@@ -78,8 +78,8 @@ locals {
         matcher = try(tostring(s.health.matcher), "200")
       }, null)
       routes = [for r in try(s.routes, []) : {
-        priority = tonumber(r.priority)
-        paths    = [for p in r.paths : tostring(p)]
+        priority = try(tonumber(r.priority), -1) # 빠지면 위 검사가 폴더 이름과 함께 알린다
+        paths    = [for p in try(r.paths, []) : tostring(p)]
         methods  = [for m in try(r.methods, []) : tostring(m)]
       }]
 

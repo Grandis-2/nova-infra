@@ -37,8 +37,8 @@ for k, v in doc.items():
         bad.append(f"  {name}: {k} — 환경변수 이름(대문자, 숫자, _)이어야 합니다")
     elif k in reserved or k.endswith(("_DATASOURCE_USERNAME", "_DATASOURCE_PASSWORD")):
         bad.append(f"  {name}: {k} — 인프라가 넣는 이름이라 쓸 수 없습니다")
-    if isinstance(v, (dict, list)):
-        bad.append(f"  {name}: {k} — 값은 문자열이어야 합니다")
+    if not isinstance(v, str):
+        bad.append(f"  {name}: {k} — 값은 문자열이어야 합니다 (숫자 · true 는 따옴표로 감싸고, 빈 값은 쓸 수 없습니다)")
 if bad:
     sys.exit("\n".join(bad))
 PY
@@ -66,7 +66,9 @@ decrypt() {
   for s in "$@"; do
     [[ -e "$(enc "$s")" ]] || { echo "없음: $(rel "$(enc "$s")")" >&2; exit 1; }
     [[ -e "$(plain "$s")" ]] && { echo "이미 있습니다: $(rel "$(plain "$s")") — 지우고 다시 실행하세요" >&2; exit 1; }
-    (umask 077 && sops decrypt "$(enc "$s")" >"$(plain "$s")")
+    # 실패하면 빈 secret.yml 이 남아 다음 실행을 막으므로 임시 파일에 먼저 푼다
+    (umask 077 && sops decrypt "$(enc "$s")" >"$(plain "$s").tmp") || { rm -f "$(plain "$s").tmp"; echo "복호화에 실패했습니다: $s" >&2; exit 1; }
+    mv "$(plain "$s").tmp" "$(plain "$s")"
     echo "풀었습니다: $(rel "$(plain "$s")") (git 에 올라가지 않습니다)"
   done
 }

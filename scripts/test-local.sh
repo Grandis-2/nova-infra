@@ -124,6 +124,8 @@ declare -A stack_dir=(
 )
 
 rm -rf "$work/_application" && cp -r "$root/terraform/application" "$work/_application"
+# 모듈 복사본은 매 실행마다 새로 만든다 (스택을 골라 돌릴 때 옛 모듈로 시험하지 않게)
+rm -rf "$work/_mods"
 find "$work/_application" \( -name 'secrets.sops.yml' -o -name 'secret.yml' \) -delete
 
 for stack in "${stacks[@]}"; do
@@ -154,7 +156,8 @@ output "db_port" { value = 3306 }
 output "app_secret_arns" { value = { for k, s in aws_secretsmanager_secret.service : k => s.arn } }
 TF
   else
-    cp -rL "$src/." "$dst/" 2>/dev/null
+    [[ -d "$src" ]] || { echo "== $stack"; echo "   FAIL  스택 폴더가 없습니다: $src"; fail=1; continue; }
+    cp -rL "$src/." "$dst/" 2>/dev/null || { echo "== $stack"; echo "   FAIL  복사에 실패했습니다: $src"; fail=1; continue; }
   fi
   # 함께 복사된 .terraform 은 지운다. init 이 캐시에서 링크한다
   rm -rf "$dst/.terraform"

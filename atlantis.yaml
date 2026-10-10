@@ -38,7 +38,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -49,7 +49,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../_modules/sops/*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../_modules/sops/*.tf"]
       enabled: true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -60,7 +60,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -71,7 +71,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/*/*.yml", "../_modules/service/*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/*/*.yml", "../_modules/service/*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -82,7 +82,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -93,7 +93,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../_modules/queue/*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../_modules/queue/*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -104,7 +104,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../application/*/*.yml"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../application/*/*.yml"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -115,7 +115,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -126,7 +126,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../application/*/*.yml"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../application/*/*.yml"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -137,7 +137,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../aws/provider.tf", "../../../../application/*/*.yml"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../aws/provider.tf", "../../../../application/*/*.yml"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -148,7 +148,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -159,7 +159,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -170,7 +170,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/*/*.yml", "../_modules/task_role/*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/*/*.yml", "../_modules/task_role/*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -181,7 +181,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -192,7 +192,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../_modules/service/*.tf", "../../../application/*/*.yml"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../_modules/service/*.tf", "../../../application/*/*.yml"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -203,7 +203,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -214,7 +214,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/*/*.yml"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/*/*.yml"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
@@ -225,6 +225,6 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
