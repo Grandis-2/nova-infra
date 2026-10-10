@@ -24,7 +24,7 @@
 # 스택은 PR 하나에 층 하나씩 올린다. 아직 레포에 올리지 않은 스택은 autoplan 을 꺼 둔다 —
 # 켜 두면 공용 파일이 바뀐 PR 에서 Atlantis 가 없는 폴더까지 plan 하려다 실패한다. 그 스택을 올리는 PR 에서 true 로 바꾼다.
 version: 3
-automerge: false
+automerge: true # atlantis apply 가 모든 프로젝트에서 성공하면 PR 을 자동으로 병합한다
 parallel_plan: false # Atlantis 태스크 메모리가 작아 plan 을 하나씩 돌린다
 parallel_apply: false
 abort_on_execution_order_fail: true # 아래층 apply 가 실패하면 위층은 적용하지 않는다
