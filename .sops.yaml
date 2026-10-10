@@ -1,0 +1,6 @@
+# 앱 비밀은 common KMS 키와 nova-sops-common 역할로 암호화한다.
+# 값은 kms 스택 출력과 같다: ./scripts/tf.sh aws/kms/grandis-nova/ap-northeast-2 output sops_kms
+creation_rules:
+  # terraform/application/<서비스>/secrets.sops.yml (서비스 비밀)
+  - path_regex: terraform/.*secrets\.sops\.ya?ml$
+    kms: "arn:aws:kms:ap-northeast-2:316708313927:key/53c9d965-2df9-4016-9a0a-b67f86cf7204+arn:aws:iam::316708313927:role/nova-sops-common"
