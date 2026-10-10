@@ -51,9 +51,9 @@ resource "random_password" "user" {
 # ── DB ───────────────────────────────────────────────────────
 # NCP 목록을 조회해 조건에 맞는 첫 번째 이미지 · 사양을 쓴다 (코드를 손으로 적지 않는다).
 #   이미지: G3 · MySQL 8.4.x
-#   사양  : STAND · vCPU 2 · 메모리 8GB · AMD 아님 (AMD 모델은 이름에 "(AMD)", 코드에 ".AMD." 가 붙는다)
+#   사양  : 코드에 .STAND. · vCPU 2 · 메모리 8GB · AMD 아님 (AMD 모델은 이름에 "(AMD)", 코드에 ".AMD." 가 붙는다)
 # provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드를 맞추지 못한다.
-# 그래서 provider filter 는 문자열 하나만 쓰고 나머지 조건은 locals 에서 건다.
+# 그래서 이미지는 문자열 필터 하나(generation_code)만 쓰고, 나머지 조건은 locals 에서 건다.
 data "ncloud_mysql_image_products" "this" {
   filter {
     name   = "generation_code"
@@ -67,13 +67,10 @@ locals {
   ][0], null)
 }
 
+# 사양은 provider filter 없이 전체를 받아 locals 에서 고른다.
+# product_type = STAND 로 거르면 AMD 사양만 나왔다 (x86 사양은 product_type 값이 STAND 가 아니다)
 data "ncloud_mysql_products" "this" {
   image_product_code = try(local.mysql_image.product_code, "")
-
-  filter {
-    name   = "product_type"
-    values = [var.server_type]
-  }
 
   lifecycle {
     precondition {
@@ -84,8 +81,11 @@ data "ncloud_mysql_products" "this" {
 }
 
 locals {
+  # Standard 여부는 product_type 대신 코드의 .STAND. 로 판단한다
   mysql_product = try([for p in data.ncloud_mysql_products.this.product_list : p
-    if p.product_name == "vCPU ${var.vcpu}EA, Memory ${var.memory_gb}GB" && !strcontains(p.product_code, ".AMD.")
+    if p.product_name == "vCPU ${var.vcpu}EA, Memory ${var.memory_gb}GB"
+    && strcontains(p.product_code, ".${var.server_type}.")
+    && !strcontains(p.product_code, ".AMD.")
   ][0], null)
 }
 
@@ -113,7 +113,7 @@ resource "ncloud_mysql" "this" {
   lifecycle {
     precondition {
       condition     = local.mysql_product != null
-      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB (AMD 아님) 사양이 없습니다. 사양 목록: ${join(", ", [for p in data.ncloud_mysql_products.this.product_list : "${p.product_name} (${p.product_code})"])}"
+      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB (AMD 아님) 사양이 없습니다. 사양 목록: ${join(", ", [for p in data.ncloud_mysql_products.this.product_list : "${p.product_name} (${p.product_code}, type=${p.product_type})"])}"
     }
     precondition {
       condition     = length(local.nat_ips) > 0

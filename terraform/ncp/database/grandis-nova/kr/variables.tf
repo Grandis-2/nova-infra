@@ -19,7 +19,7 @@ variable "generation" {
 }
 
 variable "server_type" {
-  description = "사양 타입 (STAND = Standard)"
+  description = "사양 타입. 사양 코드에 들어가는 이름 (STAND = Standard)"
   type        = string
   default     = "STAND"
 }
