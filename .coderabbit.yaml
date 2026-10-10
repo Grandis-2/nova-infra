@@ -62,6 +62,9 @@ reviews:
         - calls 는 Spring 속성 이름: 서비스 키 형식이다. 대상 서비스가 있고 port 가 0 이 아닌지 본다
         - application.yml 에 비밀 값이나 localhost 가 들어가면 안 된다. 비밀은 ${ENV} 자리표시로만 쓴다
         - image_tag 의 커밋 해시는 따옴표로 감싼다
+        의도한 설계라 지적하지 않는 것.
+        - deploy: false 인 서비스를 calls 로 부르는 것. 서비스는 담당자가 설정을 채우는 대로 하나씩 켠다 (단계적 배포).
+          이 경우는 ecs 스택 config.tf 의 check 블록이 plan 경고로 알리고, 보안 그룹 규칙은 미리 만들어 둔다
     - path: "scripts/**/*.sh"
       instructions: |
         Bash 스크립트. set -euo pipefail 을 쓰고, 로컬은 읽기 전용(plan 까지)이다.
