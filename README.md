@@ -141,7 +141,7 @@ Atlantis 서버는 별도 저장소 **[Grandis-2/atlantis-deploy](https://github
 ```
 ├── atlantis.yaml              스택별 Atlantis 프로젝트
 ├── docs/architecture/         아키텍처 그림
-├── scripts/                   tf.sh(로컬 plan), validate-all.sh, test-local.sh(floci), app-secrets.sh
+├── scripts/                   tf.sh(로컬 plan), validate-all.sh(전체 검사), link-global.sh(새 스택), app-secrets.sh(외부 비밀)
 └── terraform/
     ├── application/<서비스>/  service.yml(인프라), application.yml(Spring 설정)
     ├── variables/             공용 변수, 서비스 목록
@@ -169,6 +169,5 @@ Atlantis 서버는 별도 저장소 **[Grandis-2/atlantis-deploy](https://github
 ```bash
 cp .env.example .env
 ./scripts/tf.sh aws/vpc/nova_apnortheast2 plan   # 로컬은 plan까지
-./scripts/validate-all.sh                        # 전체 스택 검사
-./scripts/test-local.sh                          # floci 에뮬레이터에 apply (요금 없음)
+./scripts/validate-all.sh                        # PR 전에 전체 스택 fmt · validate
 ```

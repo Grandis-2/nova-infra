@@ -31,7 +31,7 @@ abort_on_execution_order_fail: true # 아래층 apply 가 실패하면 위층은
 
 projects:
 
-  # 상태 저장 버킷. scripts/bootstrap.sh 로 한 번만 적용한다
+  # 상태 저장 버킷. 최초 생성은 관리자가 직접 했다 (terraform/aws/init/grandis-nova/backend.tf 주석)
   - name: init
     dir: terraform/aws/init/grandis-nova
     execution_order_group: 0
