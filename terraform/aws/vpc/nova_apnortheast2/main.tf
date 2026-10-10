@@ -253,16 +253,19 @@ resource "aws_iam_role_policy" "flow" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogStreams",
-      ]
-      # DescribeLogStreams 는 로그 그룹 ARN, 나머지는 스트림(:*)에 권한을 확인한다
-      Resource = [aws_cloudwatch_log_group.flow[0].arn, "${aws_cloudwatch_log_group.flow[0].arn}:*"]
-    }]
+    # 액션마다 권한을 확인하는 리소스가 다르다 — 스트림 생성 · 조회는 로그 그룹, 기록은 로그 스트림
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:DescribeLogStreams"]
+        Resource = [aws_cloudwatch_log_group.flow[0].arn, "${aws_cloudwatch_log_group.flow[0].arn}:*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:PutLogEvents"]
+        Resource = "${aws_cloudwatch_log_group.flow[0].arn}:log-stream:*"
+      },
+    ]
   })
 }
 
