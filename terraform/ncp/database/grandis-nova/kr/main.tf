@@ -52,8 +52,10 @@ resource "random_password" "user" {
 # NCP 목록을 조회해 조건에 맞는 첫 번째 이미지 · 사양을 쓴다 (코드를 손으로 적지 않는다).
 #   이미지: G3 · MySQL 8.4.x
 #   사양  : 코드에 .STAND. · vCPU 2 · 메모리 8GB · AMD 아님 (AMD 모델은 이름에 "(AMD)", 코드에 ".AMD." 가 붙는다)
-# provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드를 맞추지 못한다.
-# 그래서 이미지는 문자열 필터 하나(generation_code)만 쓰고, 나머지 조건은 locals 에서 건다.
+# 사양 목록은 이미지마다 다르다 (한 이미지에 AMD 사양만 있을 수 있다). 그래서 조건에 맞는 이미지를 모두 조회해
+# AMD 가 아닌 사양이 있는 첫 이미지를 고른다.
+# provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드를 맞추지 못하며, product_type = STAND 는
+# AMD 사양만 돌려준다. 그래서 이미지는 문자열 필터 하나(generation_code)만 쓰고, 나머지 조건은 locals 에서 건다.
 data "ncloud_mysql_image_products" "this" {
   filter {
     name   = "generation_code"
@@ -62,31 +64,31 @@ data "ncloud_mysql_image_products" "this" {
 }
 
 locals {
-  mysql_image = try([for i in data.ncloud_mysql_image_products.this.image_product_list : i
+  # 같은 이미지 코드가 여러 번 나오므로 코드로 중복을 없앤다 (조회 순서 유지)
+  _image_codes = distinct([for i in data.ncloud_mysql_image_products.this.image_product_list : i.product_code
     if startswith(i.engine_version_code, "${var.engine_version_prefix}.")
-  ][0], null)
+  ])
 }
 
-# 사양은 provider filter 없이 전체를 받아 locals 에서 고른다.
-# product_type = STAND 로 거르면 AMD 사양만 나왔다 (x86 사양은 product_type 값이 STAND 가 아니다)
 data "ncloud_mysql_products" "this" {
-  image_product_code = try(local.mysql_image.product_code, "")
-
-  lifecycle {
-    precondition {
-      condition     = local.mysql_image != null
-      error_message = "${var.generation} 세대에 MySQL ${var.engine_version_prefix}.x 이미지가 없습니다. 이미지 목록: ${join(", ", [for i in data.ncloud_mysql_image_products.this.image_product_list : "${i.product_name} (${i.engine_version_code})"])}"
-    }
-  }
+  for_each           = toset(local._image_codes)
+  image_product_code = each.value
 }
 
 locals {
-  # Standard 여부는 product_type 대신 코드의 .STAND. 로 판단한다
-  mysql_product = try([for p in data.ncloud_mysql_products.this.product_list : p
+  # 이미지 순서대로, 각 이미지에서 조건에 맞는 사양을 찾는다
+  _matches = flatten([for code in local._image_codes : [
+    for p in data.ncloud_mysql_products.this[code].product_list : { image_code = code, product = p }
     if p.product_name == "vCPU ${var.vcpu}EA, Memory ${var.memory_gb}GB"
     && strcontains(p.product_code, ".${var.server_type}.")
     && !strcontains(p.product_code, ".AMD.")
+  ]])
+  mysql_match = try(local._matches[0], null)
+  # 고른 이미지의 엔진 버전 (같은 이미지 코드 중 첫 항목)
+  mysql_image = try([for i in data.ncloud_mysql_image_products.this.image_product_list : i
+    if i.product_code == local.mysql_match.image_code && startswith(i.engine_version_code, "${var.engine_version_prefix}.")
   ][0], null)
+  mysql_product = try(local.mysql_match.product, null)
 }
 
 resource "ncloud_mysql" "this" {
@@ -94,9 +96,9 @@ resource "ncloud_mysql" "this" {
   server_name_prefix = "${var.product}-db"
   subnet_no          = ncloud_subnet.db.id
 
-  image_product_code  = local.mysql_image.product_code
+  image_product_code  = try(local.mysql_image.product_code, null)
   product_code        = try(local.mysql_product.product_code, null) # 없으면 아래 precondition 이 사양 목록을 보여 준다
-  engine_version_code = local.mysql_image.engine_version_code
+  engine_version_code = try(local.mysql_image.engine_version_code, null)
   port                = var.port
 
   is_ha                 = var.is_ha # HA 는 서버 2대(요금 2배)
@@ -113,7 +115,7 @@ resource "ncloud_mysql" "this" {
   lifecycle {
     precondition {
       condition     = local.mysql_product != null
-      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB (AMD 아님) 사양이 없습니다. 사양 목록: ${join(", ", [for p in data.ncloud_mysql_products.this.product_list : "${p.product_name} (${p.product_code}, type=${p.product_type})"])}"
+      error_message = "${var.generation} MySQL ${var.engine_version_prefix}.x 이미지 ${length(local._image_codes)}개 중 ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB (AMD 아님) 사양이 있는 이미지가 없습니다. 이미지별 AMD 아닌 사양: ${join(" / ", [for code in local._image_codes : "${code}: ${join(", ", [for p in data.ncloud_mysql_products.this[code].product_list : p.product_name if !strcontains(p.product_code, ".AMD.")])}"])}"
     }
     precondition {
       condition     = length(local.nat_ips) > 0
