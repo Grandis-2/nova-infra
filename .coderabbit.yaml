@@ -19,6 +19,8 @@ reviews:
     enabled: true
     drafts: false
     ignore_title_keywords: ["WIP"]
+    # skip-review 라벨이 붙은 PR 은 자동 리뷰하지 않는다 (필요하면 댓글로 @coderabbitai review)
+    labels: ["!skip-review"]
 
   path_filters:
     # 리뷰할 필요가 없는 파일
