@@ -1,0 +1,125 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit 리뷰 설정. 스키마: https://coderabbit.ai/integrations/schema.v2.json
+language: ko-KR
+tone_instructions: "한국어로 간결하게. 지적마다 실제로 무엇이 깨지는지와 근거(문서, 코드 위치)를 함께 적는다."
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  poem: false
+  in_progress_fortune: false
+  suggested_labels: false
+  suggested_reviewers: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords: ["WIP"]
+
+  path_filters:
+    # 리뷰할 필요가 없는 파일
+    - "!docs/architecture/img/**"
+    - "!**/.terraform.lock.hcl"
+    - "!**/secrets.sops.yml"
+    # 스택 폴더의 공용 파일은 terraform/variables · terraform/<aws|ncp> 를 가리키는 심볼릭 링크다. 원본만 리뷰한다
+    - "!terraform/*/*/**/provider.tf"
+    - "!terraform/*/*/**/version.tf"
+    - "!terraform/*/*/**/provider_us_east_1.tf"
+    - "!terraform/*/*/**/var_global.tf"
+    - "!terraform/*/*/**/locals_global.tf"
+    - "!terraform/*/*/**/locals_services.tf"
+    - "!terraform/*/*/**/remote_state_global.tf"
+    - "!terraform/*/*/**/global.auto.tfvars"
+
+  path_instructions:
+    - path: "terraform/**/*.tf"
+      instructions: |
+        AWS(ap-northeast-2) · NCP 인프라를 Terraform 1.16, AWS provider 6 으로 관리한다. 변경은 PR 에서 Atlantis 가 plan/apply 한다.
+        다음을 우선 본다.
+        - 기존 리소스가 교체(replace)되거나 삭제될 수 있는 변경: 이름 · 식별자 변경, for_each 키 변경, ForceNew 인자
+        - 최소 권한: IAM 정책의 와일드카드 Action/Resource, 보안 그룹의 0.0.0.0/0 인바운드, 필요 이상으로 넓은 포트
+        - 비밀: 평문 비밀 · 키 · 비밀번호를 코드나 상태 파일에 남기지 않는다. 생성 비밀은 ephemeral 리소스와 write-only 속성(*_wo)을 쓴다
+        - AWS 리소스의 description · 태그 값처럼 AWS 로 보내는 문자열은 ASCII 만 쓴다. 코드 주석은 한국어다
+        - 다른 스택 출력은 terraform/variables/remote_state_global.tf 의 local.remote_state 로 읽는다
+        의도한 설계라 지적하지 않는 것.
+        - 서비스 간 내부 통신은 HTTP 다 (Service Connect TLS 를 쓰지 않음)
+        - DB 는 NCP Cloud DB 이고 NAT 고정 IP 와 TLS 로만 접근한다
+        - VPC 인터페이스 엔드포인트와 Flow Logs 는 비용 때문에 기본으로 끈다
+        - ECS 는 Fargate Spot 만 쓴다
+        - ALB 는 public 이지만 CloudFront prefix list 와 CloudFront 가 붙이는 비밀 헤더가 있는 요청만 받는다
+        - 업로드 이미지 CDN(cdn 스택)에는 WAF 를 붙이지 않는다
+    - path: "terraform/application/**"
+      instructions: |
+        서비스 하나 = 폴더 하나. service.yml 은 terraform/variables/locals_services.tf 가 검증하고 읽는다.
+        - service.yml 의 필드가 locals_services.tf 의 _service_fields 와 검증 규칙에 맞는지 본다
+        - routes 의 priority 가 다른 서비스와 겹치지 않는지, paths + methods 가 4개 이하인지 본다
+        - calls 는 Spring 속성 이름: 서비스 키 형식이다. 대상 서비스가 있고 port 가 0 이 아닌지 본다
+        - application.yml 에 비밀 값이나 localhost 가 들어가면 안 된다. 비밀은 ${ENV} 자리표시로만 쓴다
+        - image_tag 의 커밋 해시는 따옴표로 감싼다
+    - path: "scripts/**/*.sh"
+      instructions: |
+        Bash 스크립트. set -euo pipefail 을 쓰고, 로컬은 읽기 전용(plan 까지)이다.
+        - tf.sh 의 쓰기 명령 차단을 우회하는 경로가 생기지 않는지 본다
+        - 비밀 원문을 다루는 곳은 umask 077 과 임시 파일을 쓰고, 실패 시 원문을 남기지 않는지 본다
+        - 사용자에게 보이는 메시지는 한국어다
+    - path: "terraform/**/*.tfvars"
+      instructions: |
+        커밋하는 설정 값이다. 비밀(비밀번호, 키, 토큰)이 들어가면 안 된다. 값 변경이 리소스 교체를 부르는지 본다.
+    - path: "atlantis.yaml"
+      instructions: |
+        스택 하나 = Atlantis 프로젝트 하나. 다음을 본다.
+        - when_modified 가 그 스택의 *.tf, *.tfvars, .terraform.lock.hcl, 공용 변수, 쓰는 _modules 와 application 파일을 모두 포함하는지
+        - execution_order_group 이 스택 의존 순서와 맞는지
+        - 아직 레포에 올리지 않은 스택은 autoplan enabled: false 가 맞다 (의도)
+        - apply_requirements 가 [mergeable] 인 것은 혼자 운영하는 동안의 의도다 (TODO 주석 참고)
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+      requirements: "Conventional Commits 형식 '<type>(<스택>): <한글 요약>'. type 은 feat, fix, docs, chore, refactor, test, ci 중 하나. 예: feat(securitygroup): 서비스 정의와 보안 그룹 추가"
+    description:
+      mode: warning
+    issue_assessment:
+      mode: "off"
+    custom_checks:
+      - name: "Jira 티켓"
+        mode: warning
+        instructions: "PR 제목이나 본문에 Jira 티켓 키(NV-숫자, 예: Refs: NV-372)가 있는지 확인한다. 없으면 실패로 본다."
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+  tools:
+    shellcheck:
+      enabled: true
+    tflint:
+      enabled: true
+    checkov:
+      enabled: true
+    trivy:
+      enabled: true
+    gitleaks:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  jira:
+    usage: auto
+    project_keys: ["NV"]
