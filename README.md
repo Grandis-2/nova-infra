@@ -134,7 +134,7 @@ Atlantis 서버는 별도 저장소 **[Grandis-2/atlantis-deploy](https://github
 - **변경은 PR로만**: 로컬은 읽기 전용(plan까지)이고, apply는 Atlantis만 합니다.
 - **비밀은 Terraform이 생성**: write-only 속성이라 상태 파일에 남지 않습니다. 외부 키만 sops로 암호화합니다.
 - **최소 권한**: 서비스마다 보안 그룹과 태스크 역할을 따로 두고, `service.yml`에 적은 것만 허용합니다.
-- **비용 절감**: Fargate Spot, NAT 인스턴스(fck-nat), NCP DB를 씁니다. ECS와 캐시는 평일 낮에만 띄웁니다.
+- **비용 절감**: Fargate Spot, NAT 인스턴스(fck-nat), NCP DB를 씁니다.
 
 ## 구조
 
