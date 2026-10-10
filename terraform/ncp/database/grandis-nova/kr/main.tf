@@ -51,11 +51,10 @@ resource "random_password" "user" {
 # ── DB ───────────────────────────────────────────────────────
 # NCP 목록을 조회해 조건에 맞는 첫 번째 이미지 · 사양을 쓴다 (코드를 손으로 적지 않는다).
 #   이미지: G3 · MySQL 8.4.x
-#   사양  : 코드에 .STAND. · vCPU 2 · 메모리 8GB · AMD 아님 (AMD 모델은 이름에 "(AMD)", 코드에 ".AMD." 가 붙는다)
-# 사양 목록은 이미지마다 다르다 (한 이미지에 AMD 사양만 있을 수 있다). 그래서 조건에 맞는 이미지를 모두 조회해
-# AMD 가 아닌 사양이 있는 첫 이미지를 고른다.
-# provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드를 맞추지 못하며, product_type = STAND 는
-# AMD 사양만 돌려준다. 그래서 이미지는 문자열 필터 하나(generation_code)만 쓰고, 나머지 조건은 locals 에서 건다.
+#   사양  : 코드의 .STAND.C002.M008. (Standard · vCPU 2 · 메모리 8GB). AMD 아닌 모델 우선, 없으면 AMD 모델
+# 사양 목록은 이미지마다 다르므로 조건에 맞는 이미지를 모두 조회한다.
+# provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드(cpu_count · memory_size)를 맞추지 못한다.
+# 그래서 이미지는 문자열 필터 하나(generation_code)만 쓰고, 나머지 조건은 locals 에서 건다.
 data "ncloud_mysql_image_products" "this" {
   filter {
     name   = "generation_code"
@@ -76,14 +75,17 @@ data "ncloud_mysql_products" "this" {
 }
 
 locals {
-  # 이미지 순서대로, 각 이미지에서 조건에 맞는 사양을 찾는다
+  # 이미지 순서대로 STAND · vCPU · 메모리가 맞는 사양을 모은다. AMD 아닌 모델을 먼저 쓰고, 없으면 같은 사양의 AMD 모델을 쓴다
+  # (G3 · MySQL 8.4 이미지에는 AMD 모델만 있다: "vCPU 2EA, Memory 8GB (AMD)" / SVR.VDBAS.AMD.STAND.C002.M008...)
   _matches = flatten([for code in local._image_codes : [
     for p in data.ncloud_mysql_products.this[code].product_list : { image_code = code, product = p }
-    if p.product_name == "vCPU ${var.vcpu}EA, Memory ${var.memory_gb}GB"
-    && strcontains(p.product_code, ".${var.server_type}.")
-    && !strcontains(p.product_code, ".AMD.")
+    if strcontains(p.product_code, ".${var.server_type}.${format("C%03d.M%03d", var.vcpu, var.memory_gb)}.")
   ]])
-  mysql_match = try(local._matches[0], null)
+  mysql_match = try(
+    [for m in local._matches : m if !strcontains(m.product.product_code, ".AMD.")][0],
+    local._matches[0],
+    null,
+  )
   # 고른 이미지의 엔진 버전 (같은 이미지 코드 중 첫 항목)
   mysql_image = try([for i in data.ncloud_mysql_image_products.this.image_product_list : i
     if i.product_code == local.mysql_match.image_code && startswith(i.engine_version_code, "${var.engine_version_prefix}.")
@@ -115,7 +117,7 @@ resource "ncloud_mysql" "this" {
   lifecycle {
     precondition {
       condition     = local.mysql_product != null
-      error_message = "${var.generation} MySQL ${var.engine_version_prefix}.x 이미지 ${length(local._image_codes)}개 중 ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB (AMD 아님) 사양이 있는 이미지가 없습니다. 이미지별 AMD 아닌 사양: ${join(" / ", [for code in local._image_codes : "${code}: ${join(", ", [for p in data.ncloud_mysql_products.this[code].product_list : p.product_name if !strcontains(p.product_code, ".AMD.")])}"])}"
+      error_message = "${var.generation} MySQL ${var.engine_version_prefix}.x 이미지 ${length(local._image_codes)}개에 ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB 사양이 없습니다. 이미지별 사양: ${join(" / ", [for code in local._image_codes : "${code}: ${join(", ", [for p in data.ncloud_mysql_products.this[code].product_list : p.product_name])}"])}"
     }
     precondition {
       condition     = length(local.nat_ips) > 0
