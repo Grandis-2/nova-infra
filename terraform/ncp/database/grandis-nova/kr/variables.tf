@@ -10,19 +10,34 @@ variable "zone" {
   default     = "KR-2"
 }
 
-variable "product_code" {
-  description = <<-EOT
-    서버 사양 코드. null 이면 최소 사양. 목록은 ncloud_mysql_products 데이터 소스로 확인한다.
-    max_connections 가 메모리에 비례하므로 태스크 수 × Hikari 풀(기본 10)보다 커야 한다.
-  EOT
+# 서버 사양 — 세대 · 타입 · vCPU · 메모리로 NCP 사양 목록에서 고른다 (사양 코드를 손으로 적지 않는다)
+# max_connections 가 메모리에 비례하므로 태스크 수 × Hikari 풀(기본 10)보다 커야 한다.
+variable "generation" {
+  description = "서버 세대. G3 는 스토리지가 CB2 다"
   type        = string
-  default     = null
+  default     = "G3"
 }
 
-variable "engine_version_code" {
-  description = "MySQL 엔진 버전 코드. null 이면 NCP 기본값 (앱은 8.4 기준)"
+variable "server_type" {
+  description = "사양 타입 (STAND = Standard)"
   type        = string
-  default     = null
+  default     = "STAND"
+}
+
+variable "vcpu" {
+  type    = number
+  default = 2
+}
+
+variable "memory_gb" {
+  type    = number
+  default = 8
+}
+
+variable "engine_version_prefix" {
+  description = "MySQL 엔진 버전. 이 접두사에 맞는 가장 최신 이미지를 쓴다 (앱은 8.4 기준)"
+  type        = string
+  default     = "8.4"
 }
 
 variable "port" {

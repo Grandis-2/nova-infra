@@ -49,13 +49,61 @@ resource "random_password" "user" {
 }
 
 # ── DB ───────────────────────────────────────────────────────
+# 이미지(세대 · 엔진 버전)와 사양(타입 · vCPU · 메모리)을 NCP 목록에서 고른다
+data "ncloud_mysql_image_products" "this" {
+  filter {
+    name   = "generation_code"
+    values = [var.generation]
+  }
+  filter {
+    name   = "engine_version_code"
+    values = ["^${replace(var.engine_version_prefix, ".", "\\.")}\\."]
+    regex  = true
+  }
+}
+
+locals {
+  # 같은 버전대에서 가장 최신 엔진 (8.4.3 < 8.4.10 이 되도록 자리마다 비교)
+  _images = { for i in data.ncloud_mysql_image_products.this.image_product_list :
+    join("", [for n in split(".", i.engine_version_code) : format("%05d", tonumber(n))]) => i
+  }
+  mysql_image = try(local._images[reverse(sort(keys(local._images)))[0]], null)
+}
+
+data "ncloud_mysql_products" "this" {
+  image_product_code = local.mysql_image.product_code
+
+  filter {
+    name   = "product_type"
+    values = [var.server_type]
+  }
+  # 사양 코드 예: SVR.VDBAS.STAND.C002.M008.NET...  (C = vCPU 수, M = 메모리 GB)
+  filter {
+    name   = "product_code"
+    values = [format("\\.C%03d\\.M%03d\\.", var.vcpu, var.memory_gb)]
+    regex  = true
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.mysql_image != null
+      error_message = "${var.generation} 세대에 MySQL ${var.engine_version_prefix} 이미지가 없습니다. engine_version_prefix 를 확인하세요."
+    }
+    postcondition {
+      condition     = length(self.product_list) == 1
+      error_message = "${var.generation} ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB 사양이 ${length(self.product_list)}개입니다 (1개여야 합니다)."
+    }
+  }
+}
+
 resource "ncloud_mysql" "this" {
   service_name       = "${local.name_prefix}-mysql"
   server_name_prefix = "${var.product}-db"
   subnet_no          = ncloud_subnet.db.id
 
-  product_code        = var.product_code        # null = 최소 사양
-  engine_version_code = var.engine_version_code # null = 현재 기본 버전
+  image_product_code  = local.mysql_image.product_code
+  product_code        = data.ncloud_mysql_products.this.product_list[0].product_code
+  engine_version_code = local.mysql_image.engine_version_code
   port                = var.port
 
   is_ha                 = var.is_ha # HA 는 서버 2대(요금 2배)
