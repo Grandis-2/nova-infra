@@ -1,0 +1,35 @@
+# TODO(catalog 담당): 운영 값을 채우고 주석을 푼다. 주소와 비밀은 적지 않는다.
+#
+# spring:
+#   datasource:
+#     hikari:
+#       transaction-isolation: TRANSACTION_READ_COMMITTED   # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
+#       maximum-pool-size: 10                               # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+#   jpa:
+#     hibernate:
+#       ddl-auto: validate                                  # 스키마는 Flyway 가 만든다
+#     properties:
+#       hibernate:
+#         jdbc:
+#           time_zone: UTC
+#     open-in-view: false
+#   data:
+#     redis:
+#       timeout: 300ms
+#       connect-timeout: 200ms
+#       lettuce:
+#         pool:
+#           max-active: 16
+#           max-wait: 100ms
+#
+# jwt:
+#   issuer: nova
+#   audience: nova-api
+#   access-token-validity: 30m
+#   refresh-token-validity: 14d
+# nova:
+#   outbox:
+#     transport: sqs
+# cache:
+#   product-ttl: 10m
+#   price-ttl: 1m

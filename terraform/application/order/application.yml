@@ -1,0 +1,68 @@
+# TODO(order 담당): 운영 값을 채우고 주석을 푼다. 주소와 비밀은 적지 않는다.
+#
+# spring:
+#   datasource:
+#     hikari:
+#       transaction-isolation: TRANSACTION_READ_COMMITTED   # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
+#       maximum-pool-size: 10                               # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+#   jpa:
+#     hibernate:
+#       ddl-auto: validate                                  # 스키마는 Flyway 가 만든다
+#     properties:
+#       hibernate:
+#         jdbc:
+#           time_zone: UTC
+#     open-in-view: false
+#   data:
+#     redis:
+#       timeout: 300ms
+#       connect-timeout: 200ms
+#   http:
+#     serviceclient:
+#       preorder:
+#         connect-timeout: 300ms
+#         read-timeout: 1s
+#       payment:
+#         connect-timeout: 300ms
+#         read-timeout: 1s
+#       payment-confirm:
+#         connect-timeout: 300ms
+#         read-timeout: 70s
+#
+# jwt:
+#   issuer: nova
+#   audience: nova-api
+#   access-token-validity: 30m
+#   refresh-token-validity: 14d
+# nova:
+#   outbox:
+#     transport: sqs
+#     concurrency: 32
+#     relay-interval: 10s
+#     relay-after: 1m
+#     relay-batch: 100
+#     relay-lease: 1m
+#   sqs:
+#     api-call-timeout: 3s
+#     consumer:
+#       enabled: true
+#       queue: order-events
+#       concurrency: 1
+#       wait-seconds: 20
+#       visibility: 5m
+#       backoff-base: 5s
+#       backoff-max: 5m
+#       defer-first-delay: 60s
+#       defer-max-delay: 15m
+#       defer-alert-after: 24h
+#   payment-confirm:
+#     max-concurrency: 50
+# auth:
+#   revocation-check:
+#     fail-closed-paths:
+#       - /api/v1/admin/**
+#       - /api/v1/session/refresh
+#       - /api/v1/me/**
+#       - /api/v1/orders/*/payment-attempts/**
+#       - POST /api/v1/orders/*/cancel
+#       - PATCH /api/v1/orders/*/shipping-address

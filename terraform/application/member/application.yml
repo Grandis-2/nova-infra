@@ -1,0 +1,70 @@
+# TODO(member 담당): 운영 값을 채우고 주석을 푼다. 주소와 비밀은 적지 않는다.
+#
+# spring:
+#   datasource:
+#     hikari:
+#       transaction-isolation: TRANSACTION_READ_COMMITTED   # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
+#       maximum-pool-size: 10                               # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+#   jpa:
+#     hibernate:
+#       ddl-auto: validate                                  # 스키마는 Flyway 가 만든다
+#     properties:
+#       hibernate:
+#         jdbc:
+#           time_zone: UTC
+#     open-in-view: false
+#   data:
+#     redis:
+#       timeout: 300ms
+#       connect-timeout: 200ms
+#       lettuce:
+#         pool:
+#           max-active: 16
+#           max-wait: 100ms
+#
+# jwt:
+#   issuer: nova
+#   audience: nova-api
+#   access-token-validity: 30m
+#   refresh-token-validity: 14d
+#   key-id: 2026-09-k1
+# server:
+#   # none 으로 고정한다. 비워 두면 Boot 가 클라우드 환경을 감지해 X-Forwarded-For 를 고쳐 쓰고,
+#   # 관리자 로그인 시도 제한이 IP 를 잘못 판정한다
+#   forward-headers-strategy: none
+#
+# kakao:
+#   client-id: CHANGE_ME             # TODO: 카카오 REST API 키 (비밀 아님). client-secret 은 Secrets Manager 에 둔다
+#   token-uri: https://kauth.kakao.com/oauth/token
+#   user-info-uri: https://kapi.kakao.com/v2/user/me
+#   allowed-redirect-uris:
+#     - https://www.grandis-nova.link/login/kakao/callback
+#   connect-timeout: 2s
+#   read-timeout: 5s
+#
+# admin:
+#   username: admin                  # password-hash 는 Secrets Manager 에 둔다 (ADMIN_PASSWORDHASH)
+#
+# member:
+#   refresh-cleanup:
+#     cron: "0 */10 * * * *"
+#     batch-size: 1000
+#     max-batches-per-run: 100
+#
+# auth:
+#   admin-login-limit:
+#     max-attempts: 5
+#     max-total-attempts: 60
+#     window: 1m
+#     trusted-proxy-hops: 2          # CloudFront → ALB
+#   cookie:
+#     secure: true
+#   refresh:
+#     allowed-origins:
+#       - https://www.grandis-nova.link
+#   revocation-check:
+#     fail-closed-paths:
+#       - /api/v1/admin/**
+#       - /api/v1/session/refresh
+#       - /api/v1/me/**
+#

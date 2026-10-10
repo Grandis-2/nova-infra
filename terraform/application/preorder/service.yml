@@ -1,0 +1,40 @@
+# 접수 · 순번 · 회차 · 배송 차수 (Core)
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
+cpu: 2048
+memory: 4096
+port: 8083
+management_port: 9083
+deployment: blue_green
+
+scaling:
+  desired: 1
+  min: 1
+  max: 5                      # 접수가 몰리면 가장 먼저 늘어난다
+
+health:
+  port: 9083
+  path: /actuator/health/readiness
+  matcher: "200"
+
+routes:
+  # preorder 의 외부 경로는 모두 이 두 접두어 아래다(배송 차수 · 회차 · 동기화 작업 · DLQ 포함)
+  # POST /api/v1/preorders 와 /api/v1/preorders/queue* 는 waitingroom(10, 11)이 먼저 받는다
+  - priority: 30
+    paths: ["/api/v1/preorders*", "/api/v1/admin/preorders*"]
+
+jwt: verify
+calls:
+  spring.http.serviceclient.catalog.base-url: catalog
+  spring.http.serviceclient.order.base-url: order
+  external.mock.base-url: mock
+db: shop
+redis: main
+
+queues:
+  send: [preorder-register, preorder-cancel, order-events, waitingroom-events]
+  consume: [preorder-events]
+  dlq: [preorder-events]          # DLQ 메시지를 DB 로 옮긴다
+
+# waitingroom 과 같은 값을 쓴다 (공유 시크릿 nova-prod/shared/waiting-token)
+generated_secrets:
+  WAITING_TOKEN_SECRET: shared/waiting-token

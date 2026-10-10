@@ -1,0 +1,38 @@
+# 대기열 입장 판정 + POST /api/v1/preorders 중계 (Spring Cloud Gateway)
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
+cpu: 2048
+memory: 4096
+port: 8085
+management_port: 9085          # 앱 기본값(WaitingroomDefaults)과 맞춘다
+deployment: blue_green
+
+scaling:
+  desired: 1
+  min: 1
+  max: 5                      # 대기열 트래픽을 직접 받는다
+
+health:
+  port: 9085
+  path: /actuator/health/readiness
+  matcher: "200"
+
+routes:
+  - priority: 10
+    paths: ["/api/v1/preorders/queue*", "/api/v1/admin/waitingroom*"]
+  # 접수(POST)만 대기열을 거친다. 조회(GET)는 같은 경로라도 preorder(30)가 받는다
+  - priority: 11
+    paths: ["/api/v1/preorders"]
+    methods: [POST]
+
+jwt: verify
+calls:
+  waitingroom.relay.preorder-uri: preorder
+redis: main                     # 전용 Redis 가 필요하면 elasticache clusters 에 추가하고 이 값을 바꾼다
+
+queues:
+  send: [preorder-events]
+  consume: [waitingroom-events]
+
+# preorder 와 같은 값을 쓴다 (공유 시크릿 nova-prod/shared/waiting-token)
+generated_secrets:
+  WAITING_TOKEN_SECRET: shared/waiting-token

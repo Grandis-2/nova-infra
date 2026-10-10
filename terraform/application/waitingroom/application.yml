@@ -1,0 +1,23 @@
+spring:
+  data:
+    redis:
+      # 명령 하나가 배분 회차(1초)를, 연결이 리더 리스(2초)를 넘겨 붙들지 않게(앱 기본값과 같다)
+      timeout: 500ms
+      connect-timeout: 1s
+# jwt.jwk-set-uri · jwk-set-allow-http 는 인프라가 member 주소로 채운다(service.yml 의 jwt: verify)
+jwt:
+  issuer: nova                  # member 와 같은 값이어야 검증이 통과한다
+  audience: nova-api
+waitingroom:
+  token:
+    # 입장권 · 대기 토큰 서명 키. preorder 의 nova.admission-ticket 과 같은 값이어야 접수가 통과한다
+    secret: ${WAITING_TOKEN_SECRET}
+    previous: ${WAITING_TOKEN_PREVIOUS:}
+    rollout-ends-at: ${WAITING_TOKEN_ROLLOUT_ENDS_AT:}
+  admission:
+    # 기본 입장 속도(초당 인원). 운영 중에는 관리자 API 로 바꾼다
+    global-credit: 150
+    product-cap: 150
+  schedule:
+    queue: waitingroom-events   # 회차 일정 수신
+    resync-queue: preorder-events  # 일정을 하나도 모를 때 재발행 요청

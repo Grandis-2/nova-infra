@@ -1,0 +1,10 @@
+# @Scheduled 작업을 돌리는 상시 앱. 항상 1개만 띄운다
+deploy: false                   # application.yml 을 채우면 true
+cpu: 512
+memory: 1024
+port: 0
+deployment: singleton           # 옛 태스크를 먼저 내려 같은 작업이 두 번 돌지 않게 한다
+
+db: shop
+extra_databases:
+  external_mock: external-mock.datasource    # 같은 DB 서버. batch 계정은 SELECT 만 할 수 있다
