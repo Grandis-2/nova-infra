@@ -219,64 +219,12 @@ resource "aws_vpc_endpoint" "interface" {
 }
 
 # ── Flow Logs (선택) ─────────────────────────────────────────
-resource "aws_cloudwatch_log_group" "flow" {
-  count = var.enable_flow_logs ? 1 : 0
+# 로그 그룹 · 전달 역할 · Flow Log 를 한 모듈로 묶는다. 역할은 이 Flow Log 만 쓰므로 iam 스택이 아니라 여기서 만든다
+module "flow_log" {
+  source = "../_modules/flow_log"
+  count  = var.enable_flow_logs ? 1 : 0
 
-  name              = "/aws/vpc/${local.name_prefix}"
+  name_prefix       = local.name_prefix
+  vpc_id            = aws_vpc.this.id
   retention_in_days = var.flow_log_retention_days
-}
-
-data "aws_iam_policy_document" "flow_assume" {
-  count = var.enable_flow_logs ? 1 : 0
-
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["vpc-flow-logs.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "flow" {
-  count = var.enable_flow_logs ? 1 : 0
-
-  name               = "${local.name_prefix}-vpc-flow-log"
-  assume_role_policy = data.aws_iam_policy_document.flow_assume[0].json
-}
-
-resource "aws_iam_role_policy" "flow" {
-  count = var.enable_flow_logs ? 1 : 0
-
-  name = "write-logs"
-  role = aws_iam_role.flow[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    # 액션마다 권한을 확인하는 리소스가 다르다 — 스트림 생성 · 조회는 로그 그룹, 기록은 로그 스트림
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["logs:CreateLogStream", "logs:DescribeLogStreams"]
-        Resource = [aws_cloudwatch_log_group.flow[0].arn, "${aws_cloudwatch_log_group.flow[0].arn}:*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["logs:PutLogEvents"]
-        Resource = "${aws_cloudwatch_log_group.flow[0].arn}:log-stream:*"
-      },
-    ]
-  })
-}
-
-resource "aws_flow_log" "this" {
-  count = var.enable_flow_logs ? 1 : 0
-
-  vpc_id               = aws_vpc.this.id
-  traffic_type         = "REJECT" # 비용을 줄이려고 차단된 트래픽만 남긴다
-  iam_role_arn         = aws_iam_role.flow[0].arn
-  log_destination      = aws_cloudwatch_log_group.flow[0].arn
-  log_destination_type = "cloud-watch-logs"
-
-  tags = { Name = "${local.name_prefix}-flow-log" }
 }

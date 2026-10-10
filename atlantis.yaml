@@ -60,7 +60,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../_modules/flow_log/*.tf"]
       enabled: true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
