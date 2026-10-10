@@ -3,7 +3,9 @@
 #            조회는 CloudFront(OAC)로만 한다. 버킷은 비공개
 #   log    : ALB, CloudFront 액세스 로그
 #
-# upload 버킷의 CloudFront 읽기 정책은 배포 ARN 이 필요해서 cdn 스택에서 붙인다.
+# upload 버킷의 정책(CloudFront 읽기 + 비TLS 요청 거부)은 cdn 스택이 붙인다. CloudFront 읽기 조건에 배포 ARN 이
+# 필요한데 cdn 이 s3 에 의존하므로 여기서는 만들 수 없다. 버킷 정책은 하나뿐이라 여기서 따로 붙이면 서로 덮어쓴다.
+# cdn 이 적용되기 전까지는 버킷이 비공개 · 업로드 권한 없음(uploads: true 인 서비스 없음) 상태라 노출 경로가 없다.
 
 data "aws_caller_identity" "current" {}
 
