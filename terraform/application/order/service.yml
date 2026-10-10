@@ -1,0 +1,37 @@
+# 주문 · 재고 · 결제 시도
+deploy: false                   # application.yml 을 채우면 true
+cpu: 1024
+memory: 2048
+port: 8084
+deployment: blue_green
+
+scaling:
+  desired: 1
+  min: 1
+  max: 4
+
+# TODO(order 담당): actuator 관리 포트가 생기면 /actuator/health/readiness 로 바꾼다.
+# 그 전까지는 HTTP 응답만 오면 정상으로 본다
+health:
+  port: 8084
+  path: /
+  matcher: "200-499"
+
+routes:
+  # 재고는 order 가 관리한다. catalog(50)의 /api/v1/admin/products* 보다 먼저 매칭한다
+  - priority: 20
+    paths: ["/api/v1/admin/products/*/stock"]
+  - priority: 40
+    paths: ["/api/v1/orders*", "/api/v1/admin/orders*"]
+
+jwt: verify
+calls:
+  spring.http.serviceclient.preorder.base-url: preorder
+  spring.http.serviceclient.payment.base-url: payment
+  spring.http.serviceclient.payment-confirm.base-url: payment
+db: shop
+redis: main                     # 토큰 폐기 여부 확인
+
+queues:
+  send: [payment-events, preorder-events, order-events]   # order-events 는 지연 재처리(defer)할 때 자기 큐에 다시 넣는다
+  consume: [order-events]

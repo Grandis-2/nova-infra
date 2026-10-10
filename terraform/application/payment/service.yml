@@ -1,0 +1,19 @@
+# 결제(토스). 외부에 노출하지 않고 order 만 /internal 로 호출한다
+deploy: false                   # application.yml 을 채우면 true
+cpu: 1024
+memory: 2048
+port: 8085
+deployment: rolling
+
+scaling:
+  desired: 1
+  min: 1
+  max: 3
+
+jwt: verify
+db: shop
+redis: main
+
+queues:
+  send: [order-events]
+  consume: [payment-events]

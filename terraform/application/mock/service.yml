@@ -1,0 +1,9 @@
+# 외부 예약 시스템 목업. 이미지(nova-mock)가 준비되면 deploy: true 로 바꾼다
+name: mock
+deploy: false
+cpu: 512
+memory: 1024
+port: 8081                      # external.mock.base-url 의 기본 포트
+deployment: rolling
+
+db: external_mock

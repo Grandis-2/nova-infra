@@ -1,0 +1,22 @@
+# SQS 소비 (웹 서버 없음)
+deploy: false                   # application.yml 을 채우면 true
+cpu: 1024
+memory: 2048
+port: 0
+deployment: rolling
+spot: true                      # 중단돼도 메시지가 큐에 남아 재처리된다
+
+scaling:
+  desired: 1
+  min: 1
+  max: 8                      # 큐 적체에 따라 늘었다가 1로 돌아온다
+  backlog:
+    queue: preorder-register
+    per_task: 50
+
+calls:
+  external.mock.base-url: mock
+db: shop
+
+queues:
+  consume: [preorder-register, preorder-cancel, notification]

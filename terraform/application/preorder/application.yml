@@ -1,0 +1,84 @@
+spring:
+  datasource:
+    hikari:
+      transaction-isolation: TRANSACTION_READ_COMMITTED   # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
+      maximum-pool-size: 10                               # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+  jpa:
+    hibernate:
+      ddl-auto: validate                                  # 스키마는 Flyway 가 만든다
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  data:
+    redis:
+      timeout: 300ms
+      connect-timeout: 200ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-wait: 100ms
+
+  threads:
+    virtual:
+      enabled: true
+  http:
+    serviceclient:
+      catalog:
+        connect-timeout: 300ms
+        read-timeout: 1s
+      order:
+        connect-timeout: 300ms
+        read-timeout: 1s
+jwt:
+  issuer: nova
+  audience: nova-api
+  access-token-validity: 30m
+  refresh-token-validity: 14d
+nova:
+  outbox:
+    transport: sqs
+    concurrency: 32
+    relay-interval: 10s
+    relay-after: 1m
+    relay-batch: 100
+    relay-lease: 1m
+  sqs:
+    api-call-timeout: 3s
+    consumer:
+      enabled: true
+      queue: preorder-events
+      concurrency: 1
+      wait-seconds: 20
+      visibility: 5m
+      backoff-base: 5s
+      backoff-max: 5m
+    dead-letter:
+      enabled: true
+      queue: preorder-events-dlq
+  admission-ticket:
+    secret: ${WAITING_TOKEN_SECRET}
+    previous: ${WAITING_TOKEN_PREVIOUS:}
+    rollout-ends-at: ${WAITING_TOKEN_ROLLOUT_ENDS_AT:}
+  metrics:
+    refresh-interval: 30s
+  external-mock:
+    scope: preorder
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        preorder.accept: true
+        preorder.events.handle: true
+        preorder.events.lag: true
+

@@ -1,0 +1,31 @@
+# 상품 · 옵션 · 카테고리 · 리뷰
+deploy: false                   # application.yml 을 채우면 true
+cpu: 1024
+memory: 2048
+port: 8082
+management_port: 9082          # 앱 기본값(CatalogDefaults)과 맞춘다
+deployment: blue_green
+
+scaling:
+  desired: 1
+  min: 1
+  max: 4
+
+health:
+  port: 9082
+  path: /actuator/health/readiness
+  matcher: "200"
+
+routes:
+  - priority: 50
+    paths: ["/api/v1/products*", "/api/v1/admin/products*", "/api/v1/reviews*", "/api/v1/categories*"]
+
+jwt: verify
+calls:
+  spring.http.serviceclient.order.base-url: order
+  spring.http.serviceclient.member.base-url: member
+db: shop
+redis: main
+
+queues:
+  send: [order-events, preorder-events]   # outbox
