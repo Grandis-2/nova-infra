@@ -16,7 +16,8 @@ locals {
       fileexists("${local.application_dir}/${k}/application.yml") ? file("${local.application_dir}/${k}/application.yml") : ""
     )
   }
-  _cfg_empty = [for k, t in local._cfg_text : k if try(yamldecode(t), null) == null]
+  # 주석뿐(null)이거나 빈 맵({})이면 비어 있는 것으로 본다
+  _cfg_empty = [for k, t in local._cfg_text : k if try(length(yamldecode(t)), 0) == 0]
 
   # 인프라가 정하는 값. yml 보다 우선한다
   _cfg_computed = {
