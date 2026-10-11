@@ -20,5 +20,10 @@ output "shared_secret_arns" {
 
 output "ops_secret_names" {
   description = "사람이 조회하는 운영 비밀 (관리자 세션: aws secretsmanager get-secret-value --secret-id <이름>)"
-  value       = [for s in aws_secretsmanager_secret.admin_password : s.name]
+  value       = concat([for s in aws_secretsmanager_secret.admin_password : s.name], [aws_secretsmanager_secret.grafana_admin.name])
+}
+
+output "grafana_admin_secret_arn" {
+  description = "관측 호스트(obs) Grafana admin 비밀번호. obs 역할만 읽는다 (실행 역할은 ops/* 를 읽지 못한다)"
+  value       = aws_secretsmanager_secret.grafana_admin.arn
 }

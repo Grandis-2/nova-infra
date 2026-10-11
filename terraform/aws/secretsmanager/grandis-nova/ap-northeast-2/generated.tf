@@ -16,7 +16,7 @@ locals {
   # "<서비스>/<키>" -> 시크릿 이름의 서비스 부분
   _gen_service = { for id, t in local._gen_by_type : id => local.services[split("/", id)[0]].name }
 
-  version_of = { for id in concat(keys(local._gen_by_type), [for n in local.shared_secrets : "shared/${n}"]) : id => lookup(var.secret_versions, id, 1) }
+  version_of = { for id in concat(keys(local._gen_by_type), [for n in local.shared_secrets : "shared/${n}"], [local.grafana_admin_version_key]) : id => lookup(var.secret_versions, id, 1) }
 }
 
 # secret_versions 에 오타 키가 있으면 아무 비밀도 바뀌지 않고 조용히 넘어간다. plan 을 멈춰 알린다.
@@ -25,7 +25,7 @@ resource "terraform_data" "secret_versions_check" {
   lifecycle {
     precondition {
       condition     = length(setsubtract(keys(var.secret_versions), keys(local.version_of))) == 0
-      error_message = "secret_versions 에 없는 비밀 키가 있습니다: ${join(", ", setsubtract(keys(var.secret_versions), keys(local.version_of)))}. 키는 \"<서비스>/<환경변수>\" 또는 \"shared/<이름>\" 입니다."
+      error_message = "secret_versions 에 없는 비밀 키가 있습니다: ${join(", ", setsubtract(keys(var.secret_versions), keys(local.version_of)))}. 키는 \"<서비스>/<환경변수>\", \"shared/<이름>\" 또는 \"${local.grafana_admin_version_key}\" 입니다."
     }
   }
 }
