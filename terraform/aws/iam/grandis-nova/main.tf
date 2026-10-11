@@ -35,7 +35,11 @@ data "aws_s3_bucket_policy" "upload" {
           && jsonencode(st.Principal) == jsonencode("*")
           && contains(flatten([st.Action]), "s3:*")
           && length(setsubtract([local.upload_bucket, "${local.upload_bucket}/*"], flatten([st.Resource]))) == 0
-          && contains(flatten([st.Condition.Bool["aws:SecureTransport"]]), "false"),
+          # 조건이 더 붙으면 거부 범위가 좁아지므로 SecureTransport=false 하나만 있어야 한다 (값은 문자열 · 배열 모두 허용)
+          && contains([
+            jsonencode({ Bool = { "aws:SecureTransport" = "false" } }),
+            jsonencode({ Bool = { "aws:SecureTransport" = ["false"] } }),
+          ], jsonencode(st.Condition)),
           false
         )
       ])
