@@ -33,6 +33,8 @@ locals {
       elasticache    = "elasticache" # aws/elasticache/nova_apnortheast2
       iam            = "iam"         # aws/iam/grandis-nova
       ecs            = "ecs"         # aws/ecs/nova_apnortheast2
+      cdn            = "cdn"         # aws/cdn/grandis-nova
+      edge           = "edge"        # aws/edge/grandis-nova
     } : name => merge(local.remote_state_defaults, { key = "${var.env}/${key}/terraform.tfstate" })
   }
 }

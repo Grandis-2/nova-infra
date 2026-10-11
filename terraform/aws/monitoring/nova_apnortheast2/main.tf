@@ -1,0 +1,284 @@
+# ─────────────────────────────────────────────────────────────
+# monitoring — 경보와 대시보드
+#
+# 경보는 사람이 바로 조치할 것만 만든다. 할 일 없는 경보는 무시하게 되고 진짜 장애를 놓친다.
+#
+#   사용자가 이미 아프다 : ALB 5xx, 응답 지연, 태스크 0개, CloudFront 5xx (edge.tf)
+#   곧 아파진다          : CPU, 큐 적체, Valkey (DB 는 NCP Cloud Insight 알림)
+#   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
+#   공격 · 차단          : WAF 차단 급증 (edge.tf)
+#
+# 경보는 SNS 토픽으로 모으고 Slack 채널로 보낸다 (slack.tf).
+# CloudFront · 글로벌 WAF 지표는 us-east-1 에만 있어 그 경보와 토픽은 us-east-1 에 둔다.
+# ─────────────────────────────────────────────────────────────
+
+locals {
+  alb_suffix    = data.terraform_remote_state.ecs.outputs.alb_arn_suffix
+  cluster_name  = data.terraform_remote_state.ecs.outputs.cluster_name
+  service_names = data.terraform_remote_state.ecs.outputs.service_names
+
+  queues         = data.terraform_remote_state.sqs.outputs.queues
+  sched_dlq_name = data.terraform_remote_state.sqs.outputs.scheduler_dlq.name
+
+  valkey_nodes = sort(flatten([for rg in data.aws_elasticache_replication_group.valkey : rg.member_clusters]))
+  valkey_alarms = {
+    cpu       = { metric = "EngineCPUUtilization", statistic = "Average", threshold = 80, periods = 3, description = "engine CPU above 80% (single thread)" }
+    memory    = { metric = "DatabaseMemoryUsagePercentage", statistic = "Maximum", threshold = 80, periods = 2, description = "memory above 80%. Evictions come next" }
+    evictions = { metric = "Evictions", statistic = "Sum", threshold = 0, periods = 1, description = "keys were evicted. Queue or session data may be lost" }
+  }
+}
+
+# 쓰기 엔드포인트에서 그룹 ID 를 얻어 노드 목록을 읽는다.
+# TLS 를 켜면 master.<그룹 ID>.<…>, 끄면 <그룹 ID>.<…> 형식이다
+data "aws_elasticache_replication_group" "valkey" {
+  for_each = data.terraform_remote_state.elasticache.outputs.redis_endpoints
+
+  replication_group_id = regex("^(?:master\\.)?([^.]+)\\.", each.value)[0]
+}
+
+resource "aws_sns_topic" "alerts" {
+  name = "${local.name_prefix}-alerts"
+
+  tags = { Name = "${local.name_prefix}-alerts" }
+}
+
+# ── 사용자가 이미 아프다 ─────────────────────────────────────
+resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
+  alarm_name          = "${local.name_prefix}-alb-5xx"
+  alarm_description   = "ALB is returning 5xx. Service errors or no healthy targets"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "HTTPCode_ELB_5XX_Count"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = var.alb_5xx_threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = { LoadBalancer = local.alb_suffix }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "latency" {
+  alarm_name          = "${local.name_prefix}-latency-p95"
+  alarm_description   = "Response time p95 is above the 500ms target"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "TargetResponseTime"
+  extended_statistic  = "p95"
+  period              = 300
+  evaluation_periods  = 2 # 한 번 튄 것으로는 울리지 않는다
+  threshold           = var.latency_p95_threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = { LoadBalancer = local.alb_suffix }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
+  for_each = data.terraform_remote_state.ecs.outputs.target_group_arn_suffixes
+
+  alarm_name          = "${local.name_prefix}-unhealthy-${each.key}"
+  alarm_description   = "Target group ${each.key} has unhealthy targets"
+  namespace           = "AWS/ApplicationELB"
+  metric_name         = "UnHealthyHostCount"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 3
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    LoadBalancer = local.alb_suffix
+    TargetGroup  = each.value
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+# 태스크가 하나도 없으면 트래픽이 없을 때는 다른 경보가 울리지 않는다 (기동 실패, Spot 회수, 이미지 오류)
+resource "aws_cloudwatch_metric_alarm" "no_running_tasks" {
+  for_each = local.service_names
+
+  alarm_name          = "${local.name_prefix}-${each.key}-no-tasks"
+  alarm_description   = "${each.value} has no running tasks. Check stopped task reasons and logs"
+  namespace           = "ECS/ContainerInsights"
+  metric_name         = "RunningTaskCount"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 5 # 배포 · singleton 재시작으로 잠깐 0 이 되는 것은 넘긴다
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching" # 지표가 끊긴 것도 태스크가 없는 것으로 본다
+
+  dimensions = {
+    ClusterName = local.cluster_name
+    ServiceName = each.value
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+# ── 곧 아파진다 ──────────────────────────────────────────────
+resource "aws_cloudwatch_metric_alarm" "service_cpu" {
+  for_each = local.service_names
+
+  alarm_name          = "${local.name_prefix}-${each.key}-cpu"
+  alarm_description   = "${each.value} CPU has been high for a while. Check whether it hit the scaling max"
+  namespace           = "AWS/ECS"
+  metric_name         = "CPUUtilization"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = 85
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    ClusterName = local.cluster_name
+    ServiceName = each.value
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+# DB 는 NCP 에 있어 CloudWatch 지표가 없다. NCP Cloud Insight 알림(CPU, 디스크, 연결 수)으로 본다.
+
+# Valkey: 대기열 · 세션이 여기 있다. 메모리가 차서 키가 밀려나면(eviction) 대기 순번이 사라진다
+resource "aws_cloudwatch_metric_alarm" "valkey" {
+  for_each = {
+    # 노드 ID(nova-prod-valkey-001)에 이미 접두사가 있다
+    for p in setproduct(local.valkey_nodes, keys(local.valkey_alarms)) : "${p[0]}-${p[1]}" => {
+      node = p[0]
+      spec = local.valkey_alarms[p[1]]
+    }
+  }
+
+  alarm_name          = each.key
+  alarm_description   = "${each.value.node}: ${each.value.spec.description}"
+  namespace           = "AWS/ElastiCache"
+  metric_name         = each.value.spec.metric
+  statistic           = each.value.spec.statistic
+  period              = 300
+  evaluation_periods  = each.value.spec.periods
+  threshold           = each.value.spec.threshold
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = { CacheClusterId = each.value.node }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "queue_age" {
+  for_each = local.queues
+
+  alarm_name          = "${local.name_prefix}-${each.key}-age"
+  alarm_description   = "Oldest message age is above the threshold. Consumers are falling behind"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = var.queue_age_threshold_seconds
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = { QueueName = each.value.name }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+# ── 조용히 실패했다 ──────────────────────────────────────────
+# DLQ 메시지는 재시도를 모두 실패한 것이므로 한 건만 쌓여도 알린다.
+resource "aws_cloudwatch_metric_alarm" "dlq" {
+  for_each = merge(
+    { for k, q in local.queues : k => q.dlq_name },
+    { scheduler = local.sched_dlq_name },
+  )
+
+  alarm_name          = "${local.name_prefix}-${each.key}-dlq"
+  alarm_description   = "${each.value} has messages. Find the cause, then redrive"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = { QueueName = each.value }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+}
+
+# 배치 태스크가 비정상 종료하면 알린다. batch 가 멈추면 만료 처리가 통째로 서지만
+# ECS 가 새로 띄우므로 겉으로는 잘 드러나지 않는다.
+#
+# group 으로 배치 서비스만 거르고, 배포 때 정상 종료 코드(143 = SIGTERM)는 뺀다.
+# 거르지 않으면 롤링 배포 때마다 경보가 울린다.
+resource "aws_cloudwatch_event_rule" "batch_failure" {
+  # batch 가 deploy: false 면 감시할 서비스가 없다
+  count = contains(keys(local.service_names), "batch") ? 1 : 0
+
+  name        = "${local.name_prefix}-batch-task-failed"
+  description = "Batch task stopped abnormally"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ecs"]
+    detail-type = ["ECS Task State Change"]
+    detail = {
+      lastStatus = ["STOPPED"]
+      clusterArn = [data.terraform_remote_state.ecs.outputs.cluster_arn]
+      group      = ["service:${local.service_names["batch"]}"]
+      containers = {
+        exitCode = [{ "anything-but" = [0, 143] }]
+      }
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "batch_failure" {
+  count = length(aws_cloudwatch_event_rule.batch_failure)
+
+  rule      = aws_cloudwatch_event_rule.batch_failure[0].name
+  target_id = "sns"
+  arn       = aws_sns_topic.alerts.arn
+
+  # Chatbot 은 ECS 이벤트 원문을 Slack 에 그리지 못한다. 사용자 정의 알림 형식으로 바꿔 보낸다
+  input_transformer {
+    input_paths = {
+      task   = "$.detail.taskArn"
+      reason = "$.detail.stoppedReason"
+    }
+    input_template = <<-EOT
+      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally", "description": "<task>: <reason>"}}
+    EOT
+  }
+}
+
+data "aws_iam_policy_document" "sns" {
+  statement {
+    sid       = "AllowCloudWatchAlarms"
+    effect    = "Allow"
+    actions   = ["SNS:Publish"]
+    resources = [aws_sns_topic.alerts.arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com", "events.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "alerts" {
+  arn    = aws_sns_topic.alerts.arn
+  policy = data.aws_iam_policy_document.sns.json
+}
