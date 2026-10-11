@@ -110,12 +110,10 @@ resource "aws_cloudwatch_dashboard" "this" {
           view   = "timeSeries"
           stat   = "Maximum"
           period = 60
-          metrics = flatten([
-            for n in local.valkey_nodes : [
-              ["AWS/ElastiCache", "EngineCPUUtilization", "CacheClusterId", n],
-              ["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", n],
-            ]
-          ])
+          metrics = concat(
+            [for n in local.valkey_nodes : ["AWS/ElastiCache", "EngineCPUUtilization", "CacheClusterId", n]],
+            [for n in local.valkey_nodes : ["AWS/ElastiCache", "DatabaseMemoryUsagePercentage", "CacheClusterId", n]],
+          )
         }
       },
       {
@@ -129,12 +127,10 @@ resource "aws_cloudwatch_dashboard" "this" {
           region = "us-east-1" # CloudFront 지표는 us-east-1 에만 있다
           view   = "timeSeries"
           period = 300
-          metrics = flatten([
-            for k, id in local.distributions : [
-              ["AWS/CloudFront", "Requests", "DistributionId", id, "Region", "Global", { stat = "Sum", label = "${k} requests" }],
-              ["AWS/CloudFront", "5xxErrorRate", "DistributionId", id, "Region", "Global", { stat = "Average", label = "${k} 5xx %", yAxis = "right" }],
-            ]
-          ])
+          metrics = concat(
+            [for k, id in local.distributions : ["AWS/CloudFront", "Requests", "DistributionId", id, "Region", "Global", { stat = "Sum", label = "${k} requests" }]],
+            [for k, id in local.distributions : ["AWS/CloudFront", "5xxErrorRate", "DistributionId", id, "Region", "Global", { stat = "Average", label = "${k} 5xx %", yAxis = "right" }]],
+          )
         }
       },
       {
