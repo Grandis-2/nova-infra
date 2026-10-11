@@ -149,8 +149,8 @@ resource "ncloud_access_control_group_rule" "db" {
 
 # ── Secrets Manager ──────────────────────────────────────────
 locals {
-  # 콘솔에서 Public 도메인을 켜기 전에는 빈 문자열
-  db_host = try(one(compact([for s in ncloud_mysql.this.mysql_server_list : s.public_domain if s.public_domain != null])), "")
+  # 콘솔에서 Public 도메인을 켜기 전에는 빈 문자열. one([]) 은 null 을 돌려주므로 첫 항목을 인덱스로 고른다
+  db_host = try(compact([for s in ncloud_mysql.this.mysql_server_list : s.public_domain])[0], "")
 }
 
 resource "aws_secretsmanager_secret" "service" {
