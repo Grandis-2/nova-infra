@@ -82,8 +82,9 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | `alb` | CloudFront 관리형 prefix list, 443 | 서비스의 앱 · 헬스 포트 |
 | `<서비스>` (서비스마다 하나) | ALB (앱 · 헬스 포트), 자신을 호출하는 서비스 (앱 포트) | 전체 (NAT 경유) |
 | `redis` | 캐시를 쓰는 서비스, 6379 | — |
-| `vpce` | 서비스, bastion, 443 | — |
+| `vpce` | 서비스, bastion, obs, 443 | — |
 | `bastion` | 없음 (SSM Session Manager로만 접속) | 전체 |
+| `obs` (관측 호스트) | 서비스, 4317 · 4318 (OTLP). Grafana는 SSM 포트 포워딩으로만 접속 | 443 |
 | NAT (fck-nat) | VPC 대역 | 전체 (고정 IP 2개로 나감) |
 
 - **진입 경로는 CloudFront 하나입니다.** ALB 보안 그룹은 CloudFront 대역만 받습니다. CloudFront가 붙이는 비밀 헤더가 없는 요청은 ALB가 404로 돌려보냅니다.

@@ -30,3 +30,8 @@ output "service_access" {
     }
   }
 }
+
+output "obs_security_group_id" {
+  description = "관측 호스트(obs) SG. 서비스 SG 에서 4317 · 4318 만 받는다"
+  value       = aws_security_group.obs.id
+}
