@@ -16,6 +16,7 @@ locals {
       fileexists("${local.application_dir}/${k}/application.yml") ? file("${local.application_dir}/${k}/application.yml") : ""
     )
   }
+  _cfg_empty = [for k, t in local._cfg_text : k if try(yamldecode(t), null) == null]
 
   # 인프라가 정하는 값. yml 보다 우선한다
   _cfg_computed = {
@@ -96,6 +97,11 @@ locals {
 
 resource "terraform_data" "config_check" {
   lifecycle {
+    # deploy: true 인데 설정이 비어 있으면 인프라 계산값만 받고 기동에 실패한다
+    precondition {
+      condition     = length(local._cfg_empty) == 0
+      error_message = "application.yml 이 비어 있는데 deploy: true 인 서비스: ${join(", ", local._cfg_empty)}. 설정을 채우거나 deploy: false 로 둔다."
+    }
     precondition {
       condition     = length(local._cfg_secret_literals) == 0
       error_message = "application.yml 에 비밀 값이 있다: ${join(", ", local._cfg_secret_literals)}. 같은 폴더의 secrets.sops.yml 로 옮기고, 값 자리에는 $${환경변수} 를 쓴다."
@@ -112,14 +118,6 @@ resource "terraform_data" "config_check" {
       condition     = length(local._secret_reserved) == 0
       error_message = "비밀(secrets.sops.yml · generated_secrets) 키가 인프라 환경변수나 service.yml 의 environment 와 겹친다: ${join(", ", local._secret_reserved)}"
     }
-  }
-}
-
-# deploy: true 인데 설정이 비어 있으면 그 서비스는 인프라 계산값만 받고 기동에 실패한다. plan 에 경고를 띄운다
-check "service_config_present" {
-  assert {
-    condition     = length([for k, t in local._cfg_text : k if try(yamldecode(t), null) == null]) == 0
-    error_message = "application.yml 이 비어 있는데 deploy: true 인 서비스: ${join(", ", [for k, t in local._cfg_text : k if try(yamldecode(t), null) == null])}"
   }
 }
 

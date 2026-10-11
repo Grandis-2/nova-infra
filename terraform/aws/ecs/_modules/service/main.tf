@@ -106,7 +106,8 @@ resource "aws_service_discovery_service" "this" {
 }
 
 # ALB 연결 모양 (배포 방식 · 경로 수 · 타깃 그룹). 서비스의 load_balancer 는 Blue/Green 때문에 무시하므로,
-# 이 모양이 바뀌면(롤링 ↔ Blue/Green, 경로 추가, 타깃 그룹 교체) 서비스를 다시 만들어 반영한다
+# 이 모양이 바뀌면(롤링 ↔ Blue/Green, 경로 추가, 타깃 그룹 교체) 서비스를 다시 만들어 반영한다.
+# 같은 이름으로 지운 뒤 만들므로(provider 가 INACTIVE 까지 기다림) 그동안 서비스가 잠깐 멈춘다. 드문 구조 변경이라 감수한다
 resource "terraform_data" "lb_shape" {
   input = {
     blue_green    = var.blue_green
