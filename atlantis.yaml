@@ -149,7 +149,7 @@ projects:
     terraform_version: v1.16.0
     autoplan:
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
-      enabled: false # 이 스택을 올리는 PR 에서 true
+      enabled: true # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
   # Valkey (ElastiCache)
