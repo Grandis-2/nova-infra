@@ -60,3 +60,13 @@ output "origin_verify_header" {
   }
   sensitive = true
 }
+
+output "migration_task_definition_family" {
+  description = "배포 전 마이그레이션 태스크 (migration.tf)"
+  value       = aws_ecs_task_definition.migration.family
+}
+
+output "migration_run_task_parameter" {
+  description = "be release 가 읽는 SSM 파라미터 이름 (클러스터 · 태스크 정의 · 서브넷 · SG · 로그)"
+  value       = aws_ssm_parameter.migration.name
+}

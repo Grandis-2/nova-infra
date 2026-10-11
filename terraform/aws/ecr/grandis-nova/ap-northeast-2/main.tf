@@ -1,8 +1,16 @@
-# 서비스별 이미지 저장소. 이름은 백엔드 CI(be release.yml 의 ECR_NAMESPACE)가 푸시하는 nova/<서비스> 와 같아야 한다.
+# 이미지 저장소. 이름은 백엔드 CI(be release.yml 의 ECR_NAMESPACE)가 푸시하는 nova/<이름> 과 같아야 한다.
+#   서비스마다 하나 (application/<서비스>/service.yml)
+#   migration — Flyway 와 마이그레이션 SQL. release 가 배포 전에 마이그레이션 태스크로 돌린다 (ecs 스택 migration.tf)
 # 배포는 커밋 SHA 태그를 쓰므로 태그를 덮어쓸 수 없게 하고, CI 가 함께 올리는 latest 만 예외로 둔다.
+locals {
+  repositories = merge(
+    { for k, v in local.services : k => { name = v.name, image_tag = v.image_tag } },
+    { migration = { name = "migration", image_tag = "latest" } },
+  )
+}
 
 resource "aws_ecr_repository" "this" {
-  for_each = local.services
+  for_each = local.repositories
 
   name                 = "${var.repository_namespace}/${each.value.name}"
   image_tag_mutability = "IMMUTABLE_WITH_EXCLUSION"
@@ -44,12 +52,12 @@ resource "aws_ecr_lifecycle_policy" "this" {
         }
         action = { type = "expire" }
       }],
-      local.services[each.key].image_tag != "latest" ? [{
+      local.repositories[each.key].image_tag != "latest" ? [{
         rulePriority = 2
         description  = "Keep the image pinned by service.yml image_tag"
         selection = {
           tagStatus     = "tagged"
-          tagPrefixList = [local.services[each.key].image_tag]
+          tagPrefixList = [local.repositories[each.key].image_tag]
           countType     = "imageCountMoreThan"
           countNumber   = 9999
         }
@@ -72,7 +80,7 @@ resource "aws_ecr_lifecycle_policy" "this" {
 # Terraform 밖에서 만든 저장소는 이미지를 유지한 채 상태로 가져온다.
 # 가져온 뒤에는 아무 동작도 하지 않고, 상태를 잃었을 때 다시 가져오는 데 쓴다.
 import {
-  for_each = { for k, v in local.services : k => v if contains(var.existing_repositories, "${var.repository_namespace}/${v.name}") }
+  for_each = { for k, v in local.repositories : k => v if contains(var.existing_repositories, "${var.repository_namespace}/${v.name}") }
 
   to = aws_ecr_repository.this[each.key]
   id = "${var.repository_namespace}/${each.value.name}"

@@ -102,7 +102,7 @@ resource "aws_iam_role_policy" "github_deploy" {
       },
       {
         # Blue/Green 진행 상황 조회. 배포는 force-new-deployment 뿐이고
-        # 태스크 정의는 Terraform 이 관리하므로 RegisterTaskDefinition · PassRole 은 주지 않는다
+        # 태스크 정의는 Terraform 이 관리하므로 RegisterTaskDefinition 은 주지 않는다
         Sid    = "WatchDeployments"
         Effect = "Allow"
         Action = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments", "ecs:DescribeServiceRevisions"]
@@ -112,6 +112,50 @@ resource "aws_iam_role_policy" "github_deploy" {
           "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service-revision/${local.name_prefix}/*",
         ]
       },
+      # ── 배포 전 마이그레이션 (migration.tf, be .github/scripts/ecs-migrate.sh) ──
+      # DB(NCP)는 NAT 고정 IP 만 받아 러너에서는 닿지 않는다. 그래서 클러스터 안에 Flyway 태스크를 띄우고 끝나기를 기다린다
+      {
+        Sid      = "RunMigration"
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask"]
+        Resource = [local.migration_task_def_arn]
+        Condition = {
+          ArnEquals = { "ecs:cluster" = local.cluster_arn }
+        }
+      },
+      {
+        # RunTask 는 태스크 정의의 역할을 넘겨야 한다. 마이그레이션 실행 역할만 넘길 수 있다
+        Sid      = "PassMigrationRole"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = [aws_iam_role.migration_execution.arn]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      },
+      {
+        # 띄울 태스크 정의 · 서브넷 · SG (ecs 스택이 적는다)
+        Sid      = "ReadMigrationTarget"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = [local.migration_param_arn]
+      },
+      {
+        # Flyway 출력을 워크플로 로그로 옮긴다
+        Sid      = "ReadMigrationLogs"
+        Effect   = "Allow"
+        Action   = ["logs:GetLogEvents"]
+        Resource = [local.migration_log_arn]
+      },
     ]
   })
+
+  # EcrPush 는 ecr 스택의 저장소 목록으로 건다. ecr 을 apply 하기 전에 만든 plan 을 적용하면 nova/migration 이 빠진 채
+  # 들어가고, release 는 마이그레이션 이미지를 올리지 못해 아무것도 배포하지 못한다. 그런 plan 은 여기서 막는다
+  lifecycle {
+    precondition {
+      condition     = contains(keys(data.terraform_remote_state.ecr.outputs.repository_arns), "migration")
+      error_message = "ecr 스택에 migration 저장소가 아직 없습니다. ecr 을 apply 한 뒤 iam 을 다시 plan 하세요."
+    }
+  }
 }
