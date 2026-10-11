@@ -49,48 +49,19 @@ resource "random_password" "user" {
 }
 
 # ── DB ───────────────────────────────────────────────────────
-# NCP 목록을 조회해 조건에 맞는 첫 번째 이미지 · 사양을 쓴다 (코드를 손으로 적지 않는다).
-#   이미지: G3 · MySQL 8.4.x
-#   사양  : 코드의 .STAND.C002.M008. (Standard · vCPU 2 · 메모리 8GB). AMD 아닌 모델 우선, 없으면 AMD 모델
-# 사양 목록은 이미지마다 다르므로 조건에 맞는 이미지를 모두 조회한다.
-# provider(ncloud 4.0.7)의 filter 는 여러 개면 OR 로 합쳐지고 숫자 필드(cpu_count · memory_size)를 맞추지 못한다.
-# 그래서 이미지는 문자열 필터 하나(generation_code)만 쓰고, 나머지 조건은 locals 에서 건다.
-data "ncloud_mysql_image_products" "this" {
-  filter {
-    name   = "generation_code"
-    values = [var.generation]
-  }
-}
-
-locals {
-  # 같은 이미지 코드가 여러 번 나오므로 코드로 중복을 없앤다 (조회 순서 유지)
-  _image_codes = distinct([for i in data.ncloud_mysql_image_products.this.image_product_list : i.product_code
-    if startswith(i.engine_version_code, "${var.engine_version_prefix}.")
-  ])
-}
+# 이미지 · 사양 코드는 변수로 고정한다. 목록 조회로 고르면 NCP 목록 순서나 새 버전에 따라 값이 바뀌고,
+# 이 세 값(image · product · engine_version)은 바뀌면 DB 를 교체한다(RequiresReplace).
+# 엔진 버전만 생성할 때 고정 이미지의 버전대(8.4.x)에서 조회하고, 이후 변경은 ignore_changes 로 막는다.
+data "ncloud_mysql_image_products" "this" {}
 
 data "ncloud_mysql_products" "this" {
-  for_each           = toset(local._image_codes)
-  image_product_code = each.value
+  image_product_code = var.image_product_code
 }
 
 locals {
-  # 이미지 순서대로 STAND · vCPU · 메모리가 맞는 사양을 모은다. AMD 아닌 모델을 먼저 쓰고, 없으면 같은 사양의 AMD 모델을 쓴다
-  # (G3 · MySQL 8.4 이미지에는 AMD 모델만 있다: "vCPU 2EA, Memory 8GB (AMD)" / SVR.VDBAS.AMD.STAND.C002.M008...)
-  _matches = flatten([for code in local._image_codes : [
-    for p in data.ncloud_mysql_products.this[code].product_list : { image_code = code, product = p }
-    if strcontains(p.product_code, ".${var.server_type}.${format("C%03d.M%03d", var.vcpu, var.memory_gb)}.")
-  ]])
-  mysql_match = try(
-    [for m in local._matches : m if !strcontains(m.product.product_code, ".AMD.")][0],
-    local._matches[0],
-    null,
-  )
-  # 고른 이미지의 엔진 버전 (같은 이미지 코드 중 첫 항목)
-  mysql_image = try([for i in data.ncloud_mysql_image_products.this.image_product_list : i
-    if i.product_code == local.mysql_match.image_code && startswith(i.engine_version_code, "${var.engine_version_prefix}.")
+  mysql_engine_version = try([for i in data.ncloud_mysql_image_products.this.image_product_list : i.engine_version_code
+    if i.product_code == var.image_product_code && startswith(i.engine_version_code, "${var.engine_version_prefix}.")
   ][0], null)
-  mysql_product = try(local.mysql_match.product, null)
 }
 
 resource "ncloud_mysql" "this" {
@@ -98,9 +69,9 @@ resource "ncloud_mysql" "this" {
   server_name_prefix = "${var.product}-db"
   subnet_no          = ncloud_subnet.db.id
 
-  image_product_code  = try(local.mysql_image.product_code, null)
-  product_code        = try(local.mysql_product.product_code, null) # 없으면 아래 precondition 이 사양 목록을 보여 준다
-  engine_version_code = try(local.mysql_image.engine_version_code, null)
+  image_product_code  = var.image_product_code
+  product_code        = var.product_code
+  engine_version_code = local.mysql_engine_version
   port                = var.port
 
   is_ha                 = var.is_ha # HA 는 서버 2대(요금 2배)
@@ -115,9 +86,16 @@ resource "ncloud_mysql" "this" {
   database_name = "shop"
 
   lifecycle {
+    # 사양을 바꿀 때는 변수와 함께 이 목록을 의도적으로 고친다 (바꾸면 DB 교체)
+    ignore_changes = [image_product_code, product_code, engine_version_code]
+
     precondition {
-      condition     = local.mysql_product != null
-      error_message = "${var.generation} MySQL ${var.engine_version_prefix}.x 이미지 ${length(local._image_codes)}개에 ${var.server_type} vCPU ${var.vcpu} · 메모리 ${var.memory_gb}GB 사양이 없습니다. 이미지별 사양: ${join(" / ", [for code in local._image_codes : "${code}: ${join(", ", [for p in data.ncloud_mysql_products.this[code].product_list : p.product_name])}"])}"
+      condition     = contains([for p in data.ncloud_mysql_products.this.product_list : p.product_code], var.product_code)
+      error_message = "product_code ${var.product_code} 가 이미지 ${var.image_product_code} 의 사양 목록에 없습니다. 목록: ${join(", ", [for p in data.ncloud_mysql_products.this.product_list : "${p.product_name} (${p.product_code})"])}"
+    }
+    precondition {
+      condition     = local.mysql_engine_version != null
+      error_message = "이미지 ${var.image_product_code} 에 MySQL ${var.engine_version_prefix}.x 엔진이 없습니다."
     }
     precondition {
       condition     = length(local.nat_ips) > 0

@@ -10,34 +10,22 @@ variable "zone" {
   default     = "KR-2"
 }
 
-# 서버 사양 — 세대 · 타입 · vCPU · 메모리로 NCP 목록을 조회해 처음 맞는 것을 쓴다 (사양 코드를 손으로 적지 않는다)
+# 서버 이미지 · 사양 — 바꾸면 DB 를 교체한다. 목록은 ncloud_mysql_image_products · ncloud_mysql_products 로 조회한다.
 # max_connections 가 메모리에 비례하므로 태스크 수 × Hikari 풀(기본 10)보다 커야 한다.
-variable "generation" {
-  description = "서버 세대. G3 는 스토리지가 CB2 다"
+variable "image_product_code" {
+  description = "MySQL 서버 이미지 (G3, Rocky 8)"
   type        = string
-  default     = "G3"
+  default     = "SW.VMYSL.OS.LNX64.ROCKY.08.MYSQL.B050.G003"
 }
 
-variable "server_type" {
-  description = "사양 타입. 사양 코드에 들어가는 이름 (STAND = Standard)"
+variable "product_code" {
+  description = "서버 사양 (G3 Standard, vCPU 2EA · Memory 8GB, AMD). G3 MySQL 이미지에는 AMD 모델만 있다"
   type        = string
-  default     = "STAND"
-}
-
-variable "vcpu" {
-  description = "vCPU 수"
-  type        = number
-  default     = 2
-}
-
-variable "memory_gb" {
-  description = "메모리 (GB)"
-  type        = number
-  default     = 8
+  default     = "SVR.VDBAS.AMD.STAND.C002.M008.NET.SSD.B050.G003"
 }
 
 variable "engine_version_prefix" {
-  description = "MySQL 엔진 버전대. 이 접두사에 맞는 첫 번째 이미지를 쓴다 (앱은 8.4 기준)"
+  description = "MySQL 엔진 버전대. 생성할 때 이 버전대의 엔진을 쓴다 (앱은 8.4 기준). 이후 변경은 무시된다"
   type        = string
   default     = "8.4"
 }
