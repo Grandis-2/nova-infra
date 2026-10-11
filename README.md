@@ -67,7 +67,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | 배포 | ALB 뒤 서비스는 ECS Blue/Green (bake 5분), 나머지는 롤링. 둘 다 circuit breaker로 자동 롤백 |
 | 용량 | Fargate Spot, 2 AZ에 분산 (AZ 재분배 켬) |
 | 확장 | CPU 목표 추적. worker는 SQS 적체량에 따라 1~8개 |
-| 서비스 간 호출 | Cloud Map DNS `http://<서비스>.nova.local:<포트>` (ALB를 거치지 않음) |
+| 서비스 간 호출 | ECS Service Connect 별칭 `http://<서비스>.nova.local:<포트>` (ALB를 거치지 않음) |
 | 운영 | CloudWatch Logs (14일), Container Insights, ECS Exec |
 
 ## 네트워크와 보안 그룹
