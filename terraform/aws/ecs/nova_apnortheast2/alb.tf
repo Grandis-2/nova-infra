@@ -23,38 +23,24 @@ resource "aws_lb" "this" {
   tags = { Name = "${local.name_prefix}-alb" }
 }
 
-# HTTP 는 HTTPS 로 넘긴다. 인증서가 없으면 HTTP 로 그대로 서비스한다.
+# 인증서가 없을 때만 HTTP 로 서비스한다 (CloudFront 가 HTTP 로 원본에 붙는 경우).
+# 인증서가 있으면 ALB 보안 그룹이 CloudFront 의 443 만 받으므로 80 리스너는 닿을 수 없어 만들지 않는다.
+# 사용자 쪽은 CloudFront 가 HTTPS 만 받는다 (edge 스택 viewer_protocol_policy).
 resource "aws_lb_listener" "http" {
+  count = local.alb_certificate_arn == "" ? 1 : 0
+
   load_balancer_arn = aws_lb.this.arn
   port              = 80
   protocol          = "HTTP"
 
-  dynamic "default_action" {
-    for_each = local.alb_certificate_arn == "" ? [] : [1]
+  default_action {
+    type = "fixed-response"
 
-    content {
-      type = "redirect"
-
-      redirect {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
-    }
-  }
-
-  dynamic "default_action" {
-    for_each = local.alb_certificate_arn == "" ? [1] : []
-
-    content {
-      type = "fixed-response"
-
-      # 어떤 규칙에도 걸리지 않은 경로는 그냥 404. 기본 서비스를 두지 않는다.
-      fixed_response {
-        content_type = "application/json"
-        message_body = "{\"message\":\"not found\"}"
-        status_code  = "404"
-      }
+    # 어떤 규칙에도 걸리지 않은 경로는 그냥 404. 기본 서비스를 두지 않는다.
+    fixed_response {
+      content_type = "application/json"
+      message_body = "{\"message\":\"not found\"}"
+      status_code  = "404"
     }
   }
 }
@@ -91,5 +77,5 @@ locals {
   origin_verify_header = "X-Origin-Verify"
 
   # 인증서가 있으면 HTTPS 리스너에, 없으면 HTTP 리스너에 규칙을 건다
-  routing_listener_arn = local.alb_certificate_arn == "" ? aws_lb_listener.http.arn : aws_lb_listener.https[0].arn
+  routing_listener_arn = local.alb_certificate_arn == "" ? aws_lb_listener.http[0].arn : aws_lb_listener.https[0].arn
 }
