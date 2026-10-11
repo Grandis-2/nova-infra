@@ -22,13 +22,23 @@ module "task_role" {
 
 # 업로드 쓰기 권한(presigned PUT)을 주기 전에, upload 버킷 정책에 비TLS 요청 거부가 실제로 걸려 있는지 확인한다.
 # 정책은 cdn 스택이 붙인다. 적용 순서에 기대지 않고 실제 버킷 정책을 읽어 확인한다 (정책이 없으면 조회 자체가 실패한다).
+# 문자열이 아니라 구문을 본다: 모든 주체 · s3:* · 버킷과 객체 · SecureTransport=false 를 거부하는 Deny 가 있어야 한다.
 data "aws_s3_bucket_policy" "upload" {
   count  = anytrue([for v in local.services : v.uploads]) ? 1 : 0
   bucket = data.terraform_remote_state.s3.outputs.upload_bucket.id
 
   lifecycle {
     postcondition {
-      condition     = strcontains(self.policy, "aws:SecureTransport")
+      condition = anytrue([
+        for st in try(flatten([jsondecode(self.policy).Statement]), []) : try(
+          st.Effect == "Deny"
+          && jsonencode(st.Principal) == jsonencode("*")
+          && contains(flatten([st.Action]), "s3:*")
+          && length(setsubtract([local.upload_bucket, "${local.upload_bucket}/*"], flatten([st.Resource]))) == 0
+          && contains(flatten([st.Condition.Bool["aws:SecureTransport"]]), "false"),
+          false
+        )
+      ])
       error_message = "upload 버킷 정책에 비TLS 요청 거부(aws:SecureTransport)가 없습니다. cdn 스택을 먼저 적용한 뒤 uploads: true 를 켜세요."
     }
   }

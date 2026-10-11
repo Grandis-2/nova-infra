@@ -103,10 +103,14 @@ resource "aws_iam_role_policy" "github_deploy" {
       {
         # Blue/Green 진행 상황 조회. 배포는 force-new-deployment 뿐이고
         # 태스크 정의는 Terraform 이 관리하므로 RegisterTaskDefinition · PassRole 은 주지 않는다
-        Sid      = "WatchDeployments"
-        Effect   = "Allow"
-        Action   = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments", "ecs:DescribeServiceRevisions"]
-        Resource = "*"
+        Sid    = "WatchDeployments"
+        Effect = "Allow"
+        Action = ["ecs:ListServiceDeployments", "ecs:DescribeServiceDeployments", "ecs:DescribeServiceRevisions"]
+        Resource = [
+          "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service/${local.name_prefix}/*",
+          "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service-deployment/${local.name_prefix}/*",
+          "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service-revision/${local.name_prefix}/*",
+        ]
       },
     ]
   })
