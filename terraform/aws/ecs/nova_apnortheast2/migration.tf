@@ -72,13 +72,14 @@ resource "aws_ecs_task_definition" "migration" {
     # 태스크 SG 는 3306 만 내보낸다 (securitygroup 스택 migration.tf). 포트가 다르면 서비스는 뜨고 마이그레이션만 접속 시간 초과로 실패한다
     precondition {
       condition     = tonumber(local.db_port) == 3306
-      error_message = "DB 포트가 ${local.db_port} 입니다. securitygroup 스택 migration.tf 의 3306 나가는 규칙을 같이 바꾸세요."
+      error_message = "DB 포트가 ${local.db_port} 입니다. 이 조건의 3306 과 securitygroup 스택 migration.tf 의 3306 나가는 규칙을 함께 바꾸세요."
     }
   }
 }
 
-# release 가 RunTask 에 넘길 값. 서브넷 · SG 는 태스크 정의에 담을 수 없어 여기 적는다 (be .github/scripts/ecs-migrate.sh 가 읽는다).
-# 비밀이 아니므로 plan 에서 보이게 insecure_value 로 둔다
+# release 가 RunTask 에 넘길 값. 서브넷 · SG · 용량 공급자는 태스크 정의에 담을 수 없어 여기 적는다 (be .github/scripts/ecs-migrate.sh 가 읽는다).
+# 비밀이 아니므로 plan 에서 보이게 insecure_value 로 둔다.
+# 용량은 서비스처럼 Fargate Spot 이다. 회수되면 태스크가 실패하고 release 는 배포하지 않는다 (be flyway-project/README.md 의 실패 복구)
 resource "aws_ssm_parameter" "migration" {
   name = "/${local.name_prefix}/migration/run-task"
   type = "String"
@@ -90,6 +91,9 @@ resource "aws_ssm_parameter" "migration" {
     logStreamPrefix = local.migration_container
     subnets         = local.app_subnets
     securityGroups  = [data.terraform_remote_state.security.outputs.migration_security_group_id]
+    capacityProviderStrategy = [
+      { capacityProvider = "FARGATE_SPOT", weight = 1 },
+    ]
   })
 
   tags = { Name = local.migration_name }
