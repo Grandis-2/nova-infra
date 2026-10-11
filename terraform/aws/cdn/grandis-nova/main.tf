@@ -12,16 +12,16 @@
 # ─────────────────────────────────────────────────────────────
 
 data "aws_route53_zone" "this" {
-  count = var.domain_name != "" ? 1 : 0
+  count = local.use_domain ? 1 : 0
 
-  name         = var.route53_zone_name != "" ? var.route53_zone_name : var.domain_name
+  name         = var.route53_zone_name
   private_zone = false
 }
 
 locals {
   upload_bucket              = data.terraform_remote_state.s3.outputs.upload_bucket
   cloudfront_certificate_arn = data.terraform_remote_state.acm.outputs.cloudfront_certificate_arn
-  use_domain                 = var.domain_name != "" && local.cloudfront_certificate_arn != ""
+  use_domain                 = var.domain_name != ""
 }
 
 resource "aws_cloudfront_origin_access_control" "upload" {
@@ -95,6 +95,14 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   tags = { Name = "${local.name_prefix}-images" }
+
+  lifecycle {
+    # 인증서가 없으면 도메인 없이 조용히 만들어지므로 막는다
+    precondition {
+      condition     = !local.use_domain || local.cloudfront_certificate_arn != ""
+      error_message = "domain_name ${var.domain_name} 을 쓰려면 acm 스택의 CloudFront 인증서가 있어야 합니다. acm 스택의 subject_alternative_names 에 이 도메인을 넣고 먼저 apply 하세요."
+    }
+  }
 }
 
 # 업로드 버킷은 이 배포의 읽기만 허용한다 (쓰기는 앱 역할의 presigned URL)
