@@ -82,29 +82,6 @@ resource "aws_ecs_task_definition" "this" {
   tags = var.tags
 }
 
-# ── Cloud Map (서비스 간 이름 해석) ──────────────────────────
-resource "aws_service_discovery_service" "this" {
-  count = var.create_service && var.enable_service_discovery ? 1 : 0
-
-  # <discovery_name>.<네임스페이스> 로 찾는다 (예: preorder.nova.local)
-  name = coalesce(var.discovery_name, var.name)
-
-  dns_config {
-    namespace_id = var.service_discovery_namespace_id
-
-    dns_records {
-      ttl  = 10 # 태스크가 바뀌면 빨리 반영돼야 한다
-      type = "A"
-    }
-
-    routing_policy = "MULTIVALUE"
-  }
-
-  # 헬스 판정은 ECS 가 한다. 태스크가 멈추면 ECS 가 등록을 지운다.
-
-  tags = var.tags
-}
-
 # ALB 연결 모양 (배포 방식 · 경로 수 · 타깃 그룹). 서비스의 load_balancer 는 Blue/Green 때문에 무시하므로,
 # 이 모양이 바뀌면(롤링 ↔ Blue/Green, 경로 추가, 타깃 그룹 교체) 서비스를 다시 만들어 반영한다.
 # 같은 이름으로 지운 뒤 만들므로(provider 가 INACTIVE 까지 기다림) 그동안 서비스가 잠깐 멈춘다. 드문 구조 변경이라 감수한다
@@ -180,11 +157,29 @@ resource "aws_ecs_service" "this" {
     }
   }
 
-  dynamic "service_registries" {
-    for_each = aws_service_discovery_service.this
+  # 서비스 간 호출 (Service Connect). Blue/Green 은 Cloud Map 등록(service_registries)을 지원하지 않는다.
+  # 모든 서비스가 클라이언트로 참여하고, 포트가 있는 서비스는 <dns_name>:<port> 별칭으로 자신을 내놓는다.
+  # 별칭은 태스크 안의 프록시가 풀어 주므로 Service Connect 를 켠 태스크에서만 쓸 수 있다 (RunTask 배치는 못 씀)
+  dynamic "service_connect_configuration" {
+    for_each = var.create_service ? [1] : []
 
     content {
-      registry_arn = service_registries.value.arn
+      enabled   = true
+      namespace = var.service_connect_namespace
+
+      dynamic "service" {
+        for_each = var.service_connect_dns_name != "" && var.port > 0 ? [1] : []
+
+        content {
+          port_name      = "http"
+          discovery_name = var.name
+
+          client_alias {
+            port     = var.port
+            dns_name = var.service_connect_dns_name
+          }
+        }
+      }
     }
   }
 

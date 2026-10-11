@@ -60,9 +60,9 @@ module "service" {
   blue_green           = each.value.blue_green
   lb_role_arn          = each.value.blue_green ? local.ecs_lb_role_arn : ""
 
-  # 다른 서비스가 호출하는 것만 Cloud Map 에 등록한다 (포트 없는 서비스 제외)
-  enable_service_discovery       = each.value.port > 0
-  service_discovery_namespace_id = aws_service_discovery_private_dns_namespace.this.id
+  # 서비스 간 호출. 포트가 있는 서비스만 <이름>.<네임스페이스> 로 내놓는다 (locals.tf 의 서비스 주소와 같아야 한다)
+  service_connect_namespace = aws_service_discovery_private_dns_namespace.this.arn
+  service_connect_dns_name  = each.value.port > 0 ? "${each.value.name}.${var.namespace_name}" : ""
 
   # max > min 일 때만 오토스케일링을 건다
   min_capacity         = each.value.min

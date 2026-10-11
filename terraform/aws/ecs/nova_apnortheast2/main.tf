@@ -28,7 +28,8 @@ resource "aws_ecs_cluster_capacity_providers" "this" {
 }
 
 # ── 서비스 디스커버리 ────────────────────────────────────────
-# 내부 호출은 ALB 를 거치지 않는다. <서비스>.<네임스페이스> 이름으로 태스크 IP 를 바로 찾는다.
+# 내부 호출은 ALB 를 거치지 않는다. Service Connect 가 이 네임스페이스에 서비스를 등록하고,
+# 각 태스크의 프록시가 <서비스>.<네임스페이스> 별칭을 상대 태스크로 보낸다.
 resource "aws_service_discovery_private_dns_namespace" "this" {
   name        = var.namespace_name
   description = "Internal service discovery for ${local.name_prefix}"

@@ -29,7 +29,7 @@ locals {
   queues     = data.terraform_remote_state.sqs.outputs.queues
   log_bucket = data.terraform_remote_state.s3.outputs.log_bucket.id
 
-  # 서비스 주소: <Cloud Map 이름>.<네임스페이스>:<포트> (예: http://preorder.nova.local:8083)
+  # 서비스 주소: Service Connect 별칭 <이름>.<네임스페이스>:<포트> (예: http://preorder.nova.local:8083)
   # deploy: false 서비스도 주소를 정해 둔다 (호출하는 쪽 설정이 비지 않게)
   service_urls = {
     for k, v in local.services : k => "http://${v.name}.${var.namespace_name}:${v.port}" if v.port > 0

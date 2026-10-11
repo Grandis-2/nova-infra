@@ -80,18 +80,14 @@ variable "create_service" {
   default     = true
 }
 
-variable "enable_service_discovery" {
-  description = <<-EOT
-    Cloud Map 에 이름을 등록할지 여부.
-    네임스페이스 ID 는 같은 apply 에서 만들어져 plan 때 알 수 없다.
-    count 에 쓰면 plan 이 실패하므로 이 불리언으로 정한다.
-  EOT
-  type        = bool
-  default     = true
+variable "service_connect_namespace" {
+  description = "Service Connect 에 쓰는 Cloud Map 네임스페이스 ARN"
+  type        = string
+  default     = ""
 }
 
-variable "service_discovery_namespace_id" {
-  description = "Cloud Map 네임스페이스 ID"
+variable "service_connect_dns_name" {
+  description = "다른 서비스가 부르는 이름 (예: preorder.nova.local). 비우면 클라이언트로만 참여한다"
   type        = string
   default     = ""
 }
@@ -168,7 +164,7 @@ variable "cpu_architecture" {
 }
 
 variable "discovery_name" {
-  description = "Cloud Map 서비스 이름. 비우면 name 을 쓴다"
+  description = "서비스 키 (예: preorder). 태그에 쓴다"
   type        = string
   default     = ""
 }
