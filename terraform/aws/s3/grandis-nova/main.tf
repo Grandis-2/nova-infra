@@ -2,7 +2,9 @@
 #   upload : 사용자 업로드 이미지. 브라우저가 presigned URL 로 PUT 하고,
 #            조회는 CloudFront(OAC)로만 한다. 버킷은 비공개
 #   log    : ALB, CloudFront 액세스 로그
-#   loki   : 관측 호스트(obs)의 Loki 청크 · 인덱스. 설정은 obs.tf
+#   loki   : 관측 스택(obs)의 Loki 청크 · 인덱스. 설정은 obs.tf
+#   tempo  : 관측 스택의 Tempo 트레이스 블록
+#   mimir  : 관측 스택의 Mimir 지표 블록 · 경보 규칙
 #
 # upload 버킷의 정책(CloudFront 읽기 + 비TLS 요청 거부)은 cdn 스택이 붙인다. CloudFront 읽기 조건에 배포 ARN 이
 # 필요한데 cdn 이 s3 에 의존하므로 여기서는 만들 수 없다. 버킷 정책은 하나뿐이라 여기서 따로 붙이면 서로 덮어쓴다.
@@ -12,7 +14,7 @@ data "aws_caller_identity" "current" {}
 
 locals {
   suffix  = var.bucket_suffix != "" ? var.bucket_suffix : data.aws_caller_identity.current.account_id
-  buckets = ["upload", "log", "loki"]
+  buckets = ["upload", "log", "loki", "tempo", "mimir"]
 }
 
 resource "aws_s3_bucket" "this" {

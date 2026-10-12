@@ -84,7 +84,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | `redis` | 캐시를 쓰는 서비스, 6379 | — |
 | `vpce` | 서비스, bastion, obs, migration, 443 | — |
 | `bastion` | 없음 (SSM Session Manager로만 접속) | 전체 |
-| `obs` (관측 호스트) | 서비스, 4317 · 4318 (OTLP). Grafana는 SSM 포트 포워딩으로만 접속 | 443 |
+| `obs` (관측 스택) | 서비스, 4317 · 4318 (OTLP). Grafana는 ECS Exec 포트 포워딩으로만 접속 | 443, 3306 (NCP DB, mysqld_exporter) |
 | `migration` (배포 전 마이그레이션 태스크) | 없음 | 3306 (NAT 경유 DB) · 443 |
 | NAT (fck-nat) | VPC 대역 | 전체 (고정 IP 2개로 나감) |
 
