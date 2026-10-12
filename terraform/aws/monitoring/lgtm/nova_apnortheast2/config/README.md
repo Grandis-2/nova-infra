@@ -83,7 +83,7 @@ Collector 는 `--config=/config/collector.yaml`, Loki · Tempo · Mimir 는 `-co
 
 ## 앱이 줄 값
 
-에이전트는 be 이미지의 `/otel/javaagent.jar` 이다(NV-356). 켤 서비스의 작업 정의에 준다.
+에이전트는 be 이미지의 `/otel/javaagent.jar` 이다(NV-356). ecs 스택 `otel.tf` 가 변수 `otel_services` 에 든 서비스에 아래 값을 넣는다(지금은 `["*"]`, 배포 서비스 전부).
 
 ```
 JDK_JAVA_OPTIONS=-javaagent:/otel/javaagent.jar
@@ -94,14 +94,15 @@ OTEL_TRACES_EXPORTER=otlp
 OTEL_METRICS_EXPORTER=otlp
 OTEL_TRACES_SAMPLER=parentbased_always_on
 OTEL_INSTRUMENTATION_MICROMETER_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel.nova.local:4317
-OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel.nova.local:4318
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_INSTRUMENTATION_AWS_SDK_EXPERIMENTAL_USE_PROPAGATOR_FOR_MESSAGING=true
 OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_MDC_ATTRIBUTES_INCLUDED=traceId
 OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED=event_id,aggregate_type,aggregate_id,event_type,destination
 ```
 
 - `JAVA_TOOL_OPTIONS` 는 주지 않는다. 이미지의 힙 옵션이 그 변수에 있어 덮으면 사라진다.
-- 포트와 프로토콜은 짝을 맞춘다(4317 은 `grpc`, 4318 은 `http/protobuf`). 어긋나면 앱 로그에 실패 한 줄만 남고 아무것도 오지 않는다.
+- 포트와 프로토콜은 짝을 맞춘다(`otel.nova.local:4318` 은 `http/protobuf`, gRPC 는 `otel-grpc.nova.local:4317`). 어긋나면 앱 로그에 실패 한 줄만 남고 아무것도 오지 않는다.
 - logback 속성은 2.32.0 의 새 이름이다. 값은 `true` 가 아니라 이름 목록이다.
 - MDC 는 `traceId`(요청 ID)만 받는다. `subject`(회원 ID)는 받지 않는다.
 - 샘플링은 Collector 가 한다(`parentbased_always_on` 으로 모두 보낸다). 앱에서 자르면 버려진 쪽의 오류 트레이스를 다시 찾을 수 없다.
