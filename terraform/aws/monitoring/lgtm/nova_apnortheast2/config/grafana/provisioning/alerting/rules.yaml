@@ -161,7 +161,10 @@ groups:
             model:
               refId: A
               instant: true
-              expr: "sum by (job) (rate({__name__=~\"otelcol_(receiver_refused|exporter_send_failed|processor_refused)_.+_total\"}[5m]))"
+              # 지표 이름을 정규식으로 묶어 rate 하면 이름 라벨이 빠져 라벨이 같은 시계열이 겹치고
+              # Mimir 가 "vector cannot contain metrics with the same labelset" 로 실패한다(운영에서 DatasourceError).
+              # 그래서 카운터마다 rate 를 따로 하고 counter 라벨을 붙여 or 로 합친다
+              expr: "sum by (job) (label_replace(rate(otelcol_exporter_send_failed_log_records_total[5m]), \"counter\", \"exporter_send_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_spans_total[5m]), \"counter\", \"exporter_send_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_metric_points_total[5m]), \"counter\", \"exporter_send_failed_metric_points\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_log_records_total[5m]), \"counter\", \"receiver_refused_log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_spans_total[5m]), \"counter\", \"receiver_refused_spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_metric_points_total[5m]), \"counter\", \"receiver_refused_metric_points\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_log_records_total[5m]), \"counter\", \"receiver_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_spans_total[5m]), \"counter\", \"receiver_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_metric_points_total[5m]), \"counter\", \"receiver_failed_metric_points\", \"\", \"\"))"
           - refId: B
             datasourceUid: __expr__
             model:
