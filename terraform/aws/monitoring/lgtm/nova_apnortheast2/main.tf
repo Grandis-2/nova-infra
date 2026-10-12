@@ -383,17 +383,19 @@ resource "aws_cloudwatch_metric_alarm" "obs_no_task" {
   ok_actions    = [local.alerts_topic_arn]
 }
 
-# unlimited 모드라 크레딧이 바닥나도 느려지지 않고 초과분이 과금된다. 계속 바닥이면 인스턴스 종류를 올린다
+# unlimited 모드라 크레딧이 바닥나도 느려지지 않고, 기본 성능(t4g.large 30%)을 넘겨 쓴 만큼 나중에 과금된다.
+# 잔량(CPUCreditBalance)으로 보지 않는다. 새로 뜬 unlimited 인스턴스는 잔량 0 에서 시작해 한 시간 가까이 경보가 울린다.
+# 실제로 과금된 초과 크레딧이 생길 때만 본다. 계속 울리면 인스턴스 종류를 올린다(ecs 스택 obs_instance_type)
 resource "aws_cloudwatch_metric_alarm" "obs_cpu_credits" {
   alarm_name          = "${local.obs_name}-cpu-credits"
-  alarm_description   = "Observability instance is out of CPU credits (surplus is charged). Consider a larger or non-burstable instance"
+  alarm_description   = "Observability instance is being charged for surplus CPU credits. Consider a larger or non-burstable instance"
   namespace           = "AWS/EC2"
-  metric_name         = "CPUCreditBalance"
-  statistic           = "Minimum"
-  period              = 300
-  evaluation_periods  = 3
-  threshold           = var.obs_cpu_credit_threshold
-  comparison_operator = "LessThanThreshold"
+  metric_name         = "CPUSurplusCreditsCharged"
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
 
   dimensions = { AutoScalingGroupName = data.terraform_remote_state.ecs.outputs.obs_autoscaling_group_name }

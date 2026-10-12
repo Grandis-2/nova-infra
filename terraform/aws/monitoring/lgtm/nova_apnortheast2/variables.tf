@@ -24,12 +24,6 @@ variable "obs_log_retention_days" {
   default     = 14
 }
 
-variable "obs_cpu_credit_threshold" {
-  description = "obs 인스턴스 CPU 크레딧 잔량 경보 임계치"
-  type        = number
-  default     = 20
-}
-
 variable "obs_mysqld_exporter" {
   description = <<-EOT
     NCP DB 지표(mysqld_exporter). 읽기 전용 exporter 계정(PROCESS, REPLICATION CLIENT, SELECT)과 그 비밀번호 비밀이 생긴 뒤 켠다.
