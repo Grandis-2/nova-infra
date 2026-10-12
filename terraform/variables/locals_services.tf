@@ -44,8 +44,8 @@ locals {
       # 틀린 모양이면 backlog 가 조용히 빠져 큐 적체로 늘지 않는다. 그래서 여기서 멈춘다
       try(s.scaling.backlog, null) == null || (
         (can(tostring(s.scaling.backlog.queue)) || try(length([for q in s.scaling.backlog.queues : tostring(q)]) >= 1 && length(s.scaling.backlog.queues) <= 8, false))
-        && can(tonumber(s.scaling.backlog.per_task))
-      ) ? "" : "scaling.backlog 는 queue(문자열) 또는 queues(1~8개 목록)와 per_task(숫자)가 필요",
+        && try(tonumber(s.scaling.backlog.per_task) > 0, false)
+      ) ? "" : "scaling.backlog 는 queue(문자열) 또는 queues(1~8개 목록)와 per_task(0 보다 큰 수)가 필요",
       # 컨테이너 헬스체크(routes 없음)는 200 만 본다. ALB 처럼 범위(200-299)를 쓰지 않는다
       length(try(s.routes, [])) > 0 || try(s.health, null) == null || try(tostring(s.health.matcher), "200") == "200" ? "" : "routes 없이 쓰는 health 의 matcher 는 200 만 된다",
       # 컨테이너 헬스체크 명령(bash)에 그대로 들어가므로 경로 문자를 제한한다
