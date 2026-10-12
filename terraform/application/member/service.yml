@@ -1,5 +1,6 @@
 # 인증 · 회원 · JWKS 게시 (RS256 개인키로 서명)
-deploy: false                   # application.yml 을 채우면 true
+deploy: true
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
 cpu: 1024
 memory: 2048
 port: 8080
@@ -17,13 +18,14 @@ health:
   matcher: "200"
 
 routes:
-  # 우선순위가 가장 낮다. 다른 규칙에 걸리지 않은 /api/v1/* 는 모두 member 가 받는다
+  # 우선순위가 가장 낮다. 다른 규칙에 걸리지 않은 /api/v1/* 는 모두 member 가 받는다.
+  # /.well-known/jwks.json 은 공개키라 열어 둔다. /internal/* 은 ALB 에 열지 않는다 (서비스끼리 Service Connect 로만)
   - priority: 90
     paths: ["/api/v1/*", "/.well-known/*"]
 
-jwt: sign
+jwt: sign                       # JWKS 를 게시한다. verify 인 서비스는 member 접근이 자동으로 열린다
 db: shop
-redis: main
+redis: main                     # 리프레시 폐기 표식, 관리자 로그인 시도 수
 
 # Terraform 이 만들어 넣는다 (사람이 값을 다루지 않는다). 버전을 올릴 때만 다시 만든다 (secretsmanager 의 secret_versions)
 # 관리자 비밀번호 원문은 nova-prod/ops/member/admin-password (관리자만 조회)

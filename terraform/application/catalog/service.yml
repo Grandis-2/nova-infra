@@ -1,5 +1,6 @@
 # 상품 · 옵션 · 카테고리 · 리뷰
-deploy: false                   # application.yml 을 채우면 true
+deploy: false                   # true 로 바꿔도 뜨지만, 리뷰 작성은 order 가 뜨기 전까지 실패한다 (내 주문상품 확인)
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
 cpu: 1024
 memory: 2048
 port: 8082
@@ -9,7 +10,7 @@ deployment: blue_green
 scaling:
   desired: 1
   min: 1
-  max: 4
+  max: 4                      # 상품 조회는 사전예약이 열릴 때 같이 몰린다
 
 health:
   port: 9082
@@ -17,15 +18,17 @@ health:
   matcher: "200"
 
 routes:
+  # ALB 조건 값 한도(5개 = 경로 4 + 비밀 헤더 1)를 다 썼다. 경로를 더하려면 규칙을 하나 더 만든다.
+  # /internal/* 은 ALB 에 열지 않는다 (preorder · order 가 Service Connect 로 부른다)
   - priority: 50
     paths: ["/api/v1/products*", "/api/v1/admin/products*", "/api/v1/reviews*", "/api/v1/categories*"]
 
 jwt: verify
-calls:
-  spring.http.serviceclient.order.base-url: order
-  spring.http.serviceclient.member.base-url: member
+calls:                          # 리뷰 작성 때만 부른다
+  spring.http.serviceclient.order.base-url: order     # 내 주문상품 확인
+  spring.http.serviceclient.member.base-url: member   # 작성자 표시명
 db: shop
-redis: main
+redis: main                     # 상품 · 가격 캐시
 
 queues:
-  send: [order-events, preorder-events]   # outbox
+  send: [order-events, preorder-events]   # 아웃박스. 상품 등록 → preorder 회차 · 차수, order 초기 재고
