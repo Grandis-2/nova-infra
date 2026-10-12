@@ -98,7 +98,7 @@ variable "otel_services" {
     끄려면 목록에서 빼고 apply 한다. 이미지를 다시 만들 필요가 없다.
   EOT
   type        = list(string)
-  default     = ["preorder"]
+  default     = ["*"] # preorder 에서 확인한 뒤(NV-435) 배포하는 서비스 전부로 넓혔다(NV-438)
 }
 
 variable "otel_metrics_enabled" {
