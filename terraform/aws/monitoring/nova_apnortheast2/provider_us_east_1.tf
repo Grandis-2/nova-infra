@@ -1,1 +1,0 @@
-../../provider_us_east_1.tf

@@ -1,22 +1,36 @@
-# SQS 소비 (웹 서버 없음)
-deploy: false                   # application.yml 을 채우면 true
+# 사전예약 외부 동기화 — preorder-register · preorder-cancel 을 소비해 mock(외부 예약 시스템)에 등록 · 취소한다
+# 상태는 메시지 속성에 있다. 결과는 preorder-events 로 보낸다
+deploy: true
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
 cpu: 1024
 memory: 2048
-port: 0
+port: 9087                      # health · prometheus 만 연다 (앱 기본값 WorkerDefaults). 외부 경로(routes)는 없다
 deployment: rolling
 spot: true                      # 중단돼도 메시지가 큐에 남아 재처리된다
+# 정상 종료가 최악 약 35초 걸린다 (롱 폴링 5초 + 처리 20초 + 두 번째 큐 롱 폴링 5초 + 삭제).
+# 넘으면 처리 중에 강제 종료돼 그 차례가 가시성 시간(120초) 뒤로 밀린다. 앱 nova.worker.consumer.stop-timeout(20초)과 함께 바꾼다
+stop_timeout: 60
+
+# ALB 대상이 아니므로 컨테이너 헬스체크로 쓴다
+health:
+  port: 9087
+  path: /actuator/health/readiness
 
 scaling:
   desired: 1
   min: 1
-  max: 8                      # 큐 적체에 따라 늘었다가 1로 돌아온다
+  max: 4                      # mock 1대당 동시 16 × worker 4대 기준. 더 늘려도 mock 이 받지 못한다
   backlog:
-    queue: preorder-register
-    per_task: 50
+    queues: [preorder-register, preorder-cancel]   # 두 큐의 합. 취소만 쌓여도 늘어난다
+    per_task: 50              # 추정값. 부하 시험 뒤 다시 정한다
 
 calls:
-  external.mock.base-url: mock
+  nova.worker.mock.base-url: mock
+# worker 는 DB 를 쓰지 않지만 계정은 남겨 둔다. 빼면 ncp-database 의 사용자 목록이 바뀌는데, NCP provider 는
+# 목록이 조금만 바뀌어도 모든 서비스 계정을 지우고 다시 만든다(RequiresReplace). 서비스별 리소스로 나눈 뒤 뺀다
 db: shop
 
 queues:
-  consume: [preorder-register, preorder-cancel, notification]
+  consume: [preorder-register, preorder-cancel]
+  # 결과 이벤트는 preorder-events, 재시도는 같은 큐에 지연을 두고 다시 보낸다
+  send: [preorder-events, preorder-register, preorder-cancel]

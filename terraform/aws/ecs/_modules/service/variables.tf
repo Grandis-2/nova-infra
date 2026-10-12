@@ -127,12 +127,23 @@ variable "request_count_target" {
 }
 
 variable "queue_backlog" {
-  description = "큐 적체 기반 스케일링 설정. 컨슈머 전용. Container Insights 의 RunningTaskCount 를 쓰므로 클러스터에서 켜져 있어야 한다"
+  description = "큐 적체 기반 스케일링 설정. 컨슈머 전용. 큐가 여럿이면 메시지 수를 더한다. Container Insights 의 RunningTaskCount 를 쓰므로 클러스터에서 켜져 있어야 한다"
   type = object({
-    queue_name      = string
+    queue_names     = list(string)
     target_per_task = number
   })
   default = null
+
+  validation {
+    condition     = var.queue_backlog == null || (length(var.queue_backlog.queue_names) >= 1 && length(var.queue_backlog.queue_names) <= 8)
+    error_message = "queue_backlog.queue_names 는 1~8개다 (지표 수식 한도 10개 중 태스크 수 · 결과식이 2개를 쓴다)."
+  }
+}
+
+variable "stop_timeout" {
+  description = "SIGTERM 뒤 SIGKILL 까지 기다리는 시간(초). null 이면 ECS 기본값(30초). Fargate 상한 120"
+  type        = number
+  default     = null
 }
 
 variable "enable_execute_command" {

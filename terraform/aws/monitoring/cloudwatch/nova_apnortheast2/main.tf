@@ -176,6 +176,14 @@ resource "aws_cloudwatch_metric_alarm" "valkey" {
   ok_actions    = [aws_sns_topic.alerts.arn]
 }
 
+# 큐 이름 오타는 문턱이 조용히 기본값으로 남으므로 알린다
+check "queue_age_overrides" {
+  assert {
+    condition     = length(setsubtract(keys(var.queue_age_threshold_overrides), keys(local.queues))) == 0
+    error_message = "queue_age_threshold_overrides 에 없는 큐가 있다: ${join(", ", setsubtract(keys(var.queue_age_threshold_overrides), keys(local.queues)))}"
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "queue_age" {
   for_each = local.queues
 
@@ -186,7 +194,7 @@ resource "aws_cloudwatch_metric_alarm" "queue_age" {
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 2
-  threshold           = var.queue_age_threshold_seconds
+  threshold           = lookup(var.queue_age_threshold_overrides, each.key, var.queue_age_threshold_seconds)
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
 
