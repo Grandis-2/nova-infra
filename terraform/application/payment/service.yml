@@ -1,8 +1,10 @@
 # 결제(토스). 외부에 노출하지 않고 order 만 /internal 로 호출한다
-deploy: false                   # application.yml 을 채우면 true
+deploy: true
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
 cpu: 1024
 memory: 2048
 port: 8085
+management_port: 9086           # 앱 기본값(PaymentDefaults)과 같다
 deployment: rolling
 
 scaling:
