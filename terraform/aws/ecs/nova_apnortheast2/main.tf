@@ -18,7 +18,8 @@ resource "aws_ecs_cluster" "this" {
 resource "aws_ecs_cluster_capacity_providers" "this" {
   cluster_name = aws_ecs_cluster.this.name
 
-  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+  # obs 는 EC2 (obs.tf). 기본 전략은 FARGATE 그대로라 다른 서비스에는 영향이 없다
+  capacity_providers = ["FARGATE", "FARGATE_SPOT", aws_ecs_capacity_provider.obs.name]
 
   default_capacity_provider_strategy {
     capacity_provider = "FARGATE"

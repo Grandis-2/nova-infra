@@ -72,3 +72,21 @@ variable "db_ssl_mode" {
     error_message = "db_ssl_mode 는 MySQL Connector/J 의 sslMode 값이어야 합니다."
   }
 }
+
+variable "obs_instance_type" {
+  description = "관측 스택(obs)을 올리는 EC2. ARM(Graviton) 이어야 한다 (ECS 최적화 AL2023 arm64 AMI)"
+  type        = string
+  default     = "t4g.large"
+}
+
+variable "obs_data_volume_size" {
+  description = "obs 데이터 EBS 크기(GiB). Loki · Tempo WAL, Mimir TSDB(최근 블록), Grafana DB. 장기 저장은 S3 다"
+  type        = number
+  default     = 100
+}
+
+variable "obs_ami_id" {
+  description = "obs 인스턴스 AMI. 비우면 ECS 최적화 AL2023 arm64 최신을 SSM 에서 읽는다"
+  type        = string
+  default     = ""
+}

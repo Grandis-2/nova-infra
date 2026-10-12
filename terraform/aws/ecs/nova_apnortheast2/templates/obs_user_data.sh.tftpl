@@ -1,0 +1,59 @@
+#!/bin/bash
+# obs 컨테이너 인스턴스 부팅 스크립트 (obs.tf). 데이터 EBS 를 붙이고 마운트한 뒤에야 클러스터에 들어간다.
+# 데이터 디스크 없이 태스크가 뜨면 WAL · TSDB 가 루트 디스크에 쌓였다가 인스턴스와 함께 사라지므로,
+# 붙이기에 실패하면 ecs.config 를 쓰지 않고 끝낸다 — 인스턴스가 클러스터에 없어 서비스 경보(running < 1)가 울린다.
+set -euo pipefail
+
+REGION="${region}"
+VOLUME_ID="${volume_id}"
+MOUNT="${mount_path}"
+
+log() { echo "obs-user-data: $*"; }
+
+command -v aws >/dev/null || dnf install -y awscli-2
+
+TOKEN=$(curl -sfX PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+INSTANCE_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+
+# 이전 인스턴스가 내려가며 떼는 중일 수 있다. available 이 될 때까지 기다린다 (최대 10분)
+attached_to_me=false
+for _ in $(seq 1 60); do
+  read -r STATE ATTACHED <<<"$(aws ec2 describe-volumes --region "$REGION" --volume-ids "$VOLUME_ID" \
+    --query 'Volumes[0].[State, Attachments[0].InstanceId]' --output text)"
+  if [ "$STATE" = "in-use" ] && [ "$ATTACHED" = "$INSTANCE_ID" ]; then attached_to_me=true; break; fi
+  [ "$STATE" = "available" ] && break
+  log "volume $VOLUME_ID is $STATE ($ATTACHED), waiting"
+  sleep 10
+done
+if [ "$attached_to_me" = false ]; then
+  aws ec2 attach-volume --region "$REGION" --volume-id "$VOLUME_ID" --instance-id "$INSTANCE_ID" --device /dev/xvdf
+fi
+
+# Nitro 인스턴스에서는 NVMe 장치로 보인다. 볼륨 ID(하이픈 없이)가 장치 일련번호다
+SERIAL="$${VOLUME_ID/-/}"
+DEVICE=""
+for _ in $(seq 1 60); do
+  DEVICE=$(lsblk -dno NAME,SERIAL | awk -v s="$SERIAL" '$2 == s { print "/dev/" $1 }')
+  [ -n "$DEVICE" ] && break
+  sleep 5
+done
+[ -n "$DEVICE" ] || { log "device for $VOLUME_ID not found"; exit 1; }
+
+# 처음 한 번만 포맷한다. 파일시스템이 있으면 그대로 쓴다
+blkid "$DEVICE" >/dev/null 2>&1 || mkfs.xfs -L obsdata "$DEVICE"
+mkdir -p "$MOUNT"
+grep -q 'LABEL=obsdata' /etc/fstab || echo "LABEL=obsdata $MOUNT xfs defaults,nofail 0 2" >>/etc/fstab
+mountpoint -q "$MOUNT" || mount "$MOUNT"
+
+# 컨테이너별 디렉터리. 컨테이너는 root 가 아닌 사용자로 돈다 (monitoring 스택 obs.tf 의 작업 정의와 같아야 한다)
+%{ for dir, owner in data_dirs ~}
+mkdir -p "$MOUNT/${dir}"
+chown ${owner} "$MOUNT/${dir}"
+%{ endfor ~}
+
+cat >>/etc/ecs/ecs.config <<CONFIG
+ECS_CLUSTER=${cluster_name}
+ECS_AWSVPC_BLOCK_IMDS=true
+ECS_ENABLE_TASK_IAM_ROLE=true
+CONFIG
+log "data volume mounted at $MOUNT, joined cluster ${cluster_name}"
