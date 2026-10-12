@@ -36,3 +36,11 @@ output "mimir_bucket" {
     arn = aws_s3_bucket.this["mimir"].arn
   }
 }
+
+output "obs_config_bucket" {
+  description = "관측 스택 설정 파일. monitoring 스택이 lgtm/ 을 올리고 obs 태스크의 init 컨테이너가 받는다"
+  value = {
+    id  = aws_s3_bucket.this["obs-config"].id
+    arn = aws_s3_bucket.this["obs-config"].arn
+  }
+}

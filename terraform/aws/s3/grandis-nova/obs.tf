@@ -124,3 +124,110 @@ moved {
   from = aws_s3_bucket_policy.loki
   to   = aws_s3_bucket_policy.obs["loki"]
 }
+
+# ── obs-config 버킷 — 관측 스택 설정 파일 ─────────────────────────────
+# monitoring 스택이 lgtm/ 을 올리고(aws_s3_object), obs 태스크의 init 컨테이너가 시작할 때 받는다.
+# loki 버킷의 한 접두사로 두지 않는다. loki 버킷은 100일 만료 수명주기가 있어 바뀌지 않은 설정 파일이 지워진다.
+#
+# 버전 관리를 켠다. 설정을 잘못 올렸을 때 이전 버전으로 되돌릴 수 있게 한다. 지난 버전은 30일 뒤 지운다.
+# 쓰기는 Terraform 실행 역할만, 읽기는 obs 역할과 Terraform 실행 역할만 한다.
+resource "aws_s3_bucket_versioning" "obs_config" {
+  bucket = aws_s3_bucket.this["obs-config"].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "obs_config" {
+  bucket = aws_s3_bucket.this["obs-config"].id
+
+  rule {
+    id     = "noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.obs_config]
+}
+
+locals {
+  # Terraform 실행 역할(Atlantis 의 TF_VAR_assume_role_arn). 로컬 plan 처럼 비어 있으면 넣지 않는다
+  obs_config_writers = compact([var.assume_role_arn])
+}
+
+data "aws_iam_policy_document" "obs_config" {
+  statement {
+    sid       = "DenyReadExceptObsAndTerraform"
+    effect    = "Deny"
+    actions   = ["s3:GetObject*"]
+    resources = ["${aws_s3_bucket.this["obs-config"].arn}/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "ArnNotEquals"
+      variable = "aws:PrincipalArn"
+      values   = concat([local.obs_role_arn], local.obs_config_writers)
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(local.obs_config_writers) > 0 ? [1] : []
+
+    content {
+      sid       = "DenyWriteExceptTerraform"
+      effect    = "Deny"
+      actions   = ["s3:PutObject*", "s3:DeleteObject*", "s3:RestoreObject"]
+      resources = ["${aws_s3_bucket.this["obs-config"].arn}/*"]
+
+      principals {
+        type        = "*"
+        identifiers = ["*"]
+      }
+
+      condition {
+        test     = "ArnNotEquals"
+        variable = "aws:PrincipalArn"
+        values   = local.obs_config_writers
+      }
+    }
+  }
+
+  statement {
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.this["obs-config"].arn, "${aws_s3_bucket.this["obs-config"].arn}/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "obs_config" {
+  bucket = aws_s3_bucket.this["obs-config"].id
+  policy = data.aws_iam_policy_document.obs_config.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
+}

@@ -32,11 +32,16 @@ output "service_access" {
 }
 
 output "obs_security_group_id" {
-  description = "관측 호스트(obs) SG. 서비스 SG 에서 4317 · 4318 만 받는다"
+  description = "관측 스택(obs) 태스크 SG. 서비스 SG 에서 4317 · 4318 만 받는다"
   value       = aws_security_group.obs.id
 }
 
 output "migration_security_group_id" {
   description = "마이그레이션 태스크 SG. 인바운드 없음, 3306 · 443 만 나간다"
   value       = aws_security_group.migration.id
+}
+
+output "obs_instance_security_group_id" {
+  description = "obs 태스크를 올리는 ECS 컨테이너 인스턴스 SG. 인바운드 없음, 443 만 나간다"
+  value       = aws_security_group.obs_instance.id
 }

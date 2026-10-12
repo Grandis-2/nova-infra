@@ -59,3 +59,34 @@ resource "aws_vpc_security_group_ingress_rule" "vpce_from_obs" {
   from_port                    = 443
   to_port                      = 443
 }
+
+# ── obs 컨테이너 인스턴스 ───────────────────────────────────────
+# obs 태스크를 올리는 EC2 (ecs 스택의 obs 용량 공급자). 태스크는 awsvpc 라 위 obs SG 를 따로 쓰고,
+# 이 SG 는 인스턴스 자신(ECS 에이전트 · SSM · 이미지 pull · EBS 붙이기)의 것이다.
+# 인바운드는 없다. 사람은 ECS Exec(태스크) 또는 Session Manager(인스턴스)로 들어온다.
+resource "aws_security_group" "obs_instance" {
+  name        = "${local.name_prefix}-obs-instance-sg"
+  description = "Observability ECS container instance (no inbound)"
+  vpc_id      = local.vpc_id
+
+  tags = { Name = "${local.name_prefix}-obs-instance-sg" }
+}
+
+# ECS · SSM · EC2 API · 이미지 레지스트리 · S3 게이트웨이 엔드포인트. 대상 주소가 고정되지 않아 0.0.0.0/0 이다
+resource "aws_vpc_security_group_egress_rule" "obs_instance_https" {
+  security_group_id = aws_security_group.obs_instance.id
+  description       = "HTTPS to ECS, SSM, EC2 API, image registries, S3 gateway endpoint"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
+
+resource "aws_vpc_security_group_ingress_rule" "vpce_from_obs_instance" {
+  security_group_id            = local.vpce_sg_id
+  description                  = "from obs container instance (ECS agent, SSM agent, AWS APIs)"
+  referenced_security_group_id = aws_security_group.obs_instance.id
+  ip_protocol                  = "tcp"
+  from_port                    = 443
+  to_port                      = 443
+}
