@@ -47,6 +47,7 @@ locals {
         AWS_REGION              = var.aws_region
         SPRING_APPLICATION_JSON = local.service_config_json[k]
       },
+      local.otel_env[k], # otel.tf. service.yml 의 environment 가 같은 이름이면 그쪽이 이긴다
       v.environment,
     )
   }
