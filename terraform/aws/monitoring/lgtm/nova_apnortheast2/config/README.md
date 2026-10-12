@@ -48,7 +48,7 @@ Tempo · Mimir 의 링은 메모리에 둔다. Tempo 는 memberlist 를 띄우�
 | 컨테이너 | 변수 | 값 |
 |---|---|---|
 | otel-collector | `LOKI_OTLP_ENDPOINT` | `http://localhost:3100/otlp` |
-| otel-collector | `TEMPO_OTLP_ENDPOINT` | `localhost:14317` (gRPC, TLS 없음) |
+| otel-collector | `TEMPO_OTLP_ENDPOINT` | `127.0.0.1:14317` (gRPC, TLS 없음. localhost 는 ::1 부터 붙어 실패 로그를 남긴다) |
 | otel-collector | `MIMIR_OTLP_ENDPOINT` | `http://localhost:9009/otlp` |
 | otel-collector | `MYSQLD_EXPORTER_TARGET` | `localhost:9104`. mysqld_exporter 를 띄우지 않으면 **빈 문자열** — 그때는 긁지 않는다 |
 | loki | `LOKI_S3_BUCKET` · `LOKI_S3_REGION` | s3 스택 출력 `loki_bucket` 의 버킷, `ap-northeast-2` |

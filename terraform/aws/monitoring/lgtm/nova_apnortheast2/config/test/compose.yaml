@@ -51,7 +51,7 @@ services:
     command: ["--config=/config/collector.yaml"]
     environment:
       LOKI_OTLP_ENDPOINT: http://localhost:3100/otlp
-      TEMPO_OTLP_ENDPOINT: localhost:14317
+      TEMPO_OTLP_ENDPOINT: 127.0.0.1:14317
       MIMIR_OTLP_ENDPOINT: http://localhost:9009/otlp
       # mysqld_exporter 를 띄우지 않는 구성이면 비운다(시험이 그렇다)
       MYSQLD_EXPORTER_TARGET: ${MYSQLD_EXPORTER_TARGET:-}
