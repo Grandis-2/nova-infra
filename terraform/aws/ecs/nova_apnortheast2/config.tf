@@ -23,6 +23,10 @@ locals {
   _cfg_computed = {
     for k, v in local.deployed_services : k => merge(
       { "spring.application.name" = v.name },
+      # 콘솔(→ CloudWatch Logs) 로그를 ECS JSON 한 줄로 찍는다. 스택트레이스가 한 이벤트(error.stack_trace)에 들어가고
+      # MDC · key-value 가 필드가 되어 Logs Insights 로 바로 거른다. service.name 은 spring.application.name 이다.
+      # 로컬 실행에는 들어가지 않으므로 사람이 읽는 텍스트 로그는 그대로다.
+      { "logging.structured.format.console" = "ecs" },
       v.port > 0 ? { "server.port" = tostring(v.port) } : {},
       # Kubernetes 밖에서는 이 플래그가 있어야 Boot 가 liveness/readiness 그룹을 연다
       v.mgmt_port > 0 ? {
