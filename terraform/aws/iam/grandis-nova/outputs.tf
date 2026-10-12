@@ -21,6 +21,11 @@ output "scheduler_role_arn" {
   value = aws_iam_role.scheduler.arn
 }
 
+output "migration_execution_role_arn" {
+  description = "마이그레이션 태스크(ecs 스택 migration.tf)의 실행 역할. db/migrator 시크릿을 읽는다"
+  value       = aws_iam_role.migration_execution.arn
+}
+
 output "bastion_instance_profile" {
   value = aws_iam_instance_profile.bastion.name
 }

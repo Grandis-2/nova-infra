@@ -35,3 +35,8 @@ output "obs_security_group_id" {
   description = "관측 호스트(obs) SG. 서비스 SG 에서 4317 · 4318 만 받는다"
   value       = aws_security_group.obs.id
 }
+
+output "migration_security_group_id" {
+  description = "마이그레이션 태스크 SG. 인바운드 없음, 3306 · 443 만 나간다"
+  value       = aws_security_group.migration.id
+}

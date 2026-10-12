@@ -82,9 +82,10 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | `alb` | CloudFront 관리형 prefix list, 443 | 서비스의 앱 · 헬스 포트 |
 | `<서비스>` (서비스마다 하나) | ALB (앱 · 헬스 포트), 자신을 호출하는 서비스 (앱 포트) | 전체 (NAT 경유) |
 | `redis` | 캐시를 쓰는 서비스, 6379 | — |
-| `vpce` | 서비스, bastion, obs, 443 | — |
+| `vpce` | 서비스, bastion, obs, migration, 443 | — |
 | `bastion` | 없음 (SSM Session Manager로만 접속) | 전체 |
 | `obs` (관측 호스트) | 서비스, 4317 · 4318 (OTLP). Grafana는 SSM 포트 포워딩으로만 접속 | 443 |
+| `migration` (배포 전 마이그레이션 태스크) | 없음 | 3306 (NAT 경유 DB) · 443 |
 | NAT (fck-nat) | VPC 대역 | 전체 (고정 IP 2개로 나감) |
 
 - **진입 경로는 CloudFront 하나입니다.** ALB 보안 그룹은 CloudFront 대역만 받습니다. CloudFront가 붙이는 비밀 헤더가 없는 요청은 ALB가 404로 돌려보냅니다.
@@ -105,8 +106,9 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | 사람 (평소) | `nova-readonly` | 읽기 전용 + 상태 잠금 파일 쓰기. 로컬 plan용 |
 | 사람 (비상) | `BreakGlassAdmin` | 관리자. MFA 필수, 1시간, InfraAdmins 그룹만 |
 | Atlantis | `atlantis-grandis-nova-admin` | PowerUser + `nova-*` IAM 리소스 쓰기. 인프라 변경은 이 역할만 |
-| be GitHub Actions | `nova-prod-github-deploy` | OIDC, `Grandis-2/be`의 main 브랜치만. ECR 푸시와 ECS 재배포만 (태스크 정의 변경 불가) |
+| be GitHub Actions | `nova-prod-github-deploy` | OIDC, `Grandis-2/be`의 main 브랜치만. ECR 푸시, ECS 재배포, 배포 전 마이그레이션 태스크 실행 (태스크 정의 변경 불가) |
 | ECS (공통) | `nova-prod-ecs-task-execution` | 이미지 pull, 로그, `app/*` · `shared/*` · `db/app/*` 비밀 읽기 |
+| 마이그레이션 태스크 | `nova-prod-migration-execution` | 이미지 pull, 로그, `db/migrator` 비밀 읽기 |
 | ECS (서비스별) | `nova-prod-<서비스>-task` | `service.yml`에 적은 큐와 업로드 버킷만 |
 | ECS · 스케줄러 · bastion | `nova-prod-ecs-infrastructure-lb`, `nova-prod-scheduler-execution`, `nova-prod-bastion` | Blue/Green 리스너 전환, 배치 실행, SSM 접속 |
 | sops | `nova-sops-common`, `nova-sops-secure` | KMS 복호화. Atlantis와 관리자만 맡을 수 있음 |
@@ -127,7 +129,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 
 Atlantis 서버는 별도 저장소 **[Grandis-2/atlantis-deploy](https://github.com/Grandis-2/atlantis-deploy)** 에서 관리합니다. 두 저장소는 상태 버킷으로만 연결됩니다.
 
-앱 배포는 Atlantis와 따로 진행됩니다. be의 GitHub Actions가 이미지를 ECR에 올리고 `ecs update-service --force-new-deployment`로 다시 배포합니다.
+앱 배포는 Atlantis와 따로 진행됩니다. be의 GitHub Actions가 먼저 마이그레이션 태스크(`nova-prod-migration`)로 DB 스키마를 올리고, 이미지를 ECR에 올린 뒤 `ecs update-service --force-new-deployment`로 다시 배포합니다.
 
 ## 주요 설계
 
