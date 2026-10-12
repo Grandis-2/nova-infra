@@ -77,7 +77,7 @@ locals {
   obs_after_config = [{ containerName = "config-init", condition = "SUCCESS" }]
   obs_config_mount = [{ sourceVolume = "config", containerPath = "/config", readOnly = true }]
 
-  obs_mysqld_exporter = var.obs_mysqld_exporter.secret_arn != ""
+  obs_mysqld_exporter = var.obs_mysqld_exporter_enabled
 
   # 경보 토픽은 monitoring/cloudwatch 스택이 만든다 (Chatbot → Slack 이 이미 구독)
   alerts_topic_arn = data.aws_sns_topic.alerts.arn
@@ -219,7 +219,11 @@ locals {
         restartPolicy    = local.obs_common.restartPolicy
       },
     ],
-    # NCP DB 지표. 읽기 전용 exporter 계정과 그 비밀이 생긴 뒤 obs_mysqld_exporter 로 켠다
+    # NCP DB 지표. 계정 · 비밀은 ncp-database 스택(exporter.tf)이 만든다 — READ 계정이다.
+    # NCP 가 PROCESS · REPLICATION CLIENT 를 줄 수 없어 그 권한이 필요한 기본 수집기를 끈다(켜 두면 긁을 때마다 오류를 남긴다):
+    #   slave_status(REPLICATION CLIENT, 복제도 없다) · info_schema.innodb_cmp/cmpmem(PROCESS) · info_schema.query_response_time(Percona 전용)
+    # 남는 것: mysql_up, SHOW GLOBAL STATUS(연결 · 스레드 · 쿼리 · InnoDB 버퍼 풀 · 행 잠금 등), SHOW GLOBAL VARIABLES(max_connections 등)
+    # TLS: 앱(JDBC sslMode=REQUIRED)과 같이 암호화는 하고 인증서는 검증하지 않는다(--tls.insecure-skip-verify → DSN tls=skip-verify)
     local.obs_mysqld_exporter ? [
       {
         name      = "mysqld-exporter"
@@ -228,11 +232,17 @@ locals {
         memory    = 128
         command = [
           "--mysqld.address=${data.terraform_remote_state.database.outputs.db_address}:${data.terraform_remote_state.database.outputs.db_port}",
-          "--mysqld.username=${var.obs_mysqld_exporter.username}",
+          "--mysqld.username=${data.terraform_remote_state.database.outputs.exporter_username}",
+          "--tls.insecure-skip-verify",
           "--web.listen-address=:${local.obs_ports.mysqld_metrics}",
+          "--no-collect.slave_status",
+          "--no-collect.info_schema.innodb_cmp",
+          "--no-collect.info_schema.innodb_cmpmem",
+          "--no-collect.info_schema.query_response_time",
         ]
         secrets = [
-          { name = "MYSQLD_EXPORTER_PASSWORD", valueFrom = var.obs_mysqld_exporter.secret_arn },
+          # 비밀은 JSON(username · password · host · port)이다. password 키만 넣는다
+          { name = "MYSQLD_EXPORTER_PASSWORD", valueFrom = "${data.terraform_remote_state.database.outputs.exporter_secret_arn}:password::" },
         ]
         readonlyRootFilesystem = true
         logConfiguration       = local.obs_log["mysqld-exporter"]
