@@ -6,7 +6,7 @@
 #   obs-config 버킷          init 컨테이너가 설정 파일(monitoring 스택의 lgtm/)을 받는다
 #   SNS 경보 토픽            Grafana 경보를 monitoring 스택의 토픽(→ Chatbot → Slack)으로 보낸다
 # 실행 역할 nova-prod-obs-execution
-#   이미지 pull · 로그, Grafana admin 비밀번호를 컨테이너에 넣는다
+#   이미지 pull · 로그, Grafana admin 비밀번호와 mysqld_exporter DB 비밀번호를 컨테이너에 넣는다
 # 인스턴스 역할 nova-prod-obs-instance
 #   obs 태스크를 올리는 ECS 컨테이너 인스턴스. ECS 에이전트 · SSM, 부팅 때 데이터 EBS 를 붙인다
 #
@@ -85,6 +85,7 @@ resource "aws_iam_role_policy_attachment" "obs_execution_managed" {
   policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# 정책 이름은 처음 만든 그대로 둔다(바꾸면 지웠다 다시 만든다). Grafana 와 mysqld_exporter 비밀을 읽는다
 resource "aws_iam_role_policy" "obs_execution_secret" {
   name = "read-grafana-secret"
   role = aws_iam_role.obs_execution.id
@@ -97,6 +98,13 @@ resource "aws_iam_role_policy" "obs_execution_secret" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = [data.terraform_remote_state.secretsmanager.outputs.grafana_admin_secret_arn]
+      },
+      # mysqld_exporter 계정 (ncp-database 스택 exporter.tf). 이름 규칙으로 준다 — ARN 끝 6자리는 Secrets Manager 가 붙인다
+      {
+        Sid      = "MysqldExporterPassword"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:${local.partition}:secretsmanager:${var.aws_region}:${local.account_id}:secret:${local.name_prefix}/db/exporter-??????"]
       },
     ]
   })
