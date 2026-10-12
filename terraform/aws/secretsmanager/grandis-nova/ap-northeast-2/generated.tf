@@ -4,7 +4,7 @@
 #
 #   rsa-2048      RSA 2048 개인키 (PKCS#8 PEM)
 #   random-48     무작위 48바이트 (base64)
-#   admin-bcrypt  관리자 비밀번호의 bcrypt 해시. 원문은 nova-prod/ops/<서비스>/admin-password (서비스에는 주지 않는다)
+#   admin-bcrypt  관리자 비밀번호의 bcrypt 해시(cost 12). 원문은 nova-prod/ops/<서비스>/admin-password (서비스에는 주지 않는다)
 #   shared/<이름> 공유 시크릿 nova-prod/shared/<이름> (무작위 48바이트). 같은 이름을 쓰는 서비스가 같은 값을 읽는다
 
 locals {
@@ -68,7 +68,8 @@ resource "aws_secretsmanager_secret_version" "generated" {
   secret_string_wo = (
     each.value == "rsa-2048" ? ephemeral.tls_private_key.rsa[each.key].private_key_pem_pkcs8 :
     each.value == "random-48" ? ephemeral.random_bytes.random[each.key].base64 :
-    ephemeral.random_password.admin[each.key].bcrypt_hash
+    # random_password.bcrypt_hash 는 cost 10 고정이다. 앱(be AdminProperties)은 cost 12~14 만 받는다
+    bcrypt(ephemeral.random_password.admin[each.key].result, 12)
   )
   secret_string_wo_version = local.version_of[each.key]
 }

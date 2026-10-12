@@ -84,7 +84,7 @@ generated_secrets:
 | --- | --- | --- |
 | `rsa-2048` | RSA 2048비트 개인키, PKCS#8 PEM | `nova-prod/app/<서비스>/<키>` |
 | `random-48` | 무작위 48바이트, base64 (64자) | `nova-prod/app/<서비스>/<키>` |
-| `admin-bcrypt` | 영문·숫자 24자 비밀번호의 bcrypt 해시 | `nova-prod/app/<서비스>/<키>` (해시)<br>`nova-prod/ops/<서비스>/admin-password` (원문, 사람만 읽음) |
+| `admin-bcrypt` | 영문·숫자 24자 비밀번호의 bcrypt 해시 (cost 12) | `nova-prod/app/<서비스>/<키>` (해시)<br>`nova-prod/ops/<서비스>/admin-password` (원문, 사람만 읽음) |
 | `shared/<이름>` | 무작위 48바이트, base64. 같은 이름을 적은 서비스가 같은 값을 씀 | `nova-prod/shared/<이름>` |
 
 - 키는 환경 변수 이름이라 대문자, 숫자, `_`만 씁니다.
