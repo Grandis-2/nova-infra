@@ -1,14 +1,16 @@
 # lgtm — obs 태스크의 설정과 시험
 
-nova 관측 스택(OTel Collector · Loki · Tempo · Grafana)의 설정 파일과 로컬 시험이다. 로그 부분은 `Grandis-2/nova-observability` 에서 옮겨 왔다.
-로그와 트레이스를 받는다. 지표는 NV-431 에서 더한다.
+nova 관측 스택(OTel Collector · Loki · Tempo · Mimir · Grafana)의 설정 파일과 로컬 시험이다. 로그 부분은 `Grandis-2/nova-observability` 에서 옮겨 왔다.
+로그 · 트레이스 · 지표를 받는다.
 
 이 폴더는 Terraform 이 읽지 않는다. 설정을 S3 에 올리고 ECS 작업 정의 · 서비스로 띄우는 것은 NV-434 에서 이 스택에 더한다.
 
 ```
 앱 태스크 ──OTLP──▶ obs 태스크: otel-collector :4317/:4318 ─┬─ 로그 ──────────────▶ loki  :3100 ──▶ S3 (loki 버킷)
-                                                          └─ 트레이스(샘플링) ──▶ tempo :3200 ──▶ S3 (tempo 버킷)
-                                     grafana :3000 ── loki · tempo 조회   (ECS Exec 포트 포워딩으로만 접속)
+                                                          ├─ 트레이스(샘플링) ──▶ tempo :3200 ──▶ S3 (tempo 버킷)
+                                                          └─ 지표 ─────────────▶ mimir :9009 ──▶ S3 (mimir 버킷)
+                          mysqld_exporter :9104 ◀── Collector 가 긁음 (NCP DB 지표)
+                                     grafana :3000 ── loki · tempo · mimir 조회   (ECS Exec 포트 포워딩으로만 접속)
 ```
 
 obs 태스크의 컨테이너는 localhost 를 같이 쓴다(awsvpc). 포트가 겹치면 컨테이너가 죽는다.
@@ -18,9 +20,11 @@ obs 태스크의 컨테이너는 localhost 를 같이 쓴다(awsvpc). 포트가 
 | otel-collector | 4317 (OTLP gRPC) · 4318 (OTLP HTTP) · 8888 (자체 지표, localhost) · 13133 (헬스체크) |
 | loki | 3100 (HTTP) · 9096 (gRPC) |
 | tempo | 3200 (HTTP) · 9097 (gRPC) · 14317 (OTLP gRPC 수신, localhost — Collector 만 보낸다) |
+| mimir | 9009 (HTTP: OTLP 수신 `/otlp`, PromQL `/prometheus`) · 9098 (gRPC) · 7947 (memberlist, 127.0.0.1) |
 | grafana | 3000 |
+| mysqld_exporter | 9104 |
 
-Tempo 는 memberlist(7946)를 쓰지 않는다(링은 메모리).
+Tempo · Mimir 의 링은 메모리에 둔다. Tempo 는 memberlist 를 띄우지 않고, Mimir 3 는 띄우므로 7946 을 피해 127.0.0.1:7947 에 묶었다.
 
 ## 파일
 
@@ -29,7 +33,12 @@ Tempo 는 memberlist(7946)를 쓰지 않는다(링은 메모리).
 | `collector.yaml` | Collector. 로그: `memory_limiter` → 리소스 허용 목록 → 저장 전 마스킹 → `batch` → Loki. 트레이스: `memory_limiter` → 리소스 허용 목록 → tail sampling → 스팬 마스킹 → `batch` → Tempo |
 | `loki.yaml` | Loki 단일 바이너리. S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
 | `tempo.yaml` | Tempo 단일 바이너리. S3 저장, 보존 기간(compactor), WAL, 정상 종료 때 블록 업로드 |
-| `grafana/provisioning/datasources/` | Grafana 데이터소스: Loki(trace_id → Tempo 링크), Tempo(트레이스 → 로그) |
+| `mimir.yaml` | Mimir 단일 바이너리(`-target=all`). S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로, 보존 기간, 정상 종료 때 블록 업로드, OTLP 이름 접미사 |
+| `grafana/provisioning/datasources/` | Grafana 데이터소스: Loki(trace_id → Tempo 링크), Tempo(트레이스 → 로그), Mimir(exemplar → Tempo) |
+| `grafana/provisioning/dashboards/nova.yaml` | 대시보드 프로비저닝. `/config/grafana/dashboards` 를 `nova` 폴더로 읽는다(화면에서 고쳐도 저장되지 않는다) |
+| `grafana/dashboards/` | 서비스별 대시보드 `<서비스>.json` 8개와 그것을 만드는 `gen.sh`. 고칠 때는 `gen.sh` 의 틀을 고치고 다시 만든다 |
+| `grafana/provisioning/alerting/` | 경보: `rules.yaml`(규칙 5개), `notify.yaml`(SNS 알림 대상 · 기본 경로 · Chatbot 템플릿) |
+| `grafana/provisioning/plugins/` | 빈 프로비저닝 파일. 디렉터리가 없으면 Grafana 가 기동마다 오류 로그를 남긴다(S3 에는 빈 디렉터리가 없다) |
 | `test/` | 로컬 시험. `compose.yaml` 은 시험 전용이고 운영에서는 쓰지 않는다 |
 
 ## 실행 환경이 넘길 값
@@ -40,25 +49,34 @@ Tempo 는 memberlist(7946)를 쓰지 않는다(링은 메모리).
 |---|---|---|
 | otel-collector | `LOKI_OTLP_ENDPOINT` | `http://localhost:3100/otlp` |
 | otel-collector | `TEMPO_OTLP_ENDPOINT` | `localhost:14317` (gRPC, TLS 없음) |
+| otel-collector | `MIMIR_OTLP_ENDPOINT` | `http://localhost:9009/otlp` |
+| otel-collector | `MYSQLD_EXPORTER_TARGET` | `localhost:9104`. mysqld_exporter 를 띄우지 않으면 **빈 문자열** — 그때는 긁지 않는다 |
 | loki | `LOKI_S3_BUCKET` · `LOKI_S3_REGION` | s3 스택 출력 `loki_bucket` 의 버킷, `ap-northeast-2` |
 | loki | `LOKI_RETENTION_PERIOD` | `2160h` (90일). 조회 가능 범위(`max_query_lookback`)도 같은 값이다 |
 | loki | `LOKI_S3_ENDPOINT` · `LOKI_S3_FORCE_PATH_STYLE` · `LOKI_S3_INSECURE` | 운영에서는 넘기지 않는다(시험의 Floci 용) |
 | loki | `LOKI_COMPACTION_INTERVAL` · `LOKI_RETENTION_DELETE_DELAY` | 운영에서는 넘기지 않는다(기본 10m · 2h) |
 | tempo | `TEMPO_S3_BUCKET` · `TEMPO_S3_REGION` | s3 스택 출력 `tempo_bucket` 의 버킷, `ap-northeast-2` |
-| tempo | `TEMPO_S3_ENDPOINT` | **필수.** `s3.ap-northeast-2.amazonaws.com` (Loki 와 달리 비워 둘 수 없다) |
+| tempo | `TEMPO_S3_ENDPOINT` | 넘기지 않는다. 없으면 `s3.<TEMPO_S3_REGION>.amazonaws.com` |
 | tempo | `TEMPO_RETENTION` | `336h` (14일) |
 | tempo | `TEMPO_S3_FORCE_PATH_STYLE` · `TEMPO_S3_INSECURE` | 운영에서는 넘기지 않는다(시험의 Floci 용) |
-| grafana | `LOKI_URL` · `TEMPO_URL` | `http://localhost:3100` · `http://localhost:3200` |
+| mimir | `MIMIR_S3_BUCKET` · `MIMIR_S3_REGION` | s3 스택 출력 `mimir_bucket` 의 버킷, `ap-northeast-2` |
+| mimir | `MIMIR_RETENTION` | `2160h` (90일) |
+| mimir | `MIMIR_S3_ENDPOINT` | 넘기지 않아도 된다. 없으면 `s3.ap-northeast-2.amazonaws.com` (Mimir 는 기본값 안에 다른 변수를 못 쓴다 — 리전을 바꾸면 넘긴다) |
+| mimir | `MIMIR_S3_INSECURE` · `MIMIR_S3_BUCKET_LOOKUP_TYPE` | 운영에서는 넘기지 않는다(시험의 Floci 용) |
+| grafana | `LOKI_URL` · `TEMPO_URL` · `MIMIR_URL` | `http://localhost:3100` · `http://localhost:3200` · `http://localhost:9009/prometheus` |
 | grafana | `GF_SECURITY_ADMIN_PASSWORD` | 비밀 주입: `nova-prod/ops/grafana/admin-password` (secretsmanager 스택) |
 | grafana | `GF_PATHS_PROVISIONING` | `/config/grafana/provisioning` |
+| grafana | `SNS_TOPIC_ARN` | **필수.** monitoring 스택의 알림 주제(Chatbot 이 구독). 비어 있으면 Grafana 가 뜨지 않는다(알림 대상 검증 실패) |
+| grafana | `AWS_REGION` | `ap-northeast-2` (SNS 리전). 태스크 역할에 그 주제의 `sns:Publish` 가 있어야 한다 |
 
-설정 파일은 컨테이너의 `/config/` 아래에 놓인다: `/config/collector.yaml` · `/config/loki.yaml` · `/config/tempo.yaml` · `/config/grafana/**`.
-Collector 는 `--config=/config/collector.yaml`, Loki · Tempo 는 `-config.file=/config/<이름>.yaml -config.expand-env=true` 로 띄운다.
+설정 파일은 컨테이너의 `/config/` 아래에 놓인다: `/config/collector.yaml` · `/config/loki.yaml` · `/config/tempo.yaml` · `/config/mimir.yaml` · `/config/grafana/**`.
+Collector 는 `--config=/config/collector.yaml`, Loki · Tempo · Mimir 는 `-config.file=/config/<이름>.yaml -config.expand-env=true` 로 띄운다.
 
 작업 정의(NV-434)가 지킬 것 — 시험 compose(`test/compose.yaml`)와 같게 맞춘다.
 - 이미지는 태그와 다이제스트로 고정한다(`test/compose.yaml` 의 값).
-- 데이터 경로는 재시작 · 인스턴스 교체에도 남는 디스크여야 한다(WAL): loki `/loki`, tempo `/var/tempo` (UID 10001), grafana `/var/lib/grafana` (UID 472).
-- Loki · Tempo 의 정지 시간을 넉넉히 준다(`stopTimeout` 120초). 정상 종료 때 들고 있던 청크 · 블록을 S3 로 올린다.
+- 데이터 경로는 재시작 · 인스턴스 교체에도 남는 디스크여야 한다(WAL): loki `/loki`, tempo `/var/tempo`, mimir `/data` (셋 다 UID 10001), grafana `/var/lib/grafana` (UID 472).
+- Tempo · Mimir 이미지의 기본 사용자는 root 다. 작업 정의에서 `user: 10001:10001` 로 돌린다(시험 compose 도 그렇게 돈다).
+- Loki · Tempo · Mimir 의 정지 시간을 넉넉히 준다(`stopTimeout` 120초). 정상 종료 때 들고 있던 청크 · 블록을 S3 로 올린다.
 - Collector 메모리는 1 GiB 이상. tail sampling 이 결정 전 트레이스를 메모리에 든다(`memory_limiter` 768 MiB).
 - 버킷 정책은 `nova-prod-obs` 역할만 객체에 접근하게 막아 두었다(s3 스택).
 - 모든 컨테이너는 리눅스 권한이 필요 없다(1024 위 포트만 쓴다). 권한을 모두 버리고 권한 상승을 막는다.
@@ -73,8 +91,9 @@ OTEL_SERVICE_NAME=<svc>
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod,service.namespace=nova
 OTEL_LOGS_EXPORTER=otlp
 OTEL_TRACES_EXPORTER=otlp
-OTEL_METRICS_EXPORTER=none
+OTEL_METRICS_EXPORTER=otlp
 OTEL_TRACES_SAMPLER=parentbased_always_on
+OTEL_INSTRUMENTATION_MICROMETER_ENABLED=true
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel.nova.local:4317
 OTEL_EXPORTER_OTLP_PROTOCOL=grpc
 OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_MDC_ATTRIBUTES_INCLUDED=traceId
@@ -86,6 +105,22 @@ OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED=event_id,aggr
 - logback 속성은 2.32.0 의 새 이름이다. 값은 `true` 가 아니라 이름 목록이다.
 - MDC 는 `traceId`(요청 ID)만 받는다. `subject`(회원 ID)는 받지 않는다.
 - 샘플링은 Collector 가 한다(`parentbased_always_on` 으로 모두 보낸다). 앱에서 자르면 버려진 쪽의 오류 트레이스를 다시 찾을 수 없다.
+
+## 경보 (`grafana/provisioning/alerting/`)
+
+Grafana 가 1분마다 Mimir 를 질의해 판단하고, SNS → AWS Chatbot → Slack 으로 보낸다. 같은 경보 이름 · job 끼리 묶고 4시간마다 다시 알린다.
+
+| 규칙 | 조건 | 지속 | 등급 |
+|---|---|---|---|
+| HTTP 5xx 비율 | 서비스별 5xx 비율 > 5% | 5분 | critical |
+| HTTP P99 응답 시간 | 서비스별 P99 > 2초 | 10분 | warning |
+| JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
+| 서비스 지표 끊김 | 지난 1시간 안에 보내던 서비스가 지금 target_info 를 안 보냄 | 5분 | critical |
+| obs 수집 실패 | Collector 의 수신 거부 · 내보내기 실패 > 0 | 10분 | warning |
+
+- 트래픽이 없어 질의가 비면 정상으로 본다(`noDataState: OK`). 질의가 실패하면 Grafana 가 오류 경보를 따로 보낸다.
+- Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 일 때만 그대로 보여 준다. `notify.yaml` 의 템플릿이 그 JSON 을 만들고, 값의 `"` · `\` · 줄바꿈은 바꿔 넣는다(`test/grafana.sh` 가 렌더링해 확인).
+- obs 자체가 죽으면 이 경보도 멈춘다. obs 태스크 · 인스턴스 감시는 CloudWatch 경보(작업 정의 쪽)가 맡는다.
 
 ## 트레이스 샘플링 (`collector.yaml` 의 `tail_sampling`)
 
@@ -104,8 +139,8 @@ OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED=event_id,aggr
 ## 조회
 
 ```
-{service_name="nova-preorder", deployment_environment="prod"} | event_id="<uuid>"
-{service_name=~"nova-.+"} | aggregate_type="PREORDER" | aggregate_id="<uuid>"
+{service_name="preorder", deployment_environment="prod"} | event_id="<uuid>"
+{service_namespace="nova"} | aggregate_type="PREORDER" | aggregate_id="<uuid>"
 ```
 
 인덱스 라벨은 `service_name` · `service_namespace` · `deployment_environment` 뿐이다(`loki.yaml` 의 `ignore_defaults` 와 지정 목록).
@@ -123,6 +158,13 @@ OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED=event_id,aggr
 - Grafana 는 익명 접근 · 가입 · 플러그인 관리가 꺼져 있다.
 - Collector 는 리소스 속성을 **허용 목록**으로만 남긴다. AWS 리소스 감지를 켜면 붙는 `aws.ecs.*` · `cloud.account.id` 는 계정 ID 를 담는다. 이것도 버린다(`test/agent-probe.sh` C 가 확인).
 - **손실을 허용하는 경로다.** Collector 에 디스크 큐가 없고, 메모리가 차면 받기를 거부하고, obs 가 내려가 있는 동안의 로그는 오지 않는다. 정본(outbox 등)의 근거로 쓰지 않는다.
+
+**대시보드.** Grafana 의 `nova` 폴더에 서비스마다 하나(`nova · <서비스>`): HTTP 요청 수 · 5xx 비율 · P99(점을 누르면 트레이스), JVM 힙 · GC · 스레드 · CPU, DB 커넥션 풀, WARN · ERROR 로그, 오류 트레이스.
+DB 커넥션 풀 패널의 지표 이름(HikariCP)은 실제 앱에서 아직 확인하지 않았다.
+
+**지표.** Mimir 데이터소스에서 PromQL 로 본다. 이름은 Prometheus 관례(단위 · 종류 접미사)다: `http.server.request.duration` → `http_server_request_duration_seconds_bucket`.
+`job` 라벨은 `<service.namespace>/<service.name>`(예 `nova/preorder`), `deployment_environment` · `service_namespace` 도 라벨이다. 다른 리소스 속성은 `target_info` 에만 있다.
+Collector 자기 지표는 `job="otelcol-contrib"` 다.
 
 **트레이스.** Grafana Explore 에서 Tempo 를 고르거나, 로그 줄을 펼쳐 trace_id 의 "Tempo" 링크로 간다.
 스팬에서는 "Logs for this span" 이 같은 서비스의 같은 trace_id 로그를 연다.
@@ -158,6 +200,8 @@ Collector 가 Loki 에 넘기기 전에 개인정보 원문을 고정 표시로 
 | 보존 기간이 지난 청크만 compactor 가 S3 에서 지운다 | `bash test/retention.sh` |
 | 저장 전 마스킹: 사례 22개 · 바뀌면 안 되는 값 11개 · 예외 메시지 · 맵 / 목록 본문을 필드마다 기대값과 비교 | `bash test/masking.sh` |
 | Java 25 + 에이전트 2.32.0 + logback → 스택. 프로토콜 짝, MDC 는 `traceId` 만, `aws.*` 버림 | `bash test/agent-probe.sh` (JDK 25 필요) |
+| Grafana 프로비저닝: 데이터소스 셋의 연결 확인, nova 대시보드 수, 경보 규칙 · 알림 대상 · 기본 경로, 규칙 PromQL 실행, Chatbot 템플릿 렌더링, 프로비저닝 오류 로그 없음 | `bash test/grafana.sh` |
+| 지표: OTLP 히스토그램 · 카운터를 PromQL 로(이름 접미사 · job · 올린 리소스 속성), 허용 목록, Collector 자기 지표, mysqld 대상이 빌 때, Grafana 조회, 정상 종료 뒤 S3 에서 읽기 | `bash test/metrics.sh` |
 | 트레이스: 오류 트레이스 저장 · 스팬 마스킹(쿼리 값 · 이메일 · 전화 · 중복 키) · 느린 트레이스 저장 · 헬스체크 · 빈 롱폴링 버림 · 10% 샘플링 · Grafana 조회 · 정상 종료 뒤 S3 에서 읽기 | `bash test/traces.sh` |
 
 시험 compose 는 작업 정의와 같은 포트 · 환경 변수 이름 · `/config` 경로를 쓰고, 모든 컨테이너가 한 네트워크 네임스페이스(`netns`)를 같이 쓴다(awsvpc 와 같다).

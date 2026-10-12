@@ -44,10 +44,3 @@ variable "obs_mysqld_exporter" {
     secret_arn = ""
   }
 }
-
-variable "obs_metrics_enabled" {
-  description = "지표(Mimir) 컨테이너를 켠다. config/mimir.yaml 과 collector 의 metrics 파이프라인이 들어온 뒤 true (NV-431)"
-  type        = bool
-  default     = false
-}
-

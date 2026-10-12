@@ -14,7 +14,7 @@ services:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: ${LOKI_S3_REGION}
-      BUCKETS: ${LOKI_S3_BUCKET} ${TEMPO_S3_BUCKET}
+      BUCKETS: ${LOKI_S3_BUCKET} ${TEMPO_S3_BUCKET} ${MIMIR_S3_BUCKET}
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -49,6 +49,17 @@ services:
       TEMPO_S3_ENDPOINT: s3:4566
       TEMPO_S3_FORCE_PATH_STYLE: "true"
       TEMPO_S3_INSECURE: "true"
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    depends_on:
+      s3-bucket:
+        condition: service_completed_successfully
+
+  mimir:
+    environment:
+      MIMIR_S3_ENDPOINT: s3:4566
+      MIMIR_S3_INSECURE: "true"
+      MIMIR_S3_BUCKET_LOOKUP_TYPE: path
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
     depends_on:

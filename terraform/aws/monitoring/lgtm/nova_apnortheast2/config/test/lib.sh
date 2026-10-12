@@ -10,18 +10,22 @@ export OBS_OTLP_HTTP_PORT="${OBS_OTLP_HTTP_PORT:-14318}"
 export OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-13000}"
 export OBS_LOKI_PORT="${OBS_LOKI_PORT:-13100}"
 export OBS_TEMPO_PORT="${OBS_TEMPO_PORT:-13200}"
+export OBS_MIMIR_PORT="${OBS_MIMIR_PORT:-19009}"
 export LOKI_S3_BUCKET="${LOKI_S3_BUCKET:-obs-smoke-loki}"
 export LOKI_S3_REGION="${LOKI_S3_REGION:-ap-northeast-2}"
 export LOKI_RETENTION_PERIOD="${LOKI_RETENTION_PERIOD:-24h}"
 export TEMPO_S3_BUCKET="${TEMPO_S3_BUCKET:-obs-smoke-tempo}"
 export TEMPO_S3_REGION="${TEMPO_S3_REGION:-$LOKI_S3_REGION}"
 export TEMPO_RETENTION="${TEMPO_RETENTION:-24h}"
+export MIMIR_S3_BUCKET="${MIMIR_S3_BUCKET:-obs-smoke-mimir}"
+export MIMIR_S3_REGION="${MIMIR_S3_REGION:-$LOKI_S3_REGION}"
+export MIMIR_RETENTION="${MIMIR_RETENTION:-24h}"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/$COMPOSE_PROJECT_NAME.XXXXXX")"
 export OBS_DATA_DIR="$WORK/data"
-mkdir -p "$OBS_DATA_DIR/loki" "$OBS_DATA_DIR/grafana" "$OBS_DATA_DIR/tempo"
+mkdir -p "$OBS_DATA_DIR/loki" "$OBS_DATA_DIR/grafana" "$OBS_DATA_DIR/tempo" "$OBS_DATA_DIR/mimir"
 # 컨테이너 UID(10001 · 472)와 맞지 않는 Linux 호스트를 위해 열어 둔다. 시험용 임시 디렉터리다.
-chmod 777 "$OBS_DATA_DIR/loki" "$OBS_DATA_DIR/grafana" "$OBS_DATA_DIR/tempo"
+chmod 777 "$OBS_DATA_DIR/loki" "$OBS_DATA_DIR/grafana" "$OBS_DATA_DIR/tempo" "$OBS_DATA_DIR/mimir"
 GRAFANA_PASSWORD="smoke-$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')"
 export GRAFANA_ADMIN_PASSWORD="$GRAFANA_PASSWORD"
 
@@ -29,6 +33,7 @@ DC=(docker compose -f test/compose.yaml -f test/compose.local.yaml)
 LOKI="http://127.0.0.1:$OBS_LOKI_PORT"
 GRAFANA="http://127.0.0.1:$OBS_GRAFANA_PORT"
 TEMPO="http://127.0.0.1:$OBS_TEMPO_PORT"
+MIMIR="http://127.0.0.1:$OBS_MIMIR_PORT"
 
 # 컨테이너가 만든 파일(UID 10001 · 472, 0750)은 Linux 호스트 사용자가 지우지 못한다. 같은 바인드 마운트를 단 컨테이너 안에서 지운다.
 wipe() {
@@ -122,6 +127,15 @@ s3_objects_in() {  # 버킷
     s3 ls "s3://$1" --recursive 2>/dev/null || true
 }
 
+wait_mimir() {
+  for _ in $(seq 1 90); do
+    [ "$(curl -s -o /dev/null -w '%{http_code}' "$MIMIR/ready")" = 200 ] && return 0
+    sleep 2
+  done
+  "${DC[@]}" logs mimir | tail -30
+  fail "Mimir /ready 가 180초 안에 200 이 아니다"
+}
+
 up() {
   echo "── 띄우기 ($COMPOSE_PROJECT_NAME, 작업 디렉터리 $WORK)"
   "${DC[@]}" up -d --quiet-pull
@@ -129,4 +143,6 @@ up() {
   pass "Loki ready"
   wait_tempo
   pass "Tempo ready"
+  wait_mimir
+  pass "Mimir ready"
 }

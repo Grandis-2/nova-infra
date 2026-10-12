@@ -1,15 +1,15 @@
 # 단일 바이너리 Tempo. 블록은 S3, 아직 블록이 되지 않은 스팬(WAL)은 로컬 디스크(/var/tempo).
 # -config.expand-env=true 로 띄운다. 값은 작업 정의(시험에서는 compose)가 넘긴다:
-#   TEMPO_S3_BUCKET · TEMPO_S3_REGION · TEMPO_RETENTION · TEMPO_S3_ENDPOINT (필수)
-#     TEMPO_S3_ENDPOINT 는 Loki 와 달리 비워 둘 수 없다. 실제 AWS 에서는 s3.<리전>.amazonaws.com
-#   TEMPO_S3_FORCE_PATH_STYLE · TEMPO_S3_INSECURE (로컬 S3 대체용. 실제 AWS 에서는 넘기지 않는다)
+#   TEMPO_S3_BUCKET · TEMPO_S3_REGION · TEMPO_RETENTION (필수)
+#   TEMPO_S3_ENDPOINT · TEMPO_S3_FORCE_PATH_STYLE · TEMPO_S3_INSECURE (로컬 S3 대체용. 실제 AWS 에서는 넘기지 않는다.
+#     TEMPO_S3_ENDPOINT 가 없으면 리전의 S3 주소 s3.<TEMPO_S3_REGION>.amazonaws.com 이다)
 #
 # 자격 증명은 여기 없다. 비어 있으면 SDK 기본 체인을 쓴다 — ECS 에서는 태스크 역할이다.
 #
 # obs 태스크의 컨테이너는 localhost 를 같이 쓴다(awsvpc). 포트가 Collector(4317 · 4318) · Loki(3100 · 9096) 와 겹치지 않게 둔다.
 #   3200   HTTP (조회 · Grafana)
 #   9097   gRPC (내부)
-#   14317  OTLP gRPC 수신 — Collector 만 보낸다. 앱은 Collector 로 보낸다. 기본값 4317 · 4318 은 Collector 와 겹쳐 쓰지 않는다
+#   14317  OTLP gRPC 수신 — Collector 만 보낸다(보안 그룹이 열지 않는다). 앱은 Collector 로 보낸다. 기본값 4317 · 4318 은 Collector 와 겹쳐 쓰지 않는다
 # memberlist(7946)는 쓰지 않는다(링은 메모리).
 # 샘플링은 Collector(tail_sampling)가 끝낸 뒤라 Tempo 는 받은 것을 모두 저장한다.
 
@@ -25,7 +25,9 @@ distributor:
     otlp:
       protocols:
         grpc:
-          endpoint: 127.0.0.1:14317
+          # 모든 주소에 연다. localhost 가 ::1 로 먼저 풀려 127.0.0.1 만 열면 Collector 가 매번 한 번씩 실패하고 다시 붙는다.
+          # 태스크 밖에서는 닿지 않는다 — obs 보안 그룹은 4317 · 4318 만 연다
+          endpoint: :14317
 
 # 한 대뿐이라 링을 메모리에 둔다(memberlist 를 쓰지 않는다)
 ingester:
@@ -51,7 +53,7 @@ storage:
     s3:
       bucket: ${TEMPO_S3_BUCKET}
       region: ${TEMPO_S3_REGION}
-      endpoint: ${TEMPO_S3_ENDPOINT}
+      endpoint: ${TEMPO_S3_ENDPOINT:-s3.${TEMPO_S3_REGION}.amazonaws.com}
       forcepathstyle: ${TEMPO_S3_FORCE_PATH_STYLE:-false}
       insecure: ${TEMPO_S3_INSECURE:-false}
     # 재시작 뒤 아직 블록이 되지 않은 스팬을 되살리는 근거. /var/tempo 는 영속 디스크여야 한다.

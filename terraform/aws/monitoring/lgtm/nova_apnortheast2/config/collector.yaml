@@ -1,9 +1,10 @@
-# obs 태스크의 OTel Collector. 로그 → Loki, 트레이스 → Tempo. 지표는 NV-431 에서 더한다.
-# 앱이 지표를 보내면 받지 않는다 — 파이프라인이 없어 receiver 가 그 경로를 열지 않는다(HTTP /v1/metrics → 404).
+# obs 태스크의 OTel Collector. 로그 → Loki, 트레이스 → Tempo, 지표 → Mimir.
 #
 # 실행 환경마다 다른 값은 환경 변수로 받는다. obs 태스크의 컨테이너는 localhost 를 같이 쓴다(awsvpc).
 #   LOKI_OTLP_ENDPOINT   Loki 의 OTLP 수신 주소. http://localhost:3100/otlp
 #   TEMPO_OTLP_ENDPOINT  Tempo 의 OTLP gRPC 수신 주소. localhost:14317
+#   MIMIR_OTLP_ENDPOINT  Mimir 의 OTLP 수신 주소. http://localhost:9009/otlp
+#   MYSQLD_EXPORTER_TARGET  mysqld_exporter 주소(localhost:9104). 띄우지 않으면 비운다 — 그때는 아무것도 긁지 않는다
 #
 # 포트: 4317 · 4318 (OTLP 수신), 8888 (자체 지표, localhost), 13133 (헬스체크 — 작업 정의의 컨테이너 헬스체크가 부른다)
 #
@@ -21,6 +22,27 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+  # 지표를 OTLP 로 내지 않는 것들은 긁어 온다(30초).
+  #   otel-collector: 이 Collector 자신(수신 · 거부 · 내보내기 실패 수). obs 수집 경로 경보가 쓴다.
+  #     Mimir 에서는 job="otelcol-contrib" 다(자기 지표의 service.name 이 job_name 보다 우선한다)
+  #   mysqld: NCP DB(mysqld_exporter). MYSQLD_EXPORTER_TARGET 이 비면 대상이 없다
+  prometheus/scrape:
+    config:
+      scrape_configs:
+        - job_name: otel-collector
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["localhost:8888"]
+        - job_name: mysqld
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["${env:MYSQLD_EXPORTER_TARGET}"]
+          # 대상이 빈 문자열이면 버린다(빈 주소를 긁으려다 오류를 내지 않게)
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: ""
+              action: drop
+
 processors:
   # 컨테이너 메모리 한도(1 GiB) 안에서 GC 여유를 남긴다. tail_sampling 이 결정 전 트레이스를 메모리에 든다.
   memory_limiter:
@@ -37,7 +59,7 @@ processors:
   # process.pid · process.command_args · os.description 은 조회 축이 아니면서 길거나 재시작마다 바뀐다.
   # aws.ecs.* 는 넣지 않았다. aws.ecs.task.arn · cluster.arn 에 계정 ID 가 들어 있고,
   # 태스크를 가리키는 데는 service.instance.id 와 host.name 으로 충분하다.
-  # 로그와 트레이스에 같은 목록을 쓴다(아래 두 목록은 같게 유지한다).
+  # 로그 · 트레이스 · 지표에 같은 목록을 쓴다.
   transform/resource-allowlist:
     error_mode: ignore
     log_statements:
@@ -57,6 +79,10 @@ processors:
               "host.name"
             ])
     trace_statements:
+      - context: resource
+        statements:
+          - *resource_allowlist
+    metric_statements:
       - context: resource
         statements:
           - *resource_allowlist
@@ -179,6 +205,11 @@ exporters:
     endpoint: ${env:TEMPO_OTLP_ENDPOINT}
     tls:
       insecure: true
+  # 같은 태스크 안의 Mimir(localhost). Mimir 가 OTLP 를 Prometheus 시계열로 바꾼다(단위 접미사 · 리소스 속성은 target_info)
+  otlphttp/mimir:
+    endpoint: ${env:MIMIR_OTLP_ENDPOINT}
+    tls:
+      insecure: true
 
 service:
   extensions: [health_check]
@@ -191,6 +222,10 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, transform/resource-allowlist, tail_sampling, transform/mask-spans, batch]
       exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp, prometheus/scrape]
+      processors: [memory_limiter, transform/resource-allowlist, batch]
+      exporters: [otlphttp/mimir]
   telemetry:
     logs:
       level: info

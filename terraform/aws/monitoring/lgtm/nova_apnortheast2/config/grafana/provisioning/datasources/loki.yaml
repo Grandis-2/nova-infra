@@ -1,4 +1,4 @@
-# Grafana 데이터소스 — Loki. Tempo 는 tempo.yaml, 지표는 NV-431 에서 더한다.
+# Grafana 데이터소스 — Loki. Tempo 는 tempo.yaml, 지표(Mimir)는 mimir.yaml.
 # LOKI_URL 은 Grafana 컨테이너 환경 변수다. obs 태스크 안에서는 http://localhost:3100
 #
 # 로그 → 트레이스: 에이전트가 로그 레코드에 trace_id 를 붙이고, Loki 는 그것을 structured metadata 로 저장한다.

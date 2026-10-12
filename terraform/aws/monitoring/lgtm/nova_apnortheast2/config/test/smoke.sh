@@ -31,10 +31,6 @@ echo "$meta" | grep -q '"event_id"' || fail "event_id 가 structured metadata �
 echo "$meta" | grep -q 'process_pid' && fail "process.pid 가 Collector 허용 목록을 통과했다"
 pass "event_id 는 structured metadata, process.pid 는 버려짐"
 
-code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$OBS_OTLP_HTTP_PORT/v1/metrics" \
-  -H 'Content-Type: application/json' -d '{"resourceMetrics":[]}')"
-[ "$code" != 200 ] && pass "지표는 아직 받지 않는다 (/v1/metrics → $code)" || fail "지표 파이프라인이 열려 있다"
-
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST -G "$LOKI/loki/api/v1/delete" \
   --data-urlencode "query={service_name=\"$SERVICE\"}" --data-urlencode "start=0")"
 [ "${code:0:1}" != 2 ] && pass "삭제 요청 API 는 꺼져 있다 (→ $code)" || fail "삭제 요청이 받아졌다 ($code)"

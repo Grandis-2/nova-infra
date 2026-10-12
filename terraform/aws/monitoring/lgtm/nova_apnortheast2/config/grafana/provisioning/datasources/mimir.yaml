@@ -1,0 +1,18 @@
+# Grafana 데이터소스 — Mimir(Prometheus 호환). MIMIR_URL 은 Grafana 컨테이너 환경 변수다. obs 태스크 안에서는 http://localhost:9009/prometheus
+#
+# 지표 → 트레이스: 에이전트가 히스토그램에 exemplar(trace_id)를 붙이면 그래프의 점에서 Tempo 로 간다.
+apiVersion: 1
+
+datasources:
+  - name: Mimir
+    type: prometheus
+    uid: mimir
+    access: proxy
+    url: ${MIMIR_URL}
+    editable: false
+    jsonData:
+      prometheusType: Mimir
+      timeInterval: 30s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo

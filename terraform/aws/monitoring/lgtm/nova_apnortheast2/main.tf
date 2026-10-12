@@ -51,7 +51,7 @@ locals {
     aws_cli        = "amazon/aws-cli:2.37.12@sha256:ce44b800602264c12298bbf3399055a4cefdb9ed4a098abe564afe26e7071bce"
     otel_collector = "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6"
     loki           = "grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193"
-    tempo          = "grafana/tempo:2.10.5@sha256:ee21727732c7a7199cb71c3eee9153bbf23f9b0b87619f0555a0cf21a67f1a33"
+    tempo          = "grafana/tempo:2.10.8@sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a"
     mimir          = "grafana/mimir:3.2.2@sha256:04068a0a838b6efe9449a04c1d6acd74c7438ac6073dfcbb99c29892647525e3"
     grafana        = "grafana/grafana:12.4.12@sha256:83be3e511ede559bee80e2215bb1987cb1246075461cb961beb515b0341e7aea"
     mysqld_exp     = "prom/mysqld-exporter:v0.20.0@sha256:abed8dac117b4ae5b70757f988e44795935b9a72c3b58d720c67ba688f8cb79e"
@@ -110,7 +110,7 @@ locals {
         environment = [
           { name = "LOKI_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.loki_http}/otlp" },
           { name = "TEMPO_OTLP_ENDPOINT", value = "localhost:${local.obs_ports.tempo_otlp}" },
-          { name = "MIMIR_OTLP_ENDPOINT", value = var.obs_metrics_enabled ? "http://localhost:${local.obs_ports.mimir_http}/otlp" : "" },
+          { name = "MIMIR_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.mimir_http}/otlp" },
           { name = "MYSQLD_EXPORTER_TARGET", value = local.obs_mysqld_exporter ? "localhost:${local.obs_ports.mysqld_metrics}" : "" },
         ]
         # Service Connect 가 이 이름으로 앱 요청을 받는다
@@ -164,43 +164,7 @@ locals {
         linuxParameters  = local.obs_common.linuxParameters
         restartPolicy    = local.obs_common.restartPolicy
       },
-      {
-        name      = "grafana"
-        image     = local.obs_images.grafana
-        essential = true
-        memory    = 512
-        user      = local.obs_data_dirs["grafana"]
-        environment = [
-          { name = "GF_PATHS_PROVISIONING", value = "/config/grafana/provisioning" },
-          { name = "GF_AUTH_ANONYMOUS_ENABLED", value = "false" },
-          { name = "GF_USERS_ALLOW_SIGN_UP", value = "false" },
-          { name = "GF_SECURITY_ADMIN_USER", value = "admin" },
-          { name = "GF_SECURITY_DISABLE_GRAVATAR", value = "true" },
-          { name = "GF_ANALYTICS_REPORTING_ENABLED", value = "false" },
-          { name = "GF_ANALYTICS_CHECK_FOR_UPDATES", value = "false" },
-          { name = "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES", value = "false" },
-          { name = "GF_NEWS_NEWS_FEED_ENABLED", value = "false" },
-          { name = "GF_PLUGINS_PLUGIN_ADMIN_ENABLED", value = "false" },
-          { name = "LOKI_URL", value = "http://localhost:${local.obs_ports.loki_http}" },
-          { name = "TEMPO_URL", value = "http://localhost:${local.obs_ports.tempo_http}" },
-          { name = "MIMIR_URL", value = var.obs_metrics_enabled ? "http://localhost:${local.obs_ports.mimir_http}/prometheus" : "" },
-          { name = "SNS_TOPIC_ARN", value = local.alerts_topic_arn },
-          { name = "AWS_REGION", value = var.aws_region },
-        ]
-        # 최초 기동 때만 admin 에 쓰인다. 이미 있는 admin 의 비밀번호 교체는 config/README.md
-        secrets = [
-          { name = "GF_SECURITY_ADMIN_PASSWORD", valueFrom = data.terraform_remote_state.secretsmanager.outputs.grafana_admin_secret_arn },
-        ]
-        mountPoints      = concat(local.obs_config_mount, [{ sourceVolume = "grafana-data", containerPath = "/var/lib/grafana", readOnly = false }])
-        dependsOn        = concat(local.obs_after_config, [{ containerName = "loki", condition = "START" }])
-        logConfiguration = local.obs_log["grafana"]
-        linuxParameters  = local.obs_common.linuxParameters
-        restartPolicy    = local.obs_common.restartPolicy
-      },
-    ],
-    # 지표(Mimir). config/mimir.yaml 과 collector 의 metrics 파이프라인이 들어온 뒤 obs_metrics_enabled 로 켠다 (NV-431)
-    var.obs_metrics_enabled ? [
-      # 이미지 기본 사용자는 root 다. 데이터 디렉터리 소유자로 낮춰 돌린다
+      # 이미지 기본 사용자는 root 다. 데이터 디렉터리 소유자로 낮춰 돌린다(activity tracker 파일은 config/mimir.yaml 에서 /data 로 옮겼다)
       {
         name      = "mimir"
         image     = local.obs_images.mimir
@@ -220,7 +184,40 @@ locals {
         linuxParameters  = local.obs_common.linuxParameters
         restartPolicy    = local.obs_common.restartPolicy
       },
-    ] : [],
+      {
+        name      = "grafana"
+        image     = local.obs_images.grafana
+        essential = true
+        memory    = 512
+        user      = local.obs_data_dirs["grafana"]
+        environment = [
+          { name = "GF_PATHS_PROVISIONING", value = "/config/grafana/provisioning" },
+          { name = "GF_AUTH_ANONYMOUS_ENABLED", value = "false" },
+          { name = "GF_USERS_ALLOW_SIGN_UP", value = "false" },
+          { name = "GF_SECURITY_ADMIN_USER", value = "admin" },
+          { name = "GF_SECURITY_DISABLE_GRAVATAR", value = "true" },
+          { name = "GF_ANALYTICS_REPORTING_ENABLED", value = "false" },
+          { name = "GF_ANALYTICS_CHECK_FOR_UPDATES", value = "false" },
+          { name = "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES", value = "false" },
+          { name = "GF_NEWS_NEWS_FEED_ENABLED", value = "false" },
+          { name = "GF_PLUGINS_PLUGIN_ADMIN_ENABLED", value = "false" },
+          { name = "LOKI_URL", value = "http://localhost:${local.obs_ports.loki_http}" },
+          { name = "TEMPO_URL", value = "http://localhost:${local.obs_ports.tempo_http}" },
+          { name = "MIMIR_URL", value = "http://localhost:${local.obs_ports.mimir_http}/prometheus" },
+          { name = "SNS_TOPIC_ARN", value = local.alerts_topic_arn },
+          { name = "AWS_REGION", value = var.aws_region },
+        ]
+        # 최초 기동 때만 admin 에 쓰인다. 이미 있는 admin 의 비밀번호 교체는 config/README.md
+        secrets = [
+          { name = "GF_SECURITY_ADMIN_PASSWORD", valueFrom = data.terraform_remote_state.secretsmanager.outputs.grafana_admin_secret_arn },
+        ]
+        mountPoints      = concat(local.obs_config_mount, [{ sourceVolume = "grafana-data", containerPath = "/var/lib/grafana", readOnly = false }])
+        dependsOn        = concat(local.obs_after_config, [{ containerName = "loki", condition = "START" }])
+        logConfiguration = local.obs_log["grafana"]
+        linuxParameters  = local.obs_common.linuxParameters
+        restartPolicy    = local.obs_common.restartPolicy
+      },
+    ],
     # NCP DB 지표. 읽기 전용 exporter 계정과 그 비밀이 생긴 뒤 obs_mysqld_exporter 로 켠다
     local.obs_mysqld_exporter ? [
       {

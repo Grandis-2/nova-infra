@@ -9,9 +9,10 @@
 #   OBS_DATA_DIR                 loki/(WAL·인덱스 캐시·compactor) 와 grafana/ 가 생길 디렉터리
 #   LOKI_S3_BUCKET · LOKI_S3_REGION · LOKI_RETENTION_PERIOD
 #   TEMPO_S3_BUCKET · TEMPO_S3_REGION · TEMPO_RETENTION
+#   MIMIR_S3_BUCKET · MIMIR_S3_REGION · MIMIR_RETENTION
 #   GRAFANA_ADMIN_PASSWORD       Grafana admin 비밀번호 (작업 정의는 Secrets Manager 에서 넣는다)
 # 선택
-#   OBS_OTLP_GRPC_PORT(4317) · OBS_OTLP_HTTP_PORT(4318) · OBS_GRAFANA_PORT(3000) · OBS_LOKI_PORT(3100) · OBS_TEMPO_PORT(3200)
+#   OBS_OTLP_GRPC_PORT(4317) · OBS_OTLP_HTTP_PORT(4318) · OBS_GRAFANA_PORT(3000) · OBS_LOKI_PORT(3100) · OBS_TEMPO_PORT(3200) · OBS_MIMIR_PORT(9009)
 #   LOKI_S3_ENDPOINT · LOKI_S3_FORCE_PATH_STYLE · LOKI_S3_INSECURE — S3 호환 저장소(Floci)용 (TEMPO_ 도 같다)
 #   LOKI_COMPACTION_INTERVAL(10m) · LOKI_RETENTION_DELETE_DELAY(2h) — 보존 시험을 빨리 돌릴 때만
 #
@@ -40,6 +41,7 @@ services:
       - "${OBS_OTLP_HTTP_PORT:-4318}:4318"
       - "127.0.0.1:${OBS_LOKI_PORT:-3100}:3100"
       - "127.0.0.1:${OBS_TEMPO_PORT:-3200}:3200"
+      - "127.0.0.1:${OBS_MIMIR_PORT:-9009}:9009"
       - "127.0.0.1:${OBS_GRAFANA_PORT:-3000}:3000"
     <<: *hardening
     networks: [obs]
@@ -50,6 +52,9 @@ services:
     environment:
       LOKI_OTLP_ENDPOINT: http://localhost:3100/otlp
       TEMPO_OTLP_ENDPOINT: localhost:14317
+      MIMIR_OTLP_ENDPOINT: http://localhost:9009/otlp
+      # mysqld_exporter 를 띄우지 않는 구성이면 비운다(시험이 그렇다)
+      MYSQLD_EXPORTER_TARGET: ${MYSQLD_EXPORTER_TARGET:-}
     volumes:
       - ../collector.yaml:/config/collector.yaml:ro
     # tail sampling 이 결정까지 트레이스를 메모리에 들고 있다(collector.yaml 의 decision_wait · num_traces)
@@ -62,6 +67,7 @@ services:
       - netns
       - loki
       - tempo
+      - mimir
 
   loki:
     image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
@@ -91,12 +97,14 @@ services:
 
   tempo:
     image: grafana/tempo:2.10.8@sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a
+    # 이미지 기본은 root 다. 작업 정의와 같이 UID 10001 로 돈다
+    user: "10001:10001"
     command: ["-config.file=/config/tempo.yaml", "-config.expand-env=true"]
     environment:
       TEMPO_S3_BUCKET: ${TEMPO_S3_BUCKET:?TEMPO_S3_BUCKET 을 지정한다}
       TEMPO_S3_REGION: ${TEMPO_S3_REGION:?TEMPO_S3_REGION 을 지정한다}
       TEMPO_RETENTION: ${TEMPO_RETENTION:?TEMPO_RETENTION 을 지정한다 (예 336h)}
-      TEMPO_S3_ENDPOINT: ${TEMPO_S3_ENDPOINT:-s3.${TEMPO_S3_REGION}.amazonaws.com}
+      TEMPO_S3_ENDPOINT: ${TEMPO_S3_ENDPOINT:-}
       TEMPO_S3_FORCE_PATH_STYLE: ${TEMPO_S3_FORCE_PATH_STYLE:-false}
       TEMPO_S3_INSECURE: ${TEMPO_S3_INSECURE:-false}
     volumes:
@@ -110,6 +118,28 @@ services:
       - netns
     # 정상 종료 때 WAL 의 블록을 마저 쓴다
     stop_grace_period: 1m
+    restart: unless-stopped
+    logging: *logging
+
+  mimir:
+    image: grafana/mimir:3.2.2@sha256:04068a0a838b6efe9449a04c1d6acd74c7438ac6073dfcbb99c29892647525e3
+    # 이미지 기본은 root 다. 작업 정의와 같이 UID 10001 로 돈다
+    user: "10001:10001"
+    command: ["-config.file=/config/mimir.yaml", "-config.expand-env=true"]
+    environment:
+      MIMIR_S3_BUCKET: ${MIMIR_S3_BUCKET:?MIMIR_S3_BUCKET 을 지정한다}
+      MIMIR_S3_REGION: ${MIMIR_S3_REGION:?MIMIR_S3_REGION 을 지정한다}
+      MIMIR_RETENTION: ${MIMIR_RETENTION:?MIMIR_RETENTION 을 지정한다 (예 2160h)}
+    volumes:
+      - ../mimir.yaml:/config/mimir.yaml:ro
+      - ${OBS_DATA_DIR:?OBS_DATA_DIR 를 지정한다}/mimir:/data
+    mem_limit: 2g
+    <<: *hardening
+    network_mode: service:netns
+    depends_on:
+      - netns
+    # 정상 종료 때 head 를 블록으로 만들어 S3 에 올린다(flush_blocks_on_shutdown)
+    stop_grace_period: 2m
     restart: unless-stopped
     logging: *logging
 
@@ -132,6 +162,10 @@ services:
       GF_PLUGINS_PLUGIN_ADMIN_ENABLED: "false"
       LOKI_URL: http://localhost:3100
       TEMPO_URL: http://localhost:3200
+      MIMIR_URL: http://localhost:9009/prometheus
+      # 경보 알림(notify.yaml). 시험에는 실제 주제가 없다 — 프로비저닝이 읽히는지만 본다
+      SNS_TOPIC_ARN: ${SNS_TOPIC_ARN:-arn:aws:sns:ap-northeast-2:000000000000:obs-test}
+      AWS_REGION: ${LOKI_S3_REGION}
     volumes:
       - ../grafana:/config/grafana:ro
       # 컨테이너는 UID 472 로 돈다.
@@ -145,6 +179,7 @@ services:
       - netns
       - loki
       - tempo
+      - mimir
 
 networks:
   obs: {}
