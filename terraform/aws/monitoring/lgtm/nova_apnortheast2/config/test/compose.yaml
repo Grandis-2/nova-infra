@@ -1,0 +1,151 @@
+# 시험 전용 compose. 운영은 ECS 작업 정의(NV-434)로 띄우고, 이 파일은 로컬 시험(test/*.sh)에서만 쓴다.
+# 설정 파일(../collector.yaml · ../loki.yaml · ../tempo.yaml · ../grafana)은 운영과 같은 것을 운영과 같은 경로(/config/…)에 마운트한다.
+# 컨테이너 구성(이미지 다이제스트 · 메모리 한도 · 권한 제거 · Loki 정지 유예)은 작업 정의와 맞춘다.
+#
+# 네트워크도 작업 정의(awsvpc)와 같게 한다. 모든 컨테이너가 netns 컨테이너의 네트워크를 같이 써서 서로 localhost 로 부른다.
+# 그래서 포트가 겹치면 여기서 먼저 깨진다(포트 표는 ../README.md). 바깥에 여는 포트는 netns 에 단다.
+#
+# 필수
+#   OBS_DATA_DIR                 loki/(WAL·인덱스 캐시·compactor) 와 grafana/ 가 생길 디렉터리
+#   LOKI_S3_BUCKET · LOKI_S3_REGION · LOKI_RETENTION_PERIOD
+#   TEMPO_S3_BUCKET · TEMPO_S3_REGION · TEMPO_RETENTION
+#   GRAFANA_ADMIN_PASSWORD       Grafana admin 비밀번호 (작업 정의는 Secrets Manager 에서 넣는다)
+# 선택
+#   OBS_OTLP_GRPC_PORT(4317) · OBS_OTLP_HTTP_PORT(4318) · OBS_GRAFANA_PORT(3000) · OBS_LOKI_PORT(3100) · OBS_TEMPO_PORT(3200)
+#   LOKI_S3_ENDPOINT · LOKI_S3_FORCE_PATH_STYLE · LOKI_S3_INSECURE — S3 호환 저장소(Floci)용 (TEMPO_ 도 같다)
+#   LOKI_COMPACTION_INTERVAL(10m) · LOKI_RETENTION_DELETE_DELAY(2h) — 보존 시험을 빨리 돌릴 때만
+#
+# 값은 test/lib.sh 가 채운다. S3 를 Floci 로 바꾸는 덮어쓰기는 test/compose.local.yaml 이다.
+name: obs-stack
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+# 모든 컨테이너가 리눅스 권한(capability)이 필요 없다. 1024 위 포트만 쓴다.
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  # ECS awsvpc 태스크의 네트워크 네임스페이스 역할. 다른 컨테이너는 network_mode 로 이것에 붙는다.
+  netns:
+    image: alpine:3.20
+    command: ["sleep", "infinity"]
+    init: true
+    ports:
+      - "${OBS_OTLP_GRPC_PORT:-4317}:4317"
+      - "${OBS_OTLP_HTTP_PORT:-4318}:4318"
+      - "127.0.0.1:${OBS_LOKI_PORT:-3100}:3100"
+      - "127.0.0.1:${OBS_TEMPO_PORT:-3200}:3200"
+      - "127.0.0.1:${OBS_GRAFANA_PORT:-3000}:3000"
+    <<: *hardening
+    networks: [obs]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
+    command: ["--config=/config/collector.yaml"]
+    environment:
+      LOKI_OTLP_ENDPOINT: http://localhost:3100/otlp
+      TEMPO_OTLP_ENDPOINT: localhost:14317
+    volumes:
+      - ../collector.yaml:/config/collector.yaml:ro
+    # tail sampling 이 결정까지 트레이스를 메모리에 들고 있다(collector.yaml 의 decision_wait · num_traces)
+    mem_limit: 1g
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    network_mode: service:netns
+    depends_on:
+      - netns
+      - loki
+      - tempo
+
+  loki:
+    image: grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    command: ["-config.file=/config/loki.yaml", "-config.expand-env=true"]
+    environment:
+      LOKI_S3_BUCKET: ${LOKI_S3_BUCKET:?LOKI_S3_BUCKET 을 지정한다}
+      LOKI_S3_REGION: ${LOKI_S3_REGION:?LOKI_S3_REGION 을 지정한다}
+      LOKI_RETENTION_PERIOD: ${LOKI_RETENTION_PERIOD:?LOKI_RETENTION_PERIOD 를 지정한다 (예 2160h)}
+      LOKI_S3_ENDPOINT: ${LOKI_S3_ENDPOINT:-}
+      LOKI_S3_FORCE_PATH_STYLE: ${LOKI_S3_FORCE_PATH_STYLE:-false}
+      LOKI_S3_INSECURE: ${LOKI_S3_INSECURE:-false}
+      LOKI_COMPACTION_INTERVAL: ${LOKI_COMPACTION_INTERVAL:-10m}
+      LOKI_RETENTION_DELETE_DELAY: ${LOKI_RETENTION_DELETE_DELAY:-2h}
+    volumes:
+      - ../loki.yaml:/config/loki.yaml:ro
+      # 컨테이너는 UID 10001 로 돈다.
+      - ${OBS_DATA_DIR:?OBS_DATA_DIR 를 지정한다}/loki:/loki
+    mem_limit: 2g
+    <<: *hardening
+    network_mode: service:netns
+    depends_on:
+      - netns
+    # flush_on_shutdown 이 메모리의 청크를 S3 로 올릴 시간. 기본 10초면 중간에 SIGKILL 된다.
+    stop_grace_period: 2m
+    restart: unless-stopped
+    logging: *logging
+
+  tempo:
+    image: grafana/tempo:2.10.8@sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a
+    command: ["-config.file=/config/tempo.yaml", "-config.expand-env=true"]
+    environment:
+      TEMPO_S3_BUCKET: ${TEMPO_S3_BUCKET:?TEMPO_S3_BUCKET 을 지정한다}
+      TEMPO_S3_REGION: ${TEMPO_S3_REGION:?TEMPO_S3_REGION 을 지정한다}
+      TEMPO_RETENTION: ${TEMPO_RETENTION:?TEMPO_RETENTION 을 지정한다 (예 336h)}
+      TEMPO_S3_ENDPOINT: ${TEMPO_S3_ENDPOINT:-s3.${TEMPO_S3_REGION}.amazonaws.com}
+      TEMPO_S3_FORCE_PATH_STYLE: ${TEMPO_S3_FORCE_PATH_STYLE:-false}
+      TEMPO_S3_INSECURE: ${TEMPO_S3_INSECURE:-false}
+    volumes:
+      - ../tempo.yaml:/config/tempo.yaml:ro
+      # 컨테이너는 UID 10001 로 돈다.
+      - ${OBS_DATA_DIR:?OBS_DATA_DIR 를 지정한다}/tempo:/var/tempo
+    mem_limit: 1g
+    <<: *hardening
+    network_mode: service:netns
+    depends_on:
+      - netns
+    # 정상 종료 때 WAL 의 블록을 마저 쓴다
+    stop_grace_period: 1m
+    restart: unless-stopped
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:12.4.12@sha256:83be3e511ede559bee80e2215bb1987cb1246075461cb961beb515b0341e7aea
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_ADMIN_USER: admin
+      # 최초 기동 때만 적용된다. 이미 만든 admin 의 비밀번호를 바꾸는 절차는 ../README.md.
+      # 작업 정의는 Secrets Manager 값을 이 변수로 넣는다(secrets).
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD 를 지정한다}
+      GF_PATHS_PROVISIONING: /config/grafana/provisioning
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PLUGIN_ADMIN_ENABLED: "false"
+      LOKI_URL: http://localhost:3100
+      TEMPO_URL: http://localhost:3200
+    volumes:
+      - ../grafana:/config/grafana:ro
+      # 컨테이너는 UID 472 로 돈다.
+      - ${OBS_DATA_DIR:?OBS_DATA_DIR 를 지정한다}/grafana:/var/lib/grafana
+    mem_limit: 512m
+    restart: unless-stopped
+    logging: *logging
+    <<: *hardening
+    network_mode: service:netns
+    depends_on:
+      - netns
+      - loki
+      - tempo
+
+networks:
+  obs: {}
+
