@@ -1,5 +1,5 @@
 # 상품 · 옵션 · 카테고리 · 리뷰
-deploy: false                   # true 로 바꿔도 뜨지만, 리뷰 작성은 order 가 뜨기 전까지 실패한다 (내 주문상품 확인)
+deploy: true
 image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
 cpu: 1024
 memory: 2048
