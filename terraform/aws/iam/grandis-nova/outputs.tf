@@ -30,6 +30,11 @@ output "bastion_instance_profile" {
   value = aws_iam_instance_profile.bastion.name
 }
 
+output "obs_instance_profile" {
+  description = "관측 호스트(obs 스택) EC2 의 인스턴스 프로파일"
+  value       = aws_iam_instance_profile.obs.name
+}
+
 output "service_permissions" {
   description = "서비스별 태스크 역할 권한 요약"
   value = {
