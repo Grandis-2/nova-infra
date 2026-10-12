@@ -19,7 +19,7 @@ locals {
   _all_priorities = flatten([for k, s in local._service_raw : [for r in try(s.routes, []) : try(r.priority, -1)]])
 
   _service_fields = [
-    "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "scaling",
+    "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "stop_timeout", "scaling",
     "health", "routes", "jwt", "calls", "db", "extra_databases", "redis", "queues", "uploads", "generated_secrets", "environment",
   ]
 
@@ -38,6 +38,16 @@ locals {
       try(s.deployment, "rolling") != "blue_green" || length(try(s.routes, [])) > 0 ? "" : "blue_green 은 routes 가 필요",
       length(try(s.routes, [])) == 0 || can(tonumber(s.health.port)) ? "" : "routes 가 있으면 health(port, path) 가 필요",
       [for r in try(s.routes, []) : length(try(r.paths, [])) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
+      # Fargate 의 stopTimeout 상한은 120초다
+      try(s.stop_timeout, null) == null || (can(tonumber(s.stop_timeout)) && try(tonumber(s.stop_timeout) >= 2 && tonumber(s.stop_timeout) <= 120, false)) ? "" : "stop_timeout 은 2~120(초)",
+      can(s.scaling.backlog.queue) && can(s.scaling.backlog.queues) ? "scaling.backlog 에는 queue 와 queues 중 하나만 쓴다" : "",
+      # 틀린 모양이면 backlog 가 조용히 빠져 큐 적체로 늘지 않는다. 그래서 여기서 멈춘다
+      try(s.scaling.backlog, null) == null || (
+        (can(tostring(s.scaling.backlog.queue)) || can([for q in s.scaling.backlog.queues : tostring(q)]))
+        && can(tonumber(s.scaling.backlog.per_task))
+      ) ? "" : "scaling.backlog 는 queue(문자열) 또는 queues(목록)와 per_task(숫자)가 필요",
+      # 컨테이너 헬스체크(routes 없음)는 200 만 본다. ALB 처럼 범위(200-299)를 쓰지 않는다
+      length(try(s.routes, [])) > 0 || try(s.health, null) == null || try(tostring(s.health.matcher), "200") == "200" ? "" : "routes 없이 쓰는 health 의 matcher 는 200 만 된다",
       [for p, to in try(s.calls, {}) : contains(keys(local._service_raw), to) ? "" : "calls 의 '${to}' 는 없는 서비스"],
       [for p, to in try(s.calls, {}) : try(tonumber(local._service_raw[to].port), 0) > 0 ? "" : "calls 의 '${to}' 는 포트가 없는 서비스(port: 0)"],
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && length([for x in local._all_priorities : x if x == try(r.priority, -1)]) > 1 ? "route priority ${try(r.priority, "?")} 가 다른 규칙과 겹침" : ""],
@@ -65,12 +75,18 @@ locals {
       blue_green = try(s.deployment, "rolling") == "blue_green"
       singleton  = try(s.deployment, "rolling") == "singleton"
       spot       = try(tobool(s.spot), true)
+      # SIGTERM 뒤 SIGKILL 까지 기다리는 시간(초). 비우면 ECS 기본값(30초). 정상 종료에 오래 걸리는 컨슈머만 늘린다
+      stop_timeout = try(tonumber(s.stop_timeout), null)
 
       desired    = try(tonumber(s.scaling.desired), 1)
       min        = try(tonumber(s.scaling.min), try(tonumber(s.scaling.desired), 1))
       max        = try(tonumber(s.scaling.max), try(tonumber(s.scaling.min), try(tonumber(s.scaling.desired), 1)))
       cpu_target = try(tonumber(s.scaling.cpu_target), 60)
-      backlog    = try({ queue = tostring(s.scaling.backlog.queue), per_task = tonumber(s.scaling.backlog.per_task) }, null)
+      # queue(하나) 또는 queues(여럿). 여럿이면 메시지 수를 더해 본다
+      backlog = try({
+        queues   = try([tostring(s.scaling.backlog.queue)], [for q in s.scaling.backlog.queues : tostring(q)])
+        per_task = tonumber(s.scaling.backlog.per_task)
+      }, null)
 
       health = try({
         port    = tonumber(s.health.port)

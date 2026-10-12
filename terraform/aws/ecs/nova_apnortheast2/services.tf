@@ -71,9 +71,17 @@ module "service" {
   request_count_target = each.value.blue_green ? 0 : lookup(local.request_count_targets, each.key, 0)
 
   queue_backlog = each.value.backlog == null ? null : {
-    queue_name      = local.queues[each.value.backlog.queue].name
+    queue_names     = [for q in each.value.backlog.queues : local.queues[q].name]
     target_per_task = each.value.backlog.per_task
   }
+
+  # ALB 가 없는 서비스(컨슈머)는 health 를 컨테이너 헬스체크로 쓴다. 이미지에 curl · wget 이 없어 bash 로 직접 묻는다.
+  # 상태 줄의 두 번째 칸(코드)만 본다 — Tomcat 은 이유 문구 없이 "HTTP/1.1 200" 을 보낸다. 끝의 \r 은 지운다
+  health_check_command = length(each.value.routes) == 0 && each.value.health != null ? [
+    "CMD", "bash", "-c",
+    "exec 3<>/dev/tcp/127.0.0.1/${each.value.health.port} && printf 'GET ${each.value.health.path} HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ code _ <&3 && [ \"$${code%$'\\r'}\" = 200 ]",
+  ] : []
+  stop_timeout = each.value.stop_timeout
 
   tags = {
     Service = each.value.name

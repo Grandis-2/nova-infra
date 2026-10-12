@@ -28,6 +28,15 @@ variable "queue_age_threshold_seconds" {
   default     = 300
 }
 
+variable "queue_age_threshold_overrides" {
+  description = "큐별 문턱(초). 일부러 지연시켜 다시 보내는 큐는 그 지연보다 길게 둔다"
+  type        = map(number)
+  default = {
+    # worker 는 취소가 한 세대(4차례) 내내 실패하면 15분 지연을 두고 다시 보낸다
+    "preorder-cancel" = 1200
+  }
+}
+
 variable "cloudfront_5xx_rate_threshold" {
   description = "CloudFront 5xx 비율(%) 임계치. 5분 평균이 두 번 연속 넘으면 경보"
   type        = number

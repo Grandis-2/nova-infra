@@ -23,15 +23,16 @@ image_tag: latest         # 커밋 해시 앞 6자리 이상이면 그 이미지
 management_port: 0
 deployment: rolling       # rolling | blue_green | singleton
 spot: true
+stop_timeout: 30          # SIGTERM 뒤 강제 종료까지(초, 2~120). 비우면 ECS 기본값(30)
 
 scaling:
   desired: 1
   min: 1
   max: 1                  # max ≤ min이면 오토스케일링 없음
   cpu_target: 60
-  backlog: { queue: preorder-register, per_task: 50 }   # 큐 적체로 확장 (선택)
+  backlog: { queue: preorder-register, per_task: 50 }   # 큐 적체로 확장 (선택). 여럿이면 queues: [a, b] (메시지 수를 더함)
 
-health:                   # routes가 있으면 필수
+health:                   # routes가 있으면 필수. routes 없이 쓰면 컨테이너 헬스체크가 됨
   port: 9080
   path: /actuator/health/readiness
   matcher: "200"

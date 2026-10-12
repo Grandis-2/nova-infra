@@ -56,6 +56,7 @@ locals {
     }
 
     healthCheck = local.health_check
+    stopTimeout = var.stop_timeout
   }
 }
 
@@ -280,7 +281,7 @@ resource "aws_appautoscaling_policy" "request_count" {
   }
 }
 
-# 큐 적체 기반 스케일링: 메시지 수 / 태스크 수 = 태스크당 밀린 일감
+# 큐 적체 기반 스케일링: 메시지 수(큐가 여럿이면 합) / 태스크 수 = 태스크당 밀린 일감
 # CPU 로는 대기 중인 일이 보이지 않으므로 컨슈머는 이 지표로 늘린다.
 resource "aws_appautoscaling_policy" "queue_backlog" {
   count = var.create_service && var.max_capacity > 0 && var.queue_backlog != null ? 1 : 0
@@ -295,25 +296,29 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
     target_value = var.queue_backlog.target_per_task
 
     customized_metric_specification {
-      metrics {
-        id    = "messages"
-        label = "Visible messages"
+      dynamic "metrics" {
+        for_each = var.queue_backlog.queue_names
 
-        metric_stat {
-          metric {
-            namespace   = "AWS/SQS"
-            metric_name = "ApproximateNumberOfMessagesVisible"
+        content {
+          id    = "m${metrics.key}"
+          label = "Visible messages (${metrics.value})"
 
-            dimensions {
-              name  = "QueueName"
-              value = var.queue_backlog.queue_name
+          metric_stat {
+            metric {
+              namespace   = "AWS/SQS"
+              metric_name = "ApproximateNumberOfMessagesVisible"
+
+              dimensions {
+                name  = "QueueName"
+                value = metrics.value
+              }
             }
+
+            stat = "Average"
           }
 
-          stat = "Average"
+          return_data = false
         }
-
-        return_data = false
       }
 
       metrics {
@@ -346,7 +351,7 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
       metrics {
         id          = "backlog"
         label       = "Backlog per task"
-        expression  = "messages / MAX([tasks, 1])"
+        expression  = "(${join(" + ", [for i, q in var.queue_backlog.queue_names : "m${i}"])}) / MAX([tasks, 1])"
         return_data = true
       }
     }
