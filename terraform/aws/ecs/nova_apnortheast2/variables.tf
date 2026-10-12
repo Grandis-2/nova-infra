@@ -90,3 +90,19 @@ variable "obs_ami_id" {
   type        = string
   default     = ""
 }
+
+variable "otel_services" {
+  description = <<-EOT
+    OTel Java 에이전트를 켤 서비스 키(application/<키>). ["*"] 면 배포하는 서비스 전부.
+    에이전트 jar 은 be 이미지(/otel/javaagent.jar)에 있고, 여기 든 서비스에만 JDK_JAVA_OPTIONS 로 켠다 (otel.tf).
+    끄려면 목록에서 빼고 apply 한다. 이미지를 다시 만들 필요가 없다.
+  EOT
+  type        = list(string)
+  default     = ["preorder"]
+}
+
+variable "otel_metrics_enabled" {
+  description = "에이전트가 지표도 보낸다. 지표 전송만 끌 때 false (로그 · 트레이스는 그대로)"
+  type        = bool
+  default     = true
+}
