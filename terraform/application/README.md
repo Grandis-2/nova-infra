@@ -64,6 +64,7 @@ be의 `application.yml.example`을 복사해 운영 값으로 고칩니다. 공�
 - `spring.application.name`, `server.port`, `management.server.port`
 - `spring.datasource.url`, `spring.data.redis.*`
 - `jwt.jwk-set-uri`, `calls`에 적은 속성, SQS 리전
+- `uploads: true`이면 `nova.upload.bucket`, `nova.upload.cdn-base-url`, `nova.upload.region`
 
 비밀 값이나 `localhost`를 적으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
 

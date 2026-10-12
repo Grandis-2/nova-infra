@@ -39,6 +39,12 @@ data "terraform_remote_state" "s3" {
   config  = local.remote_state.s3
 }
 
+# 업로드 이미지 URL 접두사 (uploads: true 인 서비스의 설정)
+data "terraform_remote_state" "cdn" {
+  backend = "s3"
+  config  = local.remote_state.cdn
+}
+
 data "terraform_remote_state" "secrets" {
   backend = "s3"
   config  = local.remote_state.secretsmanager
