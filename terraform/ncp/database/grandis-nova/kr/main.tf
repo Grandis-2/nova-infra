@@ -35,7 +35,7 @@ resource "ncloud_subnet" "db" {
 # ── 계정 비밀번호 ────────────────────────────────────────────
 # NCP 규칙: 8~20자, 영문·숫자·특수문자 포함. ` & + \ " ' / 공백은 쓸 수 없다
 resource "random_password" "user" {
-  for_each = merge(local.db_services, { admin = {}, migrator = {} })
+  for_each = merge(local.db_services, { admin = {}, migrator = {}, exporter = {} }) # exporter: exporter.tf
 
   length           = 20
   special          = true
