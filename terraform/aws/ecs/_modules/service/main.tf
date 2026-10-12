@@ -347,11 +347,12 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
         return_data = false
       }
 
-      # 태스크가 0 일 때 나누기 오류가 나지 않게 최소 1 로 본다
+      # 태스크가 0 이거나 지표가 비어도(Container Insights 공백) 나누는 수를 1 로 본다.
+      # MAX([tasks, 1]) 은 시계열과 상수를 섞어 CloudWatch 가 거절한다
       metrics {
         id          = "backlog"
         label       = "Backlog per task"
-        expression  = "(${join(" + ", [for i, q in var.queue_backlog.queue_names : "m${i}"])}) / MAX([tasks, 1])"
+        expression  = "(${join(" + ", [for i, q in var.queue_backlog.queue_names : "m${i}"])}) / IF(FILL(tasks, 1) < 1, 1, FILL(tasks, 1))"
         return_data = true
       }
     }
