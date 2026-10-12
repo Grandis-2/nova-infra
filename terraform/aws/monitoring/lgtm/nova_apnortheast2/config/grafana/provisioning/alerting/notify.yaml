@@ -1,0 +1,39 @@
+# 경보 알림 — Grafana → SNS → AWS Chatbot → Slack (monitoring 스택의 알림 주제와 Chatbot 설정을 같이 쓴다).
+# SNS_TOPIC_ARN · AWS_REGION 은 Grafana 컨테이너 환경 변수다. 자격 증명은 SDK 기본 체인(ECS 태스크 역할, sns:Publish)이다.
+#
+# Chatbot 은 SNS 메시지가 사용자 지정 알림 형식(JSON)일 때만 그대로 보여 준다:
+#   {"version":"1.0","source":"custom","content":{"textType":"client-markdown","title":…,"description":…}}
+# 템플릿이 JSON 을 손으로 만든다. 값에 들어가는 " \ 와 줄바꿈 · 탭은 chatbot.clean 이 바꿔 JSON 이 깨지지 않게 한다.
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: chatbot
+    template: |
+      {{ define "chatbot.clean" }}{{ reReplaceAll "[\\r\\n\\t]+" " " (reReplaceAll "[\"\\\\]" "'" .) }}{{ end }}
+      {{ define "chatbot.title" }}{{ if eq .Status "firing" }}[경보]{{ else }}[해소]{{ end }} {{ template "chatbot.clean" .CommonLabels.alertname }}{{ with .CommonLabels.job }} · {{ template "chatbot.clean" . }}{{ end }} ({{ len .Alerts }}건){{ end }}
+      {{ define "chatbot.message" }}{"version":"1.0","source":"custom","content":{"textType":"client-markdown","title":"{{ template "chatbot.title" . }}","description":"{{ range .Alerts }}• *{{ template "chatbot.clean" .Labels.alertname }}*{{ with .Labels.job }} `{{ template "chatbot.clean" . }}`{{ end }}{{ with .Annotations.summary }} — {{ template "chatbot.clean" . }}{{ end }}\n{{ end }}"}}{{ end }}
+
+contactPoints:
+  - orgId: 1
+    name: chatbot-sns
+    receivers:
+      - uid: chatbot-sns
+        type: sns
+        disableResolveMessage: false
+        # 주제가 비어 있으면 Grafana 가 아예 뜨지 않는다(알림 대상 검증 실패). 작업 정의는 SNS_TOPIC_ARN 을 반드시 넣는다.
+        # sigv4 에 키를 두지 않는다 — 리전은 AWS_REGION, 자격 증명은 태스크 역할(SDK 기본 체인)이다
+        settings:
+          topic_arn: ${SNS_TOPIC_ARN}
+          sigv4:
+            region: ${AWS_REGION}
+          subject: '{{ template "chatbot.title" . }}'
+          message: '{{ template "chatbot.message" . }}'
+
+policies:
+  - orgId: 1
+    receiver: chatbot-sns
+    group_by: ["alertname", "job"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

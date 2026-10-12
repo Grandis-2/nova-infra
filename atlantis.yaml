@@ -219,7 +219,7 @@ projects:
       enabled: false # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
-  # CloudWatch 경보 · 대시보드 · Slack 알림 (LGTM 은 monitoring/lgtm, 아직 없음)
+  # CloudWatch 경보 · 대시보드 · Slack 알림 (LGTM 은 아래 lgtm 프로젝트)
   - name: monitoring
     dir: terraform/aws/monitoring/cloudwatch/nova_apnortheast2
     execution_order_group: 6
@@ -229,5 +229,17 @@ projects:
       # 서비스 목록은 ecs 출력에서 읽는다. service.yml 이 바뀐 PR 에도 이 프로젝트가 잡히게 해 두고,
       # ecs 를 apply 한 뒤 `atlantis plan -p monitoring` 으로 다시 plan 해야 새 서비스의 경보가 들어간다
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../application/*/service.yml"]
+      enabled: true # 이 스택을 올리는 PR 에서 true
+    apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
+
+  # 관측 스택 (LGTM on ECS): Collector · Loki · Tempo · Mimir · Grafana 태스크와 그 설정(config/)
+  # config/ 가 바뀌면 S3 에 다시 올리고 태스크를 다시 띄운다(main.tf). config/test/ 는 로컬 시험이라 올리지 않는다
+  - name: lgtm
+    dir: terraform/aws/monitoring/lgtm/nova_apnortheast2
+    execution_order_group: 6
+    workspace: default
+    terraform_version: v1.16.0
+    autoplan:
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "config/**"]
       enabled: true # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다

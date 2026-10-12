@@ -1,0 +1,142 @@
+# Grafana 관리 경보 규칙. 알림은 notify.yaml(SNS → Chatbot → Slack)로 간다.
+# 질의는 Mimir(PromQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(gen.sh)와 같다.
+# 트래픽이 없어 질의가 비면(NoData) 정상으로 본다. 질의가 실패하면 Error 상태 경보가 따로 간다.
+# summary 의 {{ $values … }} · {{ $labels … }} 는 Grafana 템플릿이다. Grafana 가 환경 변수로 읽지 않게 $ 를 $$ 로 쓴다.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: nova
+    folder: nova
+    interval: 1m
+    rules:
+      - uid: nova-http-5xx
+        title: HTTP 5xx 비율
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "5분 동안 5xx 응답이 5% 를 넘었다 — 값 {{ $$values.A.Value | humanizePercentage }}"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_response_status_code=~\"5..\"}[5m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\"}[5m]))"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.05]}
+      - uid: nova-http-p99
+        title: HTTP P99 응답 시간
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "10분 동안 P99 가 2초를 넘었다 — 값 {{ $$values.A.Value | humanizeDuration }}"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\"}[5m])))"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [2]}
+      - uid: nova-jvm-heap
+        title: JVM 힙 사용률
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "10분 동안 힙이 한도의 90% 를 넘었다(태스크 {{ $$labels.instance }}) — 값 {{ $$values.A.Value | humanizePercentage }}"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "sum by (job, instance) (jvm_memory_used_bytes{service_namespace=\"nova\", jvm_memory_type=\"heap\"}) / sum by (job, instance) (jvm_memory_limit_bytes{service_namespace=\"nova\", jvm_memory_type=\"heap\"} > 0)"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.9]}
+      - uid: nova-service-silent
+        title: 서비스 지표 끊김
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "지난 1시간 안에 지표를 보내던 서비스가 5분 넘게 아무것도 보내지 않는다 — 태스크가 죽었거나 obs 로 보내지 못한다"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "count by (job) (last_over_time(target_info{service_namespace=\"nova\"}[1h])) unless count by (job) (target_info{service_namespace=\"nova\"})"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: obs-ingest-errors
+        title: obs 수집 실패
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Collector 가 받기를 거부하거나 저장소로 보내지 못한다(메모리 한도 · Loki/Tempo/Mimir 오류). 로그 · 트레이스 · 지표가 빠지고 있다"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "sum by (job) (rate({__name__=~\"otelcol_(receiver_refused|exporter_send_failed|processor_refused)_.+_total\"}[5m]))"
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
