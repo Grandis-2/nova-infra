@@ -66,6 +66,15 @@ output "obs_capacity_provider_name" {
   value       = aws_ecs_capacity_provider.obs.name
 }
 
+output "obs_subnet_id" {
+  description = "obs 인스턴스 · 태스크의 서브넷 (데이터 EBS 와 같은 AZ)"
+  value       = data.aws_subnet.obs.id
+}
+
+output "obs_autoscaling_group_name" {
+  value = aws_autoscaling_group.obs.name
+}
+
 output "obs_data_mount_path" {
   description = "obs 인스턴스의 데이터 EBS 마운트 경로. 아래 디렉터리를 컨테이너에 bind mount 한다"
   value       = local.obs_mount_path

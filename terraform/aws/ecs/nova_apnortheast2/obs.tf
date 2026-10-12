@@ -82,6 +82,11 @@ resource "aws_launch_template" "obs" {
     }
   }
 
+  # 1분 지표. monitoring 의 CPU 크레딧 경보가 ASG 차원으로 본다
+  monitoring {
+    enabled = true
+  }
+
   # t4g 는 버스트형이다. unlimited 면 크레딧이 바닥나도 느려지지 않고 초과분이 과금된다(monitoring 의 크레딧 경보로 본다)
   credit_specification {
     cpu_credits = "unlimited"
