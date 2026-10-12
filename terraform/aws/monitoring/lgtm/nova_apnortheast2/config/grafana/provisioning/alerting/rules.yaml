@@ -1,7 +1,9 @@
 # Grafana 관리 경보 규칙. 알림은 notify.yaml(SNS → Chatbot → Slack)로 간다.
 # 질의는 Mimir(PromQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(gen.sh)와 같다.
 # 트래픽이 없어 질의가 비면(NoData) 정상으로 본다. 질의가 실패하면 Error 상태 경보가 따로 간다.
-# summary 의 {{ $values … }} · {{ $labels … }} 는 Grafana 템플릿이다. Grafana 가 환경 변수로 읽지 않게 $ 를 $$ 로 쓴다.
+# summary 는 Grafana 템플릿이다. 달러 기호를 쓰지 않고 .Values · .Labels 로 쓴다.
+# .Values 에는 쿼리(A)가 아니라 식(reduce · threshold)만 들어간다. 그래서 A → B(reduce: last) → C(threshold) 로 두고 B 를 찍는다.
+# 이 파일은 프로비저닝 때 환경 변수로 펼쳐진다. 달러 변수는 빈 값이 되고, 두 번 써서 막으면 그대로 남아 템플릿이 깨진다(운영에서 확인).
 apiVersion: 1
 
 groups:
@@ -19,7 +21,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "5분 동안 5xx 응답이 5% 를 넘었다 — 값 {{ $$values.A.Value | humanizePercentage }}"
+          summary: "5분 동안 5xx 응답이 5% 를 넘었다 — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
         data:
           - refId: A
             datasourceUid: mimir
@@ -28,12 +30,19 @@ groups:
               refId: A
               instant: true
               expr: "sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_response_status_code=~\"5..\"}[5m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\"}[5m]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
               type: threshold
-              expression: A
+              expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.05]}
       - uid: nova-http-p99
@@ -45,7 +54,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "10분 동안 P99 가 2초를 넘었다 — 값 {{ $$values.A.Value | humanizeDuration }}"
+          summary: "10분 동안 P99 가 2초를 넘었다 — 값 {{ with .Values.B }}{{ humanizeDuration .Value }}{{ end }}"
         data:
           - refId: A
             datasourceUid: mimir
@@ -54,12 +63,19 @@ groups:
               refId: A
               instant: true
               expr: "histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\"}[5m])))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
               type: threshold
-              expression: A
+              expression: B
               conditions:
                 - evaluator: {type: gt, params: [2]}
       - uid: nova-jvm-heap
@@ -71,7 +87,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "10분 동안 힙이 한도의 90% 를 넘었다(태스크 {{ $$labels.instance }}) — 값 {{ $$values.A.Value | humanizePercentage }}"
+          summary: "10분 동안 힙이 한도의 90% 를 넘었다(태스크 {{ .Labels.instance }}) — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
         data:
           - refId: A
             datasourceUid: mimir
@@ -80,12 +96,19 @@ groups:
               refId: A
               instant: true
               expr: "sum by (job, instance) (jvm_memory_used_bytes{service_namespace=\"nova\", jvm_memory_type=\"heap\"}) / sum by (job, instance) (jvm_memory_limit_bytes{service_namespace=\"nova\", jvm_memory_type=\"heap\"} > 0)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
               type: threshold
-              expression: A
+              expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.9]}
       - uid: nova-service-silent
@@ -106,12 +129,19 @@ groups:
               refId: A
               instant: true
               expr: "count by (job) (last_over_time(target_info{service_namespace=\"nova\"}[1h])) unless count by (job) (target_info{service_namespace=\"nova\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
               type: threshold
-              expression: A
+              expression: B
               conditions:
                 - evaluator: {type: gt, params: [0]}
       - uid: obs-ingest-errors
@@ -132,11 +162,18 @@ groups:
               refId: A
               instant: true
               expr: "sum by (job) (rate({__name__=~\"otelcol_(receiver_refused|exporter_send_failed|processor_refused)_.+_total\"}[5m]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
           - refId: C
             datasourceUid: __expr__
             model:
               refId: C
               type: threshold
-              expression: A
+              expression: B
               conditions:
                 - evaluator: {type: gt, params: [0]}

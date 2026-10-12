@@ -109,7 +109,8 @@ locals {
         command   = ["--config=/config/collector.yaml"]
         environment = [
           { name = "LOKI_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.loki_http}/otlp" },
-          { name = "TEMPO_OTLP_ENDPOINT", value = "localhost:${local.obs_ports.tempo_otlp}" },
+          # gRPC 는 localhost 를 ::1 부터 붙어 한 번씩 실패 로그를 남긴다. IPv4 로 고정한다
+          { name = "TEMPO_OTLP_ENDPOINT", value = "127.0.0.1:${local.obs_ports.tempo_otlp}" },
           { name = "MIMIR_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.mimir_http}/otlp" },
           { name = "MYSQLD_EXPORTER_TARGET", value = local.obs_mysqld_exporter ? "localhost:${local.obs_ports.mysqld_metrics}" : "" },
         ]
