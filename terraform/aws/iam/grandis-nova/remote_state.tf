@@ -12,3 +12,8 @@ data "terraform_remote_state" "ecr" {
   backend = "s3"
   config  = local.remote_state.ecr
 }
+
+data "terraform_remote_state" "secretsmanager" {
+  backend = "s3"
+  config  = local.remote_state.secretsmanager
+}
