@@ -30,9 +30,14 @@ output "bastion_instance_profile" {
   value = aws_iam_instance_profile.bastion.name
 }
 
-output "obs_instance_profile" {
-  description = "관측 호스트(obs 스택) EC2 의 인스턴스 프로파일"
-  value       = aws_iam_instance_profile.obs.name
+output "obs_task_role_arn" {
+  description = "관측 스택(monitoring) ECS 태스크 역할"
+  value       = aws_iam_role.obs.arn
+}
+
+output "obs_execution_role_arn" {
+  description = "관측 스택(monitoring) ECS 실행 역할. Grafana admin 비밀번호를 넣는다"
+  value       = aws_iam_role.obs_execution.arn
 }
 
 output "service_permissions" {
