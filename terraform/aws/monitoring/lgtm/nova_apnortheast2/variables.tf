@@ -30,17 +30,11 @@ variable "obs_cpu_credit_threshold" {
   default     = 20
 }
 
-variable "obs_mysqld_exporter" {
+variable "obs_mysqld_exporter_enabled" {
   description = <<-EOT
-    NCP DB 지표(mysqld_exporter). 읽기 전용 exporter 계정(PROCESS, REPLICATION CLIENT, SELECT)과 그 비밀번호 비밀이 생긴 뒤 켠다.
-    secret_arn 이 비어 있으면 컨테이너를 만들지 않는다. 비밀은 obs 실행 역할이 읽을 수 있어야 한다(iam 스택).
+    NCP DB 지표(mysqld_exporter) 컨테이너. 계정과 비밀은 ncp-database 스택(exporter.tf)이 만들고,
+    obs 실행 역할이 비밀을 읽는다(iam 스택). 끄면 컨테이너를 만들지 않고 Collector 도 긁지 않는다.
   EOT
-  type = object({
-    username   = string
-    secret_arn = string
-  })
-  default = {
-    username   = "exporter"
-    secret_arn = ""
-  }
+  type        = bool
+  default     = true
 }
