@@ -35,6 +35,11 @@ variable "queue_age_threshold_overrides" {
     # worker 는 취소가 한 세대(4차례) 내내 실패하면 15분 지연을 두고 다시 보낸다
     "preorder-cancel" = 1200
   }
+
+  validation {
+    condition     = alltrue([for v in values(var.queue_age_threshold_overrides) : v > 0])
+    error_message = "queue_age_threshold_overrides 값은 0 보다 커야 한다 (초)."
+  }
 }
 
 variable "cloudfront_5xx_rate_threshold" {

@@ -43,11 +43,13 @@ locals {
       can(s.scaling.backlog.queue) && can(s.scaling.backlog.queues) ? "scaling.backlog 에는 queue 와 queues 중 하나만 쓴다" : "",
       # 틀린 모양이면 backlog 가 조용히 빠져 큐 적체로 늘지 않는다. 그래서 여기서 멈춘다
       try(s.scaling.backlog, null) == null || (
-        (can(tostring(s.scaling.backlog.queue)) || can([for q in s.scaling.backlog.queues : tostring(q)]))
+        (can(tostring(s.scaling.backlog.queue)) || try(length([for q in s.scaling.backlog.queues : tostring(q)]) >= 1 && length(s.scaling.backlog.queues) <= 8, false))
         && can(tonumber(s.scaling.backlog.per_task))
-      ) ? "" : "scaling.backlog 는 queue(문자열) 또는 queues(목록)와 per_task(숫자)가 필요",
+      ) ? "" : "scaling.backlog 는 queue(문자열) 또는 queues(1~8개 목록)와 per_task(숫자)가 필요",
       # 컨테이너 헬스체크(routes 없음)는 200 만 본다. ALB 처럼 범위(200-299)를 쓰지 않는다
       length(try(s.routes, [])) > 0 || try(s.health, null) == null || try(tostring(s.health.matcher), "200") == "200" ? "" : "routes 없이 쓰는 health 의 matcher 는 200 만 된다",
+      # 컨테이너 헬스체크 명령(bash)에 그대로 들어가므로 경로 문자를 제한한다
+      try(s.health, null) == null || can(regex("^/[A-Za-z0-9/._-]*$", tostring(s.health.path))) ? "" : "health.path 는 /로 시작하고 영문 · 숫자 · / . _ - 만 쓴다",
       [for p, to in try(s.calls, {}) : contains(keys(local._service_raw), to) ? "" : "calls 의 '${to}' 는 없는 서비스"],
       [for p, to in try(s.calls, {}) : try(tonumber(local._service_raw[to].port), 0) > 0 ? "" : "calls 의 '${to}' 는 포트가 없는 서비스(port: 0)"],
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && length([for x in local._all_priorities : x if x == try(r.priority, -1)]) > 1 ? "route priority ${try(r.priority, "?")} 가 다른 규칙과 겹침" : ""],
