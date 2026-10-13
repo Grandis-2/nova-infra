@@ -28,6 +28,12 @@ variable "api_rate_limit_per_5min" {
   default     = 3000
 }
 
+variable "queue_rate_limit_per_5min" {
+  description = "IP 하나가 5분 동안 대기열(/api/v1/preorders/queue, 줄 서기 · 조회)로 보낼 수 있는 요청 수. 넘으면 차단"
+  type        = number
+  default     = 300000
+}
+
 variable "waf_block_mode" {
   description = "true 면 차단, false 면 집계만(Count). 도입 초기에는 false 로 지켜본다"
   type        = bool
