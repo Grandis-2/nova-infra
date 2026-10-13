@@ -6,6 +6,11 @@ spring:
     hikari:
       transaction-isolation: TRANSACTION_READ_COMMITTED # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
       maximum-pool-size: 10 # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+      # NCP DB 는 인터넷 너머라 왕복이 길다(약 35ms). 드라이버가 상태가 같을 때 보내는 명령을 줄인다
+      data-source-properties:
+        useLocalSessionState: true # autocommit · 읽기 전용 · 격리 수준이 이미 같으면 SET 을 보내지 않는다
+        useLocalTransactionState: true # 아무 문장도 안 보냈으면 commit · rollback 을 보내지 않는다
+        cacheServerConfiguration: true # 새 연결마다 서버 변수를 다시 묻지 않는다
   jpa:
     hibernate:
       ddl-auto: validate # 스키마는 Flyway 가 만든다
