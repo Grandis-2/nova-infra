@@ -78,7 +78,8 @@ locals {
     ]
   ])
 
-  # localhost 주소가 남아 있으면 운영에서 연결이 실패한다
+  # localhost 주소가 남아 있으면 운영에서 연결이 실패한다. 로컬 개발용으로 일부러 넣는 값(카카오 리다이렉트 등)이 있어
+  # plan 을 막지 않고 경고(check)만 남긴다
   _cfg_local_values = flatten([
     for k, text in local._cfg_text : [
       for m in regexall("(?m)^\\s*([^#\\s][^:]*):.*(?:localhost|127\\.0\\.0\\.1)", text) : "${k}: ${trimspace(m[0])}"
@@ -118,10 +119,6 @@ resource "terraform_data" "config_check" {
       error_message = "application.yml 에 비밀 값이 있다: ${join(", ", local._cfg_secret_literals)}. 같은 폴더의 secrets.sops.yml 로 옮기고, 값 자리에는 $${환경변수} 를 쓴다."
     }
     precondition {
-      condition     = length(local._cfg_local_values) == 0
-      error_message = "application.yml 에 로컬 주소가 남아 있다: ${join(", ", local._cfg_local_values)}"
-    }
-    precondition {
       condition     = length(local._secret_missing) == 0
       error_message = "secrets.sops.yml · generated_secrets 가 있는데 시크릿이 아직 없다: ${join(", ", local._secret_missing)}. secretsmanager 스택을 먼저 apply 한다."
     }
@@ -129,6 +126,13 @@ resource "terraform_data" "config_check" {
       condition     = length(local._secret_reserved) == 0
       error_message = "비밀(secrets.sops.yml · generated_secrets) 키가 인프라 환경변수나 service.yml 의 environment 와 겹친다: ${join(", ", local._secret_reserved)}"
     }
+  }
+}
+
+check "no_local_values" {
+  assert {
+    condition     = length(local._cfg_local_values) == 0
+    error_message = "application.yml 에 로컬 주소가 있다(의도한 값인지 확인): ${join(", ", local._cfg_local_values)}"
   }
 }
 
