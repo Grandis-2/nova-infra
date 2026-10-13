@@ -67,8 +67,9 @@ resource "aws_cloudwatch_metric_alarm" "cloudfront_5xx" {
 resource "aws_cloudwatch_metric_alarm" "waf_blocked" {
   provider = aws.us_east_1
   for_each = {
-    all        = { rule = "ALL", threshold = var.waf_blocked_threshold }
-    rate-limit = { rule = "ApiRateLimit", threshold = var.waf_rate_limit_blocked_threshold }
+    all              = { rule = "ALL", threshold = var.waf_blocked_threshold }
+    rate-limit       = { rule = "ApiRateLimit", threshold = var.waf_rate_limit_blocked_threshold }
+    queue-rate-limit = { rule = "QueueRateLimit", threshold = var.waf_rate_limit_blocked_threshold }
   }
 
   alarm_name          = "${local.name_prefix}-waf-cloudfront-${each.key}"
