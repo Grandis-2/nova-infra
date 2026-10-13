@@ -1,8 +1,8 @@
 # 단일 바이너리 Loki. 청크·인덱스는 S3, 아직 올라가지 않은 데이터(WAL)와 작업 파일은 로컬 디스크(/loki).
-# -config.expand-env=true 로 띄운다. 값은 실행 환경(ECS 작업 정의, 시험은 test/compose.yaml)이 넘긴다:
+# -config.expand-env=true 로 띄운다. 값은 ECS 작업 정의가 넘긴다:
 #   LOKI_S3_BUCKET · LOKI_S3_REGION · LOKI_RETENTION_PERIOD (필수)
 #   LOKI_S3_ENDPOINT · LOKI_S3_FORCE_PATH_STYLE · LOKI_S3_INSECURE (로컬 S3 대체용. 실제 AWS 에서는 비운다)
-#   LOKI_COMPACTION_INTERVAL(10m) · LOKI_RETENTION_DELETE_DELAY(2h) (보존 시험을 빨리 돌릴 때만 바꾼다)
+#   LOKI_COMPACTION_INTERVAL(10m) · LOKI_RETENTION_DELETE_DELAY(2h) (보존 동작을 빨리 확인할 때만 바꾼다)
 #
 # 자격 증명은 여기 없다. 비어 있으면 AWS SDK 기본 체인을 쓴다 — ECS 에서는 태스크 역할이다.
 #
@@ -53,7 +53,7 @@ ingester:
   wal:
     enabled: true
     dir: /loki/wal
-    # 정상 종료(SIGTERM)면 들고 있던 청크를 S3 로 올리고 내려간다. 그 시간은 ECS 컨테이너 stopTimeout(최대 120초), 시험 compose 는 stop_grace_period 가 준다.
+    # 정상 종료(SIGTERM)면 들고 있던 청크를 S3 로 올리고 내려간다. 그 시간은 ECS 컨테이너 stopTimeout(최대 120초)이 준다.
     flush_on_shutdown: true
 
 compactor:

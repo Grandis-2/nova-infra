@@ -27,10 +27,10 @@ locals {
   obs_config_bucket = data.terraform_remote_state.s3.outputs.obs_config_bucket.id
   obs_config_prefix = "lgtm"
 
-  # config/ 의 설정 파일. 시험 · 문서는 올리지 않는다
+  # config/ 의 설정 파일. 문서(README)는 올리지 않는다
   obs_config_files = toset([
     for f in fileset("${path.module}/config", "**") : f
-    if !startswith(f, "test/") && !endswith(f, ".md") && !endswith(f, ".sh")
+    if !endswith(f, ".md")
   ])
   obs_config_hash = sha256(join("", [for f in sort(tolist(local.obs_config_files)) : "${f}:${filesha256("${path.module}/config/${f}")}"]))
 
@@ -46,7 +46,7 @@ locals {
     mysqld_metrics = 9104
   }
 
-  # 이미지는 태그와 다이제스트로 고정한다 (linux/arm64 · linux/amd64 매니페스트). config/test/compose.yaml 과 같아야 한다
+  # 이미지는 태그와 다이제스트로 고정한다 (linux/arm64 · linux/amd64 매니페스트)
   obs_images = {
     aws_cli        = "amazon/aws-cli:2.37.12@sha256:ce44b800602264c12298bbf3399055a4cefdb9ed4a098abe564afe26e7071bce"
     otel_collector = "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6"
