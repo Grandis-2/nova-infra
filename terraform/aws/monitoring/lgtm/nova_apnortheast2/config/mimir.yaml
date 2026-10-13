@@ -1,6 +1,6 @@
 # 단일 바이너리 Mimir(-target=all). 블록 · 경보 규칙 · Alertmanager 상태는 S3 한 버킷에 접두사로 나눠 두고,
 # 아직 블록이 되지 않은 시계열(TSDB head · WAL)은 로컬 디스크(/data).
-# -config.file=/config/mimir.yaml -config.expand-env=true 로 띄운다. 값은 작업 정의(시험에서는 compose)가 넘긴다:
+# -config.file=/config/mimir.yaml -config.expand-env=true 로 띄운다. 값은 ECS 작업 정의가 넘긴다:
 #   MIMIR_S3_BUCKET · MIMIR_S3_REGION · MIMIR_RETENTION (필수)
 #   MIMIR_S3_ENDPOINT (없으면 s3.ap-northeast-2.amazonaws.com — 아래 endpoint 주석)
 #   MIMIR_S3_INSECURE · MIMIR_S3_BUCKET_LOOKUP_TYPE (로컬 S3 대체용. 실제 AWS 에서는 넘기지 않는다)

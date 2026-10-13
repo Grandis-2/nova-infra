@@ -1,5 +1,5 @@
 # 단일 바이너리 Tempo. 블록은 S3, 아직 블록이 되지 않은 스팬(WAL)은 로컬 디스크(/var/tempo).
-# -config.expand-env=true 로 띄운다. 값은 작업 정의(시험에서는 compose)가 넘긴다:
+# -config.expand-env=true 로 띄운다. 값은 ECS 작업 정의가 넘긴다:
 #   TEMPO_S3_BUCKET · TEMPO_S3_REGION · TEMPO_RETENTION (필수)
 #   TEMPO_S3_ENDPOINT · TEMPO_S3_FORCE_PATH_STYLE · TEMPO_S3_INSECURE (로컬 S3 대체용. 실제 AWS 에서는 넘기지 않는다.
 #     TEMPO_S3_ENDPOINT 가 없으면 리전의 S3 주소 s3.<TEMPO_S3_REGION>.amazonaws.com 이다)
