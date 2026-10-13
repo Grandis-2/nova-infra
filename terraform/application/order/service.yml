@@ -18,9 +18,10 @@ health:
   matcher: "200"
 
 routes:
-  # 재고는 order 가 관리한다. catalog(50)의 /api/v1/admin/products* 보다 먼저 매칭한다
+  # 규칙 하나의 경로는 3개까지다(ALB 조건당 비교 문자열 한도). route 를 늘리면 ECS 서비스를 다시 만드니(lb_shape) 빈자리에 넣는다
+  # 재고는 order 가 관리한다. catalog(50)의 /api/v1/admin/products* 보다 먼저 매칭한다. 드로우(회차 · 응모)도 order 다
   - priority: 20
-    paths: ["/api/v1/admin/products/*/stock"]
+    paths: ["/api/v1/admin/products/*/stock", "/api/v1/draws*", "/api/v1/admin/draws*"]
   - priority: 40
     paths: ["/api/v1/orders*", "/api/v1/admin/orders*"]
 
