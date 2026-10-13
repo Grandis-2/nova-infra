@@ -26,7 +26,6 @@ jwt: verify
 calls:
   spring.http.serviceclient.catalog.base-url: catalog
   spring.http.serviceclient.order.base-url: order
-  external.mock.base-url: mock
 db: shop
 redis: main
 
