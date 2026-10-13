@@ -7,7 +7,6 @@ locals {
 
   # Web ACL 이름은 edge 스택(waf.tf)의 이름 규칙을 따른다
   waf_cloudfront = "${local.name_prefix}-cloudfront"
-  waf_alb        = "${local.name_prefix}-alb"
 }
 
 resource "aws_sns_topic" "alerts_us_east_1" {
@@ -89,26 +88,4 @@ resource "aws_cloudwatch_metric_alarm" "waf_blocked" {
   }
 
   alarm_actions = [aws_sns_topic.alerts_us_east_1.arn]
-}
-
-# ALB WAF 는 CloudFront WAF 를 이미 통과한 요청만 본다. 여기서 차단이 나오면 우회 경로나 규칙 차이다
-resource "aws_cloudwatch_metric_alarm" "waf_alb_blocked" {
-  alarm_name          = "${local.name_prefix}-waf-alb-blocked"
-  alarm_description   = "WAF (ALB) blocked requests that passed CloudFront. Check for a bypass path"
-  namespace           = "AWS/WAFV2"
-  metric_name         = "BlockedRequests"
-  statistic           = "Sum"
-  period              = 300
-  evaluation_periods  = 1
-  threshold           = 0
-  comparison_operator = "GreaterThanThreshold"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    WebACL = local.waf_alb
-    Region = var.aws_region
-    Rule   = "ALL"
-  }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
 }
