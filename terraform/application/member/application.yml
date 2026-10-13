@@ -4,11 +4,11 @@
 spring:
   datasource:
     hikari:
-      transaction-isolation: TRANSACTION_READ_COMMITTED   # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
-      maximum-pool-size: 10                               # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+      transaction-isolation: TRANSACTION_READ_COMMITTED # 빠뜨려도 기동은 되지만 부하가 몰리면 교착이 난다
+      maximum-pool-size: 10 # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
   jpa:
     hibernate:
-      ddl-auto: validate                                  # 스키마는 Flyway 가 만든다
+      ddl-auto: validate # 스키마는 Flyway 가 만든다
     properties:
       hibernate:
         jdbc:
@@ -29,13 +29,15 @@ server:
   forward-headers-strategy: none
 
 kakao:
-  client-id: ecc34a298970504bc09587bc99844484   # REST API 키. 브라우저 인가 URL 에도 실리는 공개 값이다
+  client-id: ecc34a298970504bc09587bc99844484 # REST API 키. 브라우저 인가 URL 에도 실리는 공개 값이다
   client-secret: ${KAKAO_CLIENTSECRET}
   token-uri: https://kauth.kakao.com/oauth/token
   user-info-uri: https://kapi.kakao.com/v2/user/me
-  allowed-redirect-uris:                          # 카카오 콘솔의 Redirect URI 와 같아야 한다
+  allowed-redirect-uris:
+    # 카카오 콘솔의 Redirect URI 와 같아야 한다
     - https://grandis-nova.link/login/kakao/callback
     - https://www.grandis-nova.link/login/kakao/callback
+    - http://localhost:5173/auth/kakao/callback
   connect-timeout: 2s
   read-timeout: 5s
 
@@ -54,11 +56,12 @@ auth:
     max-attempts: 5
     max-total-attempts: 60
     window: 1m
-    trusted-proxy-hops: 2          # CloudFront → ALB. X-Forwarded-For 오른쪽에서 두 번째가 사용자 IP
+    trusted-proxy-hops: 2 # CloudFront → ALB. X-Forwarded-For 오른쪽에서 두 번째가 사용자 IP
   cookie:
     secure: true
   refresh:
-    allowed-origins:               # 재발급 요청의 Origin. 프런트 도메인과 정확히 같아야 한다
+    allowed-origins:
+      # 재발급 요청의 Origin. 프런트 도메인과 정확히 같아야 한다
       - https://grandis-nova.link
       - https://www.grandis-nova.link
   revocation-check:
@@ -70,7 +73,7 @@ auth:
 jwt:
   issuer: nova
   audience: nova-api
-  key-id: 2026-09-k1               # 키를 바꿀 때마다 새 이름
+  key-id: 2026-09-k1 # 키를 바꿀 때마다 새 이름
   private-key: ${JWT_PRIVATEKEY}
   access-token-validity: 30m
   refresh-token-validity: 14d
