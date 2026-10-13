@@ -203,7 +203,10 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
-  # 대기열 전용 한도(줄 서기 · 조회). 앱이 회원별 조회 간격(Retry-After)을 정하므로 여기서는 NAT 뒤 다수를 막지 않을 만큼 넉넉히 둔다
+  # 대기열 전용 한도(줄 서기 · 조회). 앱이 회원별 조회 간격(Retry-After)을 정하므로 여기서는 NAT 뒤 다수를 막지 않을 만큼 넉넉히 둔다.
+  # 산정: 대기자 한 명이 5분에 약 100건(2~4초 간격 조회) + 오픈 때 줄 서기. 통신사 CGNAT 은 공인 IP 하나 뒤에
+  #       수천 명이 있을 수 있어 약 3,000명분(300,000)으로 잡았다. 한 IP 의 과다 요청은 WAF 가 아니라
+  #       앱(인증 · Retry-After)이 맡는다. 줄이려면 queue_rate_limit_per_5min 만 바꾼다
   rule {
     name     = "QueueRateLimit"
     priority = 110
