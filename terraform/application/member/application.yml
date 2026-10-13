@@ -33,11 +33,12 @@ kakao:
   client-secret: ${KAKAO_CLIENTSECRET}
   token-uri: https://kauth.kakao.com/oauth/token
   user-info-uri: https://kapi.kakao.com/v2/user/me
+  # 프런트가 보낸 redirectUri 가 이 목록과 정확히 같아야 한다. 프런트의 <origin>/auth/kakao/callback 이고,
+  # 카카오 콘솔의 Redirect URI 에도 같은 값이 있어야 한다
   allowed-redirect-uris:
-    # 카카오 콘솔의 Redirect URI 와 같아야 한다
-    - https://grandis-nova.link/login/kakao/callback
-    - https://www.grandis-nova.link/login/kakao/callback
-    - http://localhost:5173/auth/kakao/callback
+    - https://grandis-nova.link/auth/kakao/callback
+    - https://www.grandis-nova.link/auth/kakao/callback
+    - http://localhost:5173/auth/kakao/callback   # 로컬 개발 (plan 에 localhost 경고가 남는다)
   connect-timeout: 2s
   read-timeout: 5s
 
