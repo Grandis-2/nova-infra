@@ -197,6 +197,8 @@ locals {
         user      = local.obs_data_dirs["grafana"]
         environment = [
           { name = "GF_PATHS_PROVISIONING", value = "/config/grafana/provisioning" },
+          # 로그인하면 개요 대시보드부터 본다(config/grafana/dashboards)
+          { name = "GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH", value = "/config/grafana/dashboards/01 Overview/overview.json" },
           { name = "GF_SERVER_ROOT_URL", value = local.grafana_url },
           { name = "GF_AUTH_ANONYMOUS_ENABLED", value = "false" },
           # Cognito OAuth (alb.tf). ALB 에서 이미 로그인했으므로 Cognito 가 비밀번호를 다시 묻지 않고 돌려보낸다
