@@ -1,9 +1,18 @@
-# 외부 예약 시스템 목업. 이미지(nova-mock)가 준비되면 deploy: true 로 바꾼다
+# 외부 예약 시스템 목업 (Grandis-2/mock). 이미지는 mock 저장소 release 가 nova/mock 에 올린다
 name: mock
-deploy: false
-cpu: 512
-memory: 1024
+deploy: true
+cpu: 1024                       # 판정 부하(초당 500건)에서 목업이 병목이 되지 않게. 이미지의 AOT 학습 · 측정도 이 크기다
+memory: 2048
 port: 8081                      # external.mock.base-url 의 기본 포트
-deployment: rolling
+management_port: 9081           # 앱 기본값(MockDefaults)과 같다. 서비스 포트와 같게 두면 기동하지 않는다
+# 지연 · 실패 설정과 결함은 태스크 메모리에만 있다(mock.shared-state: memory). 둘이 뜨면 설정이 갈리므로 한 대만 띄운다.
+# 옛 태스크가 내려간 뒤 새 태스크가 뜨므로 배포하는 동안 잠시 응답하지 않는다
+deployment: singleton
+spot: false                     # 회수되면 실행 중에 바꾼 설정이 조용히 기본값으로 돌아간다
 
-db: external_mock
+# ALB 경로가 없어 컨테이너 헬스체크가 된다. readiness 는 앱 상태만 본다(DB 장애로 태스크를 갈아 끼우지 않게)
+health:
+  port: 9081
+  path: /actuator/health/readiness
+
+db: external_mock               # 표는 mock 저장소 db/migrations 가 release 때 Flyway 로 만든다

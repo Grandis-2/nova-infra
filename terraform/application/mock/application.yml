@@ -1,1 +1,39 @@
-# TODO(mock 담당): 목업 이미지가 준비되면 운영 값을 채운다. 주소와 비밀은 적지 않는다.
+spring:
+  threads:
+    virtual:
+      enabled: true             # 꺼져 있으면 기동하지 않는다. 지연 · TIMEOUT 으로 대기하는 요청이 스레드를 다 차지한다
+  datasource:
+    hikari:
+      transaction-isolation: TRANSACTION_READ_COMMITTED   # 등록 · 취소 · 조회 밖 쿼리의 기본값
+      maximum-pool-size: 30                               # 20 은 초당 500건에서 병목이었다(목업 실측)
+      data-source-properties:
+        useLocalSessionState: true                        # 트랜잭션마다 격리 수준을 묻는 왕복을 줄인다
+  jpa:
+    hibernate:
+      ddl-auto: validate        # 표는 mock 저장소 db/migrations(Flyway)가 만든다. 다르면 기동하지 않는다
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  lifecycle:
+    # 정상 종료가 붙잡은 연결(TIMEOUT 7초)을 기다리는 상한. ECS 강제 종료(30초)보다 먼저 끝난다
+    timeout-per-shutdown-phase: 10s
+server:
+  tomcat:
+    max-connections: 8192       # TIMEOUT · 응답 유실은 연결을 붙잡는다. 넘으면 새 연결이 거절된다
+# 지연 · 실패 기본값. 실행 중에는 PUT /external/config 로 바꾸고, 재기동하면 이 값으로 돌아간다
+mock:
+  register-latency-ms: 500
+  latency-jitter: 0.4
+  failure-rate: 0.05            # 5% 는 0.05
+  failure-mode: HTTP_5XX
+  # 응답 없이 연결을 붙잡는 시간. worker 읽기 타임아웃 + 2초 이상이어야 기동한다
+  timeout-hold-ms: 7000
+  worker-read-timeout-ms: 3000  # worker 의 nova.worker.mock.read-timeout 기본값(3s)과 맞춘다
+  # 한 대(singleton)라 메모리. 여러 대로 늘리면 redis 로 바꾸고 service.yml 에 redis: main, 여기 spring.data.redis.timeout ·
+  # connect-timeout(각각 worker 읽기 타임아웃의 1/4 이하 — RedisTimeoutGuard), worker 의 mock-max-instances 를 함께 바꾼다
+  shared-state: memory
+logging:
+  level:
+    com.grandis.nova.mockapi: INFO
