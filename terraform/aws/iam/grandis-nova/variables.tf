@@ -3,6 +3,12 @@ variable "github_repositories" {
   type        = list(string)
 }
 
+variable "github_mock_repositories" {
+  description = "mock 전용 배포 역할(github_deploy_mock.tf)을 받을 저장소. 형식은 github_repositories 와 같다"
+  type        = list(string)
+  default     = []
+}
+
 variable "github_deploy_branches" {
   description = "배포를 허용할 ref. 기본은 main 브랜치뿐"
   type        = list(string)
