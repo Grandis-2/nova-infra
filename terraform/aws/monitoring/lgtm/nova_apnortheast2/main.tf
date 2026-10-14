@@ -9,7 +9,9 @@
 #            파일 내용의 해시가 작업 정의에 들어가므로 설정을 고치면 apply 가 곧 재배포다.
 #   실행   : ecs 스택의 obs 용량 공급자(EC2 1대). 데이터 디렉터리는 그 인스턴스의 데이터 EBS 를 bind mount 한다.
 #            한 호스트의 디렉터리를 쓰므로 옛 태스크를 먼저 내리고 새 태스크를 띄운다(최소 0 · 최대 100%).
-#   접속   : Grafana 포트는 열지 않는다. ECS Exec 포트 포워딩으로만 들어온다.
+#   접속   : https://grafana.<도메인> — Cognito 로그인 뒤 Grafana 도 같은 풀로 OAuth 로그인한다(alb.tf, NV-517).
+#            역할은 Cognito 그룹으로 정한다(grafana-admin → Admin, grafana-editor → Editor, 그 밖 → Viewer).
+#            비상용 admin 은 /login?disableAutoLogin 에서 로그인한다. ECS Exec 포트 포워딩도 그대로 된다.
 #
 #     aws ssm start-session --target ecs:<클러스터>_<태스크 ID>_<grafana 런타임 ID> \
 #       --document-name AWS-StartPortForwardingSession --parameters '{"portNumber":["3000"],"localPortNumber":["3000"]}'
@@ -193,7 +195,22 @@ locals {
         user      = local.obs_data_dirs["grafana"]
         environment = [
           { name = "GF_PATHS_PROVISIONING", value = "/config/grafana/provisioning" },
+          { name = "GF_SERVER_ROOT_URL", value = local.grafana_url },
           { name = "GF_AUTH_ANONYMOUS_ENABLED", value = "false" },
+          # Cognito OAuth (alb.tf). ALB 에서 이미 로그인했으므로 Cognito 가 비밀번호를 다시 묻지 않고 돌려보낸다
+          { name = "GF_AUTH_GENERIC_OAUTH_ENABLED", value = "true" },
+          { name = "GF_AUTH_GENERIC_OAUTH_NAME", value = "Cognito" },
+          { name = "GF_AUTH_GENERIC_OAUTH_CLIENT_ID", value = local.cognito.grafana_client_id },
+          { name = "GF_AUTH_GENERIC_OAUTH_SCOPES", value = "openid email profile" },
+          { name = "GF_AUTH_GENERIC_OAUTH_AUTH_URL", value = "${local.cognito.auth_base_url}/oauth2/authorize" },
+          { name = "GF_AUTH_GENERIC_OAUTH_TOKEN_URL", value = "${local.cognito.auth_base_url}/oauth2/token" },
+          { name = "GF_AUTH_GENERIC_OAUTH_API_URL", value = "${local.cognito.auth_base_url}/oauth2/userInfo" },
+          { name = "GF_AUTH_GENERIC_OAUTH_USE_PKCE", value = "true" },
+          { name = "GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP", value = "true" }, # 풀에 있는 사람만 오므로 첫 로그인 때 Grafana 사용자를 만든다
+          { name = "GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN", value = "true" },
+          { name = "GF_AUTH_GENERIC_OAUTH_EMAIL_ATTRIBUTE_PATH", value = "email" },
+          # ID 토큰의 cognito:groups. 그룹이 없으면 Viewer. 로그인할 때마다 다시 맞춘다
+          { name = "GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH", value = "contains(\"cognito:groups\" || `[]`, 'grafana-admin') && 'Admin' || contains(\"cognito:groups\" || `[]`, 'grafana-editor') && 'Editor' || 'Viewer'" },
           { name = "GF_USERS_ALLOW_SIGN_UP", value = "false" },
           { name = "GF_SECURITY_ADMIN_USER", value = "admin" },
           { name = "GF_SECURITY_DISABLE_GRAVATAR", value = "true" },
@@ -211,6 +228,10 @@ locals {
         # 최초 기동 때만 admin 에 쓰인다. 이미 있는 admin 의 비밀번호 교체는 config/README.md
         secrets = [
           { name = "GF_SECURITY_ADMIN_PASSWORD", valueFrom = data.terraform_remote_state.secretsmanager.outputs.grafana_admin_secret_arn },
+          { name = "GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET", valueFrom = local.cognito.grafana_client_secret_arn },
+        ]
+        portMappings = [
+          { name = "grafana", containerPort = local.obs_ports.grafana, protocol = "tcp", appProtocol = "http" },
         ]
         mountPoints      = concat(local.obs_config_mount, [{ sourceVolume = "grafana-data", containerPath = "/var/lib/grafana", readOnly = false }])
         dependsOn        = concat(local.obs_after_config, [{ containerName = "loki", condition = "START" }])
@@ -333,6 +354,14 @@ resource "aws_ecs_service" "obs" {
     rollback = true
   }
 
+  # Grafana 공개 (alb.tf). 대상이 등록되기 전에 헬스체크로 태스크를 내리지 않게 기동 시간을 준다
+  load_balancer {
+    target_group_arn = aws_lb_target_group.grafana.arn
+    container_name   = "grafana"
+    container_port   = local.obs_ports.grafana
+  }
+  health_check_grace_period_seconds = 300
+
   network_configuration {
     subnets          = [data.terraform_remote_state.ecs.outputs.obs_subnet_id]
     security_groups  = [data.terraform_remote_state.security.outputs.obs_security_group_id]
@@ -367,8 +396,8 @@ resource "aws_ecs_service" "obs" {
     }
   }
 
-  # 설정 파일이 먼저 올라가 있어야 새 태스크가 받는다
-  depends_on = [aws_s3_object.obs_config]
+  # 설정 파일이 먼저 올라가 있어야 새 태스크가 받는다. 대상 그룹은 리스너 규칙에 묶인 뒤에 서비스에 붙일 수 있다
+  depends_on = [aws_s3_object.obs_config, aws_lb_listener_rule.grafana]
 }
 
 # ── obs 자체 감시 (CloudWatch) ───────────────────────────────
