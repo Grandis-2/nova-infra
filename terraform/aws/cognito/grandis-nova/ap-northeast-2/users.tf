@@ -48,11 +48,14 @@ locals {
   # 이메일 → 역할 목록. 중복을 그대로 키로 쓰면 Terraform 오류 메시지에 이메일이 찍히므로(PR 댓글 공개) 묶어서 따로 센다
   users_grouped = { for u in flatten([
     for role in local.user_roles_allowed : [
-      for email in local.users_role_value_ok[role] ? coalesce(try(local.users_doc[role], null), []) : [] : { email = lower(trimspace(email)), role = role }
+      for email in local.users_role_value_ok[role] ? coalesce(try(local.users_doc[role], null), []) : [] : { email = try(lower(trimspace(email)), ""), role = role }
     ]
   ]) : u.email => u.role... }
 
   users_duplicated = nonsensitive(length([for email, roles in local.users_grouped : email if length(roles) > 1]))
+
+  # 이메일 형식이 아닌 값(빈 값 · 문자열이 아닌 값 포함)의 개수. Cognito 가 apply 도중 거부하면 일부 사용자만 만들어지고 메일이 나가므로 plan 에서 막는다
+  users_invalid_emails = nonsensitive(length([for email, roles in local.users_grouped : email if !can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email))]))
 
   # 해시 키 → 이메일(sensitive) · 역할
   users_by_key = { for email, roles in local.users_grouped : substr(sha256(email), 0, 16) => { email = sensitive(email), role = roles[0] } }
@@ -104,6 +107,11 @@ resource "terraform_data" "users_file_check" {
     precondition {
       condition     = length(local.users_bad_roles) == 0
       error_message = "users.sops.yml 의 ${join(", ", local.users_bad_roles)} 값이 이메일 목록이 아닙니다."
+    }
+
+    precondition {
+      condition     = local.users_invalid_emails == 0
+      error_message = "users.sops.yml 에 이메일 형식이 아닌 값이 ${local.users_invalid_emails}개 있습니다."
     }
 
     precondition {
