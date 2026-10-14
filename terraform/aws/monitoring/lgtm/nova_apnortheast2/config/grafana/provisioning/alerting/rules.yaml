@@ -181,7 +181,7 @@ groups:
               conditions:
                 - evaluator: {type: gt, params: [0]}
       - uid: mysql-down
-        title: MySQL exporter 연결 끊김
+        title: MySQL 수집 끊김
         condition: C
         for: 5m
         noDataState: OK
@@ -189,7 +189,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "obs 의 mysqld_exporter 가 NCP MySQL 에 붙지 못한다 — DB 가 내려갔거나 네트워크 · 계정 문제다. MySQL 대시보드 지표도 멈춘다"
+          summary: "MySQL 지표가 들어오지 않는다 — exporter 가 DB 에 붙지 못하거나(DB 중단 · 네트워크 · 계정) exporter 컨테이너가 응답하지 않는다. MySQL 대시보드 지표도 멈춘다"
         data:
           - refId: A
             datasourceUid: mimir
@@ -197,7 +197,9 @@ groups:
             model:
               refId: A
               instant: true
-              expr: "mysql_up{job=\"mysqld\"}"
+              # exporter 가 멈추면 mysql_up 이 사라지고 Collector 의 up 이 0 이 된다. 둘 중 있는 값을 본다.
+              # exporter 를 띄우지 않는 환경에는 mysqld 수집 대상이 없어 둘 다 비고, NoData 는 정상으로 본다
+              expr: "min by (job) (mysql_up{job=\"mysqld\"} or up{job=\"mysqld\"})"
           - refId: B
             datasourceUid: __expr__
             model:

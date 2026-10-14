@@ -93,7 +93,7 @@ flowchart LR
 
 **7. 한 대에 맞춘 Mimir 쿼리 설정.**
 쿼리 샤딩은 끈다. 코어가 몇 개 안 되는 한 대에서는 쪼개도 빨라지지 않고 대기열만 찬다.
-테넌트 대기열은 1000으로 둔다. 대시보드 여러 개가 동시에 패널 수십 개를 조회해도 429 가 나지 않는다.
+테넌트 대기열 한도(`max_outstanding_requests_per_tenant`)는 1000이다. 대시보드 몇 개를 동시에 열어 패널 수십 개가 한꺼번에 조회해도 여유가 있는 값이다. 한도를 넘은 조회는 HTTP 429 로 실패하므로 LGTM 대시보드의 "Mimir 쿼리 대기열"로 지켜본다.
 
 **8. 설정 파일에는 환경마다 다른 값을 넣지 않는다.**
 버킷 · 보존 기간 · 엔드포인트는 환경 변수로 받는다(`-config.expand-env=true`). 이미지는 태그와 다이제스트로 고정한다.
@@ -152,7 +152,7 @@ Grafana 가 1분마다 Mimir 를 조회해 판단하고 SNS → AWS Chatbot → 
 | HTTP P99 응답 시간 | 서비스별 P99 > 2초 | 10분 | warning |
 | JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
-| MySQL exporter 연결 끊김 | `mysql_up` < 1 | 5분 | critical |
+| MySQL 수집 끊김 | `mysql_up` 또는 exporter 수집 대상의 `up` < 1 (exporter 를 띄운 환경만) | 5분 | critical |
 | MySQL 연결 사용률 | 연결 수 / max_connections > 80% | 10분 | warning |
 | obs 수집 실패 | Collector 의 수신 거부 · 내보내기 실패 > 0 | 10분 | warning |
 | obs 저장소 거부 | Loki · Tempo · Mimir 가 버린 로그 · 스팬 · 샘플 > 0 (job · reason 별) | 10분 | warning |
