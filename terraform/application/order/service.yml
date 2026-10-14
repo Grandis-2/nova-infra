@@ -28,6 +28,7 @@ routes:
 jwt: verify
 calls:
   spring.http.serviceclient.preorder.base-url: preorder
+  spring.http.serviceclient.catalog.base-url: catalog   # 장바구니 · 드로우의 상품 정보
   spring.http.serviceclient.payment.base-url: payment
   spring.http.serviceclient.payment-confirm.base-url: payment
 db: shop
