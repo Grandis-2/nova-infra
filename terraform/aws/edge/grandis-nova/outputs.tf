@@ -11,3 +11,8 @@ output "cloudfront_distribution_id" {
 output "service_url" {
   value = local.use_domain ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.this.domain_name}"
 }
+
+output "grafana_url" {
+  description = "Grafana 공개 주소 (Cognito 로그인, NV-517)"
+  value       = local.grafana_enabled ? "https://${local.grafana_domain}" : ""
+}
