@@ -1,0 +1,466 @@
+{
+  "uid": "nova-sqs",
+  "title": "nova · SQS",
+  "description": "SQS 큐(CloudWatch). DLQ 는 맨 아래에 따로 모은다",
+  "tags": [
+    "nova",
+    "data"
+  ],
+  "editable": false,
+  "schemaVersion": 39,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "timezone": "browser",
+  "links": [
+    {
+      "title": "nova 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "nova"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "queue",
+        "label": "큐",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "cloudwatch"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "regex": "/^(?!.*-dlq$).*$/",
+        "query": {
+          "refId": "queue",
+          "queryType": "dimensionValues",
+          "region": "default",
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateNumberOfMessagesVisible",
+          "dimensionKey": "QueueName",
+          "dimensionFilters": {}
+        },
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "적체 (받을 수 있는 메시지)",
+      "description": "worker 가 큐 적체로 늘어난다(service.yml scaling.backlog). 계속 쌓이면 소비가 못 따라간다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateNumberOfMessagesVisible",
+          "dimensions": {
+            "QueueName": "$queue"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
+        }
+      ],
+      "id": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "가장 오래된 메시지 나이",
+      "description": "처리 지연. 경보는 monitoring/cloudwatch 스택(queue_age)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateAgeOfOldestMessage",
+          "dimensions": {
+            "QueueName": "$queue"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "처리 중 (가시성 시간 안)",
+      "description": "받았지만 아직 지우지 않은 메시지",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/SQS",
+          "metricName": "ApproximateNumberOfMessagesNotVisible",
+          "dimensions": {
+            "QueueName": "$queue"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "보냄",
+      "description": "",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/SQS",
+          "metricName": "NumberOfMessagesSent",
+          "dimensions": {
+            "QueueName": "$queue"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "처리 완료 (삭제)",
+      "description": "",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/SQS",
+          "metricName": "NumberOfMessagesDeleted",
+          "dimensions": {
+            "QueueName": "$queue"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "DLQ",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "DLQ 메시지",
+      "description": "0 이 아니면 재시도를 다 쓰고 버려진 메시지가 있다. 원인을 고친 뒤 원래 큐로 옮긴다(redrive)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/SQS,QueueName} MetricName=\"ApproximateNumberOfMessagesVisible\" QueueName=dlq', 'Maximum', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

@@ -1,0 +1,1085 @@
+{
+  "uid": "nova-mysql",
+  "title": "nova · MySQL (NCP)",
+  "description": "NCP Cloud DB for MySQL. obs 태스크의 mysqld_exporter(READ 계정)가 SHOW GLOBAL STATUS · VARIABLES 를 읽는다",
+  "tags": [
+    "nova",
+    "data"
+  ],
+  "editable": false,
+  "schemaVersion": 39,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "links": [
+    {
+      "title": "nova 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "nova"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "exporter 연결",
+      "description": "1 이면 obs 의 mysqld_exporter 가 DB 에 붙어 있다. 0 이면 아래 지표가 모두 멈춘다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "끊김"
+                },
+                "1": {
+                  "text": "정상"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_up{job=\"mysqld\"}",
+          "legendFormat": ""
+        }
+      ],
+      "id": 1,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "연결 사용률",
+      "description": "현재 연결 / max_connections. 서비스 태스크 수 × Hikari 풀(maximum-pool-size)이 여기로 모인다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_global_status_threads_connected{job=\"mysqld\"} / mysql_global_variables_max_connections{job=\"mysqld\"}",
+          "legendFormat": ""
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 4,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "max_connections",
+      "description": "NCP 사양(메모리)에 따라 정해진다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_global_variables_max_connections{job=\"mysqld\"}",
+          "legendFormat": ""
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 9,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "실행 중 스레드",
+      "description": "지금 쿼리를 실행 중인 연결 수. vCPU(2) 보다 오래 크게 머물면 DB 가 밀린다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_global_status_threads_running{job=\"mysqld\"}",
+          "legendFormat": ""
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "느린 쿼리",
+      "description": "선택한 기간 동안 long_query_time 을 넘은 쿼리 수. 어떤 쿼리인지는 트러블슈팅의 느린 DB 쿼리 표",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "increase(mysql_global_status_slow_queries{job=\"mysqld\"}[$__range])",
+          "legendFormat": ""
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 0
+      }
+    },
+    {
+      "type": "row",
+      "title": "연결",
+      "id": 6,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "연결 수",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_global_status_threads_connected{job=\"mysqld\"}",
+          "legendFormat": "연결"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "mysql_global_status_max_used_connections{job=\"mysqld\"}",
+          "legendFormat": "기동 후 최대"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "mysql_global_variables_max_connections{job=\"mysqld\"}",
+          "legendFormat": "max_connections"
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "실행 중 스레드",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_global_status_threads_running{job=\"mysqld\"}",
+          "legendFormat": "실행 중"
+        }
+      ],
+      "id": 8,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "연결 실패 · 끊김",
+      "description": "접속 실패가 늘면 계정 · 비밀번호 · 허용 IP(NAT) 를, 끊김이 늘면 앱의 커넥션 수명(Hikari maxLifetime)과 wait_timeout 을 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_aborted_connects{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "접속 실패(aborted_connects)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "rate(mysql_global_status_aborted_clients{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "정상 종료 없이 끊김(aborted_clients)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "sum by (error) (rate(mysql_global_status_connection_errors_total{job=\"mysqld\"}[$__rate_interval])) > 0",
+          "legendFormat": "오류 {{error}}"
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      }
+    },
+    {
+      "type": "row",
+      "title": "쿼리",
+      "id": 10,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "쿼리 수 (명령별)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (command) (rate(mysql_global_status_commands_total{job=\"mysqld\", command=~\"select|insert|update|delete|replace|commit|rollback\"}[$__rate_interval]))",
+          "legendFormat": "{{command}}"
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "전체 쿼리 수",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_queries{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "queries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "rate(mysql_global_status_questions{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "questions(클라이언트가 보낸 것)"
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "느린 쿼리 · 임시 디스크 테이블",
+      "description": "0 이 아니면 해당 쿼리의 실행 계획(EXPLAIN)을 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_slow_queries{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "느린 쿼리"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "rate(mysql_global_status_created_tmp_disk_tables{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "임시 디스크 테이블"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "rate(mysql_global_status_select_full_join{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "인덱스 없는 조인"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "D",
+          "expr": "rate(mysql_global_status_sort_merge_passes{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "정렬 병합(sort buffer 부족)"
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "네트워크",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_bytes_received{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "받음"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "rate(mysql_global_status_bytes_sent{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "보냄"
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      }
+    },
+    {
+      "type": "row",
+      "title": "InnoDB",
+      "id": 15,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "버퍼 풀 적중률",
+      "description": "디스크에서 읽지 않고 메모리에서 찾은 비율. 0.99 아래로 오래 머물면 버퍼 풀(메모리)이 작다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "적중률"
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "버퍼 풀 페이지",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (state) (mysql_global_status_buffer_pool_pages{job=\"mysqld\"})",
+          "legendFormat": "{{state}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "mysql_global_status_buffer_pool_dirty_pages{job=\"mysqld\"}",
+          "legendFormat": "dirty"
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 31
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "행 작업",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (operation) (rate(mysql_global_status_innodb_row_ops_total{job=\"mysqld\"}[$__rate_interval]))",
+          "legendFormat": "{{operation}}"
+        }
+      ],
+      "id": 18,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 31
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "행 잠금 대기",
+      "description": "같은 행을 동시에 바꾸려는 요청(재고 차감 등)이 몰리면 는다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "대기 횟수"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "mysql_global_status_innodb_row_lock_current_waits{job=\"mysqld\"}",
+          "legendFormat": "지금 기다리는 수"
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 39
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "행 잠금 평균 대기 시간",
+      "description": "innodb_row_lock_time(밀리초) 증가분 / 대기 횟수",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_innodb_row_lock_time{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval]) / 1000",
+          "legendFormat": "평균"
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

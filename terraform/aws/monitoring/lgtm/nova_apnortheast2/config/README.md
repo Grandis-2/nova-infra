@@ -40,6 +40,8 @@ Tempo · Mimir 의 링은 메모리에 둔다. Tempo 는 memberlist 를 띄우�
 | `grafana/provisioning/dashboards/nova.yaml` | 대시보드 프로비저닝. `/config/grafana/dashboards` 의 하위 디렉터리를 같은 이름의 Grafana 폴더로 읽는다(화면에서 고쳐도 저장되지 않고, 파일을 지우면 대시보드도 지워진다) |
 | `grafana/dashboards/01 Overview/` | `overview.json` — 서비스 전체 현황(요청 수 · 5xx · P99 · 인스턴스 · 힙 · CPU 표, 경보 목록). 로그인 첫 화면 |
 | `grafana/dashboards/10 Services/` | `service.json` — 서비스 상세 하나(`$service` 변수). HTTP · 외부 호출 · JVM · HikariCP · 로그 · 트레이스 |
+| `grafana/dashboards/20 Data/` | `mysql.json`(NCP MySQL, Mimir · mysqld_exporter) · `valkey.json`(ElastiCache) · `sqs.json`(큐 · DLQ). Valkey · SQS 는 CloudWatch, 새로고침 5분 |
+| `grafana/dashboards/30 Platform/` | `platform.json` — ECS 서비스(태스크 수 · 재시작 · CPU · 메모리), ALB(요청 · 오류 · 응답 시간 · 비정상 대상), CloudFront(us-east-1). CloudWatch, 새로고침 5분 |
 | `grafana/dashboards/40 Troubleshooting/` | `troubleshooting.json` — 느린 경로 · 5xx 경로(지표), 느린 요청 · 오류 · 느린 DB 쿼리(트레이스), ERROR 로그 |
 | `grafana/provisioning/alerting/` | 경보: `rules.yaml`(규칙 5개), `notify.yaml`(SNS 알림 대상 · 기본 경로 · Chatbot 템플릿) |
 | `grafana/provisioning/plugins/` | 빈 프로비저닝 파일. 디렉터리가 없으면 Grafana 가 기동마다 오류 로그를 남긴다(S3 에는 빈 디렉터리가 없다) |
@@ -164,11 +166,13 @@ Grafana 가 1분마다 Mimir 를 질의해 판단하고, SNS → AWS Chatbot →
 - Collector 는 리소스 속성을 **허용 목록**으로만 남긴다. AWS 리소스 감지를 켜면 붙는 `aws.ecs.*` · `cloud.account.id` 는 계정 ID 를 담는다. 이것도 버린다.
 - **손실을 허용하는 경로다.** Collector 에 디스크 큐가 없고, 메모리가 차면 받기를 거부하고, obs 가 내려가 있는 동안의 로그는 오지 않는다. 정본(outbox 등)의 근거로 쓰지 않는다.
 
-**대시보드.** Grafana 의 `nova` 폴더에 서비스마다 하나(`nova · <서비스>`): HTTP 요청 수 · 5xx 비율 · P99(점을 누르면 트레이스), JVM 힙 · GC · 스레드 · CPU, DB 커넥션 풀, WARN · ERROR 로그, 오류 트레이스.
-DB 커넥션 풀 패널의 지표 이름(HikariCP)은 실제 앱에서 아직 확인하지 않았다.
+**대시보드.** `grafana/dashboards/<폴더>/` 가 같은 이름의 Grafana 폴더다(위 "파일" 표). 개요(`nova-overview`, 첫 화면) → 서비스 상세(`nova-service`, `$service`) → 트러블슈팅(`nova-troubleshooting`) 순으로 내려가고,
+데이터(MySQL · Valkey · SQS)와 실행 환경(ECS · ALB · CloudFront)은 `20 Data` · `30 Platform` 에서 본다. `nova` 폴더에는 경보 규칙만 있다.
+HikariCP 대기 · 사용 시간은 에이전트가 보내는 이름(`db_client_connections_*_milliseconds`, 초로 바꿔 그린다)과 새 semconv 이름(`db_client_connection_*_seconds`)을 함께 조회한다.
 
 **지표.** Mimir 데이터소스에서 PromQL 로 본다. 이름은 Prometheus 관례(단위 · 종류 접미사)다: `http.server.request.duration` → `http_server_request_duration_seconds_bucket`.
 `job` 라벨은 `<service.namespace>/<service.name>`(예 `nova/preorder`), `deployment_environment` · `service_namespace` 도 라벨이다. 다른 리소스 속성은 `target_info` 에만 있다.
+`target_info` 에는 `service_namespace` 라벨이 없다. 앱만 고를 때는 `target_info{job=~"nova/.+"}` 로 거른다.
 Collector 자기 지표는 `job="otelcol-contrib"` 다.
 
 **트레이스.** Grafana Explore 에서 Tempo 를 고르거나, 로그 줄을 펼쳐 trace_id 의 "Tempo" 링크로 간다.
