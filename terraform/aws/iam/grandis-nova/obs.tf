@@ -5,6 +5,7 @@
 #   ECS Exec                  Grafana 포트 포워딩 (ssmmessages)
 #   obs-config 버킷          init 컨테이너가 설정 파일(monitoring 스택의 lgtm/)을 받는다
 #   SNS 경보 토픽            Grafana 경보를 monitoring 스택의 토픽(→ Chatbot → Slack)으로 보낸다
+#   CloudWatch 읽기          Grafana CloudWatch 데이터소스(SQS · ElastiCache · ECS · ALB · CloudFront 지표 조회)
 # 실행 역할 nova-prod-obs-execution
 #   이미지 pull · 로그, Grafana admin 비밀번호와 mysqld_exporter DB 비밀번호를 컨테이너에 넣는다
 # 인스턴스 역할 nova-prod-obs-instance
@@ -53,6 +54,27 @@ data "aws_iam_policy_document" "obs" {
     sid       = "AlertsPublish"
     actions   = ["sns:Publish"]
     resources = [local.alerts_topic_arn]
+  }
+
+  # Grafana CloudWatch 데이터소스(지표만. Logs Insights 는 쓰지 않는다 — 조회한 데이터 양만큼 과금된다).
+  # 지표 조회 API 는 리소스로 좁힐 수 없다(전부 읽기). DescribeRegions · tag:GetResources 는 변수 목록(리전 · 태그로 거르기)에 쓴다
+  statement {
+    sid = "CloudWatchMetricsRead"
+    actions = [
+      "cloudwatch:ListMetrics",
+      "cloudwatch:GetMetricData",
+      "cloudwatch:DescribeAlarmsForMetric",
+      "ec2:DescribeRegions",
+      "tag:GetResources",
+    ]
+    resources = ["*"]
+  }
+
+  # 패널의 경보 표시 · 경보 이력. 이 계정의 경보만(서울 · CloudFront 경보가 있는 us-east-1)
+  statement {
+    sid       = "CloudWatchAlarmsRead"
+    actions   = ["cloudwatch:DescribeAlarms", "cloudwatch:DescribeAlarmHistory"]
+    resources = ["arn:${local.partition}:cloudwatch:*:${local.account_id}:alarm:*"]
   }
 
   # ECS Exec 의 세션 채널. 대상을 좁힐 수 있는 리소스가 없다

@@ -64,6 +64,11 @@ querier:
   # 기본값(12시간)이면 최근 지표는 ingester(로컬)에서만 읽는다. 위 ignore_blocks_within 과 같은 이유로 0 이다
   query_store_after: 0s
 
+# 조회 대기열. 대시보드를 열면 패널 · 변수 쿼리가 한꺼번에 들어오는데, 기본 한도(100)를 넘으면 나머지는 429(too many outstanding
+# requests)로 바로 실패한다. 처리하는 querier 는 그대로(max_concurrent 8)라 넘친 쿼리는 실패하지 않고 줄을 서서 기다린다
+query_scheduler:
+  max_outstanding_requests_per_tenant: 1000
+
 memberlist:
   bind_addr: [127.0.0.1]
   bind_port: 7947
@@ -119,6 +124,9 @@ limits:
   otel_metric_suffixes_enabled: true
   # OTLP 리소스 속성 중 대시보드가 거르는 것만 시계열 라벨로 올린다(나머지는 target_info 에만 남는다)
   promote_otel_resource_attributes: "service.namespace,deployment.environment"
+  # 쿼리 샤딩을 끈다. 기본(16)은 쿼리 하나를 최대 16개로 쪼개 대기열에 넣는데, 한 대 · querier 8개에서는 빨라지지 않고
+  # 대기열만 16배로 찬다(패널이 많은 대시보드 하나로 한도 100 을 넘었다)
+  query_sharding_total_shards: 0
 
 # 사용 통계를 grafana.com 으로 보내지 않는다.
 usage_stats:

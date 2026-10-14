@@ -1,0 +1,16 @@
+# Grafana 데이터소스 — CloudWatch. AWS 관리형(SQS · ElastiCache · ECS Container Insights · ALB · CloudFront) 지표를 읽는다.
+# 직접 운영하는 것(앱 · MySQL · LGTM · obs 호스트)은 Mimir 에 있다. 관리형 지표를 exporter 로 다시 긁어 오지 않는다.
+#
+# 자격 증명은 태스크 역할(nova-prod-obs)이다(authType: default — SDK 기본 체인). 권한은 iam 스택 obs.tf 의 CloudWatchRead.
+# 조회 비용: GetMetricData 는 지표 1000개당 $0.01. 대시보드 새로고침을 짧게 두면 비용이 그만큼 는다(대시보드 기본 5분).
+apiVersion: 1
+
+datasources:
+  - name: CloudWatch
+    type: cloudwatch
+    uid: cloudwatch
+    access: proxy
+    editable: false
+    jsonData:
+      authType: default
+      defaultRegion: ${AWS_REGION}
