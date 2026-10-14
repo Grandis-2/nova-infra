@@ -121,7 +121,8 @@ resource "aws_iam_role_policy" "github_deploy_mock" {
         }
       },
       {
-        # mock 마이그레이션도 be 것과 같은 실행 역할(db/migrator)을 쓴다
+        # mock 마이그레이션도 be 것과 같은 실행 역할(db/migrator)을 쓴다. DB 계정이 같아 따로 나눠도 막는 것이 없다
+        # (ecs 스택 migration.tf 의 "알려진 한계" — DB 단위 계정을 만들면 실행 역할도 그 계정 것만 읽게 나눈다)
         Sid      = "PassMigrationRole"
         Effect   = "Allow"
         Action   = ["iam:PassRole"]

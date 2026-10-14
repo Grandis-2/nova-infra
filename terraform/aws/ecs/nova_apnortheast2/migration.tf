@@ -102,6 +102,11 @@ resource "aws_ssm_parameter" "migration" {
 # ── mock 마이그레이션 (NV-524) ─────────────────────────────────
 # mock 저장소 release 가 external_mock 스키마를 올린다. 이미지는 nova/mock-migration:latest(mock db/Dockerfile)이고
 # mock 전용 배포 역할(iam 스택 github_deploy_mock.tf)이 띄운다. be 것과 다른 점은 이름 · 이미지 · 접속 DB 뿐이다
+#
+# 알려진 한계: be 와 같은 nova_migrator(DDL) 계정을 쓴다. NCP 계정 권한(READ · CRUD · DDL)은 DB 를 고를 수 없고
+# 인스턴스 전체에 걸려서, mock 저장소 main 에 들어간 마이그레이션 이미지는 shop 스키마도 바꿀 수 있다.
+# NCP 로 계정을 하나 더 만들어도 같다. external_mock.* 에만 GRANT 한 MySQL 계정(nova_admin 으로 생성)과
+# 그 계정만 읽는 실행 역할로 바꾸는 것이 해결이다 — nova_admin 에 CREATE USER · GRANT OPTION 이 있는지 확인한 뒤, 또는 RDS 이전 때
 locals {
   mock_migration_name = "${local.name_prefix}-mock-migration"
 }
