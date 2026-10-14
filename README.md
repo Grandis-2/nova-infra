@@ -107,7 +107,8 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | 사람 (평소) | `nova-readonly` | 읽기 전용 + 상태 잠금 파일 쓰기. 로컬 plan용 |
 | 사람 (비상) | `BreakGlassAdmin` | 관리자. MFA 필수, 1시간, InfraAdmins 그룹만 |
 | Atlantis | `atlantis-grandis-nova-admin` | PowerUser + `nova-*` IAM 리소스 쓰기. 인프라 변경은 이 역할만 |
-| be GitHub Actions | `nova-prod-github-deploy` | OIDC, `Grandis-2/be`의 main 브랜치만. ECR 푸시, ECS 재배포, 배포 전 마이그레이션 태스크 실행 (태스크 정의 변경 불가) |
+| be GitHub Actions | `nova-prod-github-deploy` | OIDC, `Grandis-2/be`의 main 브랜치만. ECR 푸시(mock 저장소 제외), ECS 재배포, 배포 전 마이그레이션 태스크 실행 (태스크 정의 변경 불가) |
+| mock GitHub Actions | `nova-prod-github-deploy-mock` | OIDC, `Grandis-2/mock`의 main 브랜치만. `nova/mock` · `nova/mock-migration` 푸시, mock 서비스 재배포, mock 마이그레이션 태스크 실행 |
 | ECS (공통) | `nova-prod-ecs-task-execution` | 이미지 pull, 로그, `app/*` · `shared/*` · `db/app/*` 비밀 읽기 |
 | 마이그레이션 태스크 | `nova-prod-migration-execution` | 이미지 pull, 로그, `db/migrator` 비밀 읽기 |
 | ECS (서비스별) | `nova-prod-<서비스>-task` | `service.yml`에 적은 큐와 업로드 버킷만 |

@@ -12,6 +12,11 @@ output "github_deploy_role_arn" {
   value       = aws_iam_role.github_deploy.arn
 }
 
+output "github_mock_deploy_role_arn" {
+  description = "mock 저장소 워크플로의 role-to-assume 에 넣는 값 (github_deploy_mock.tf)"
+  value       = aws_iam_role.github_deploy_mock.arn
+}
+
 output "ecs_lb_role_arn" {
   description = "ECS Blue/Green 이 리스너 규칙 · 타깃 그룹을 바꿀 때 쓰는 역할"
   value       = aws_iam_role.ecs_lb.arn

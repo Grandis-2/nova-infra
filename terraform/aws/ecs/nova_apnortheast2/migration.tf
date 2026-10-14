@@ -98,3 +98,83 @@ resource "aws_ssm_parameter" "migration" {
 
   tags = { Name = local.migration_name }
 }
+
+# ── mock 마이그레이션 (NV-524) ─────────────────────────────────
+# mock 저장소 release 가 external_mock 스키마를 올린다. 이미지는 nova/mock-migration:latest(mock db/Dockerfile)이고
+# mock 전용 배포 역할(iam 스택 github_deploy_mock.tf)이 띄운다. be 것과 다른 점은 이름 · 이미지 · 접속 DB 뿐이다
+#
+# 알려진 한계: be 와 같은 nova_migrator(DDL) 계정을 쓴다. NCP 계정 권한(READ · CRUD · DDL)은 DB 를 고를 수 없고
+# 인스턴스 전체에 걸려서, mock 저장소 main 에 들어간 마이그레이션 이미지는 shop 스키마도 바꿀 수 있다.
+# NCP 로 계정을 하나 더 만들어도 같다. external_mock.* 에만 GRANT 한 MySQL 계정(nova_admin 으로 생성)과
+# 그 계정만 읽는 실행 역할로 바꾸는 것이 해결이다 — nova_admin 에 CREATE USER · GRANT OPTION 이 있는지 확인한 뒤, 또는 RDS 이전 때
+locals {
+  mock_migration_name = "${local.name_prefix}-mock-migration"
+}
+
+resource "aws_cloudwatch_log_group" "mock_migration" {
+  name              = "/ecs/${local.mock_migration_name}"
+  retention_in_days = var.log_retention_days
+
+  tags = { Name = local.mock_migration_name }
+}
+
+resource "aws_ecs_task_definition" "mock_migration" {
+  family                   = local.mock_migration_name
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = data.terraform_remote_state.iam.outputs.migration_execution_role_arn
+
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+
+  container_definitions = jsonencode([{
+    name      = local.migration_container
+    image     = "${local.repository_urls["mock-migration"]}:latest"
+    essential = true
+
+    environment = [
+      { name = "FLYWAY_URL", value = "jdbc:mysql://${local.db_address}:${local.db_port}/external_mock?${lookup(local.flyway_ssl_params, var.db_ssl_mode, "")}" },
+    ]
+    secrets = [
+      { name = "FLYWAY_USER", valueFrom = "${local.migrator_secret_arn}:username::" },
+      { name = "FLYWAY_PASSWORD", valueFrom = "${local.migrator_secret_arn}:password::" },
+    ]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.mock_migration.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = local.migration_container
+      }
+    }
+  }])
+
+  tags = { Name = local.mock_migration_name }
+
+  # 접속 옵션 · 포트 검사는 be 마이그레이션 태스크(aws_ecs_task_definition.migration)의 precondition 이 같은 값으로 한다
+}
+
+# mock release 가 RunTask 에 넘길 값 (mock .github 의 마이그레이션 스크립트가 이 이름으로 읽는다)
+resource "aws_ssm_parameter" "mock_migration" {
+  name = "/${local.name_prefix}/mock-migration/run-task"
+  type = "String"
+  insecure_value = jsonencode({
+    cluster         = aws_ecs_cluster.this.name
+    taskDefinition  = aws_ecs_task_definition.mock_migration.family
+    container       = local.migration_container
+    logGroup        = aws_cloudwatch_log_group.mock_migration.name
+    logStreamPrefix = local.migration_container
+    subnets         = local.app_subnets
+    securityGroups  = [data.terraform_remote_state.security.outputs.migration_security_group_id]
+    capacityProviderStrategy = [
+      { capacityProvider = "FARGATE_SPOT", weight = 1 },
+    ]
+  })
+
+  tags = { Name = local.mock_migration_name }
+}

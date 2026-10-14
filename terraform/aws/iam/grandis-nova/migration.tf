@@ -5,6 +5,11 @@ locals {
   migration_task_def_arn = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:task-definition/${local.name_prefix}-migration:*"
   migration_param_arn    = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter/${local.name_prefix}/migration/run-task"
   migration_log_arn      = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/ecs/${local.name_prefix}-migration:log-stream:*"
+
+  # mock 마이그레이션(external_mock). 실행 역할은 위 역할을 같이 쓴다 — 같은 db/migrator 계정이다
+  mock_migration_task_def_arn = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:task-definition/${local.name_prefix}-mock-migration:*"
+  mock_migration_param_arn    = "arn:${local.partition}:ssm:${var.aws_region}:${local.account_id}:parameter/${local.name_prefix}/mock-migration/run-task"
+  mock_migration_log_arn      = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/ecs/${local.name_prefix}-mock-migration:log-stream:*"
 }
 
 resource "aws_iam_role" "migration_execution" {
