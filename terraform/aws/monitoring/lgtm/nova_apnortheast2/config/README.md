@@ -15,16 +15,40 @@ nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보
 | 지표 | 앱 → OTLP, Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
 | AWS 관리형 지표 | Grafana 가 CloudWatch 를 직접 조회 | — | CloudWatch | CloudWatch 기본 |
 
+```mermaid
+flowchart LR
+  app["앱 태스크<br/>OTel Java 에이전트"]
+  ncp[("NCP MySQL")]
+  user(["운영자"])
+
+  subgraph obs["obs 태스크 · EC2 1대 · localhost 공유"]
+    direction LR
+    exp["mysqld_exporter"]
+    col["otel-collector"]
+    subgraph store["저장"]
+      loki["Loki<br/>로그"]
+      tempo["Tempo<br/>트레이스"]
+      mimir["Mimir<br/>지표"]
+    end
+    graf["Grafana"]
+  end
+
+  s3[("S3")]
+  cw[("CloudWatch")]
+  slack(["Slack"])
+
+  app -- "OTLP" --> col
+  exp -- "긁기" --> col
+  ncp --> exp
+  col --> loki & tempo & mimir
+  store --> s3
+  graf -- "조회" --> store
+  graf -- "조회" --> cw
+  graf -- "경보 SNS → Chatbot" --> slack
+  user -- "ALB + Cognito" --> graf
 ```
-앱 태스크 ──OTLP──▶ otel-collector :4317 / :4318 ─┬─ 로그 ────────────▶ loki  :3100 ──▶ S3
-                                                 ├─ 트레이스(샘플링) ─▶ tempo :3200 ──▶ S3
-                                                 └─ 지표 ────────────▶ mimir :9009 ──▶ S3
-                   Collector 가 긁는 것: mysqld_exporter :9104 (NCP MySQL)
-                                        loki · tempo · mimir · grafana /metrics (필요한 지표만)
-                                        hostmetrics (/hostfs, obs EC2 의 CPU · 메모리 · 디스크)
-grafana :3000 ── Loki · Tempo · Mimir · CloudWatch 조회, 경보 → SNS → Chatbot → Slack
-                 접속: https://grafana.<도메인> (ALB + Cognito 로그인)
-```
+
+Collector 는 LGTM 구성 요소와 Grafana 의 `/metrics`, obs 호스트의 CPU · 메모리 · 디스크(`/hostfs`)도 긁어 Mimir 로 보낸다.
 
 ## 설계 결정
 
@@ -45,6 +69,19 @@ Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(768 MiB)
 **4. 샘플링은 Collector 에서, 트레이스가 끝난 뒤에.**
 앱은 모두 보내고(`parentbased_always_on`), Collector 가 트레이스 전체를 보고 남길지 정한다.
 앱에서 미리 자르면 오류가 난 트레이스가 버려진 쪽에 있을 수 있다. 끝난 뒤에 정하면 오류와 느린 요청은 빠짐없이 남는다.
+
+```mermaid
+flowchart LR
+  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 빈 SQS 롱폴링?"}
+  noise -- "예" --> drop["버림 (오류여도)"]
+  noise -- "아니오" --> err{"ERROR 스팬?"}
+  err -- "예" --> keep["남김"]
+  err -- "아니오" --> slow{"1초 초과?"}
+  slow -- "예" --> keep
+  slow -- "아니오" --> pct["10% 남김"]
+```
+
+헬스체크는 `url.path` 가 `/actuator/*` 인 서버 스팬, 빈 롱폴링은 오류 없이 메시지 0건으로 끝난 `ReceiveMessage` 다. 결정을 기다리는 트레이스는 메모리에 최대 5만 건 둔다. 넘치면 오래된 것부터 결정 없이 버린다.
 
 **5. 개인정보는 저장하기 전에 지운다.**
 조회할 때 가리면 Loki API 를 직접 부를 때 원문이 보인다. 그래서 Collector 에서 원문을 바꿔 저장하고, 되돌릴 수 없다(아래 "저장 전 마스킹").
@@ -89,7 +126,19 @@ Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(768 MiB)
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지 |
 
 - 폴더 앞 번호는 목록 순서다. Grafana 는 폴더를 이름순으로만 정렬한다. 사이에 폴더를 끼울 수 있게 10 단위로 띄운다.
-- 장애를 볼 때는 개요 → 서비스 상세 → 트러블슈팅 순으로 내려간다. 표의 서비스 이름, 패널 링크, exemplar 가 다음 화면으로 이어 준다.
+- 장애를 볼 때는 아래 순서로 내려간다. 표의 서비스 이름, 패널 링크, exemplar 가 다음 화면으로 이어 준다.
+
+```mermaid
+flowchart LR
+  alert(["Slack 경보"]) --> ov["개요<br/>어느 서비스가 이상한가"]
+  ov -- "서비스 이름" --> svc["서비스 상세<br/>HTTP · JVM · HikariCP · 외부 호출"]
+  svc --> ts["트러블슈팅<br/>느린 경로 · 5xx · 느린 DB 쿼리"]
+  svc -- "exemplar" --> trace["트레이스 (Tempo)"]
+  ts -- "trace_id" --> trace
+  trace -- "Logs for this span" --> log["로그 (Loki)"]
+  svc -. "DB · 캐시 · 큐가 의심되면" .-> data["20 Data · 30 Platform"]
+```
+
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
 - `otelcol.json` 은 grafana.com 15983 rev 31 을 가져온 것이다. 원본과 다른 곳은 uid · `nova` 태그 · 데이터소스(Mimir) · job(`otelcol-contrib`) 기본값뿐이다. 새 리비전으로 바꿀 때도 이 네 곳만 다시 맞춘다.
 
