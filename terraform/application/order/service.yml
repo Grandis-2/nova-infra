@@ -23,7 +23,7 @@ routes:
   - priority: 20
     paths: ["/api/v1/admin/products/*/stock", "/api/v1/draws*", "/api/v1/admin/draws*"]
   - priority: 40
-    paths: ["/api/v1/orders*", "/api/v1/admin/orders*"]
+    paths: ["/api/v1/orders*", "/api/v1/admin/orders*", "/api/v1/cart*"]
 
 jwt: verify
 calls:
