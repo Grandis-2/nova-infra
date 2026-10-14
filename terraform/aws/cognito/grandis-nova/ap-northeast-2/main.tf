@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # cognito — Grafana 로그인 (NV-517)
 #
-# 사용자는 AWS 계정이 아니라 이 풀의 사용자다(이메일 + 비밀번호). 가입은 막고 users.yml 로만 만든다.
+# 사용자는 AWS 계정이 아니라 이 풀의 사용자다(이메일 + 비밀번호). 가입은 막고 users.sops.yml 로만 만든다(users.tf).
 #
 #   브라우저 → CloudFront(edge) → ALB 리스너 규칙(authenticate-cognito, alb 클라이언트)
 #           → Grafana(generic OAuth, grafana 클라이언트) — monitoring/lgtm 스택
@@ -23,7 +23,7 @@ resource "aws_cognito_user_pool" "grafana" {
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
 
-  # 관리자(users.yml)만 만든다. 만들면 임시 비밀번호를 메일로 보내고, 첫 로그인 때 새 비밀번호로 바꾸게 한다
+  # 관리자(users.sops.yml)만 만든다. 만들면 임시 비밀번호를 메일로 보내고, 첫 로그인 때 새 비밀번호로 바꾸게 한다
   admin_create_user_config {
     allow_admin_create_user_only = true
 

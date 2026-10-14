@@ -4,3 +4,6 @@ creation_rules:
   # terraform/application/<서비스>/secrets.sops.yml (서비스 비밀)
   - path_regex: terraform/.*secrets\.sops\.ya?ml$
     kms: "arn:aws:kms:ap-northeast-2:316708313927:key/53c9d965-2df9-4016-9a0a-b67f86cf7204+arn:aws:iam::316708313927:role/nova-sops-common"
+  # terraform/aws/cognito/<계정>/<리전>/users.sops.yml (Grafana 사용자 이메일 · 역할, NV-517)
+  - path_regex: terraform/aws/cognito/.*/users\.sops\.ya?ml$
+    kms: "arn:aws:kms:ap-northeast-2:316708313927:key/53c9d965-2df9-4016-9a0a-b67f86cf7204+arn:aws:iam::316708313927:role/nova-sops-common"
