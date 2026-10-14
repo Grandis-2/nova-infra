@@ -37,8 +37,10 @@ Tempo · Mimir 의 링은 메모리에 둔다. Tempo 는 memberlist 를 띄우�
 | `tempo.yaml` | Tempo 단일 바이너리. S3 저장, 보존 기간(compactor), WAL, 정상 종료 때 블록 업로드 |
 | `mimir.yaml` | Mimir 단일 바이너리(`-target=all`). S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로, 보존 기간, 정상 종료 때 블록 업로드, OTLP 이름 접미사, 조회 대기열 1000 · 쿼리 샤딩 끔(한 대라 쪼개도 빨라지지 않는다) |
 | `grafana/provisioning/datasources/` | Grafana 데이터소스: Loki(trace_id → Tempo 링크), Tempo(트레이스 → 로그), Mimir(exemplar → Tempo), CloudWatch(AWS 관리형 지표, 태스크 역할) |
-| `grafana/provisioning/dashboards/nova.yaml` | 대시보드 프로비저닝. `/config/grafana/dashboards` 를 `nova` 폴더로 읽는다(화면에서 고쳐도 저장되지 않는다) |
-| `grafana/dashboards/` | 서비스별 대시보드 `<서비스>.json` 8개. 같은 틀이라 패널을 고치면 8개를 같이 고친다 |
+| `grafana/provisioning/dashboards/nova.yaml` | 대시보드 프로비저닝. `/config/grafana/dashboards` 의 하위 디렉터리를 같은 이름의 Grafana 폴더로 읽는다(화면에서 고쳐도 저장되지 않고, 파일을 지우면 대시보드도 지워진다) |
+| `grafana/dashboards/01 Overview/` | `overview.json` — 서비스 전체 현황(요청 수 · 5xx · P99 · 인스턴스 · 힙 · CPU 표, 경보 목록). 로그인 첫 화면 |
+| `grafana/dashboards/10 Services/` | `service.json` — 서비스 상세 하나(`$service` 변수). HTTP · 외부 호출 · JVM · HikariCP · 로그 · 트레이스 |
+| `grafana/dashboards/40 Troubleshooting/` | `troubleshooting.json` — 느린 경로 · 5xx 경로(지표), 느린 요청 · 오류 · 느린 DB 쿼리(트레이스), ERROR 로그 |
 | `grafana/provisioning/alerting/` | 경보: `rules.yaml`(규칙 5개), `notify.yaml`(SNS 알림 대상 · 기본 경로 · Chatbot 템플릿) |
 | `grafana/provisioning/plugins/` | 빈 프로비저닝 파일. 디렉터리가 없으면 Grafana 가 기동마다 오류 로그를 남긴다(S3 에는 빈 디렉터리가 없다) |
 

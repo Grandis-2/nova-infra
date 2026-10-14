@@ -1,5 +1,5 @@
 # Grafana 관리 경보 규칙. 알림은 notify.yaml(SNS → Chatbot → Slack)로 간다.
-# 질의는 Mimir(PromQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(grafana/dashboards/*.json)와 같다.
+# 질의는 Mimir(PromQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(grafana/dashboards/**/*.json)와 같다.
 # 트래픽이 없어 질의가 비면(NoData) 정상으로 본다. 질의가 실패하면 Error 상태 경보가 따로 간다.
 # summary 는 Grafana 템플릿이다. 달러 기호를 쓰지 않고 .Values · .Labels 로 쓴다.
 # .Values 에는 쿼리(A)가 아니라 식(reduce · threshold)만 들어간다. 그래서 A → B(reduce: last) → C(threshold) 로 두고 B 를 찍는다.
@@ -128,7 +128,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: "count by (job) (last_over_time(target_info{service_namespace=\"nova\"}[1h])) unless count by (job) (target_info{service_namespace=\"nova\"})"
+              expr: "count by (job) (last_over_time(target_info{job=~\"nova/.+\"}[1h])) unless count by (job) (target_info{job=~\"nova/.+\"})"
           - refId: B
             datasourceUid: __expr__
             model:
