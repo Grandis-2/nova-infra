@@ -36,3 +36,14 @@ resource "aws_vpc_security_group_ingress_rule" "alb_from_cloudfront" {
 }
 
 # ALB → 서비스 아웃바운드는 서비스 모듈이 서비스마다 만든다
+
+# Grafana 리스너 규칙(monitoring/lgtm)의 authenticate-cognito 는 ALB 가 직접 Cognito 토큰 · userInfo 엔드포인트를 부른다.
+# 막혀 있으면 로그인 직후 /oauth2/idpresponse 가 500(AuthTokenEpRequestTimeout)이다. 엔드포인트 IP 가 고정되지 않아 0.0.0.0/0 이다
+resource "aws_vpc_security_group_egress_rule" "alb_to_cognito" {
+  security_group_id = aws_security_group.alb.id
+  description       = "HTTPS to Cognito token and userInfo endpoints (authenticate-cognito)"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
