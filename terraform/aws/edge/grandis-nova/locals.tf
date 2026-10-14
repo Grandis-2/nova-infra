@@ -39,7 +39,11 @@ locals {
   origin_over_https = local.use_domain && local.route53_zone_id != ""
   origin_host       = local.origin_over_https ? "origin.${var.domain_name}" : local.alb_dns_name
 
-  origin_verify = data.terraform_remote_state.ecs.outputs.origin_verify_header
+  # remote state 로 읽은 값은 sensitive 표시가 풀려 plan(공개 PR 댓글)에 그대로 찍힌다. 값은 다시 가린다
+  origin_verify = {
+    name  = data.terraform_remote_state.ecs.outputs.origin_verify_header.name
+    value = sensitive(data.terraform_remote_state.ecs.outputs.origin_verify_header.value)
+  }
 
   waf_override = var.waf_block_mode ? "none" : "count"
 }

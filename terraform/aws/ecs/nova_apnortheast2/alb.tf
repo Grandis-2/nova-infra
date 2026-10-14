@@ -68,9 +68,17 @@ resource "aws_lb_listener" "https" {
 # ── 원본 검증 헤더 ───────────────────────────────────────────
 # ALB 보안 그룹은 CloudFront IP 대역만 허용하지만, 이 대역은 모든 CloudFront 배포가 공유한다.
 # 남의 배포로도 ALB 에 닿을 수 있으므로 우리 배포만 아는 헤더(edge 스택)가 없으면 404 를 준다.
+#
+# 값을 바꿀 때는 keepers.rotation 을 올린다. 이 스택을 apply 한 뒤 edge · monitoring/lgtm 을 다시 plan 해서 apply 한다
+# (그 사이 CloudFront 가 옛 값을 보내 API 가 404 다). 이 값을 remote state 로 읽는 스택은 sensitive() 로 감싸야
+# 공개 PR 의 plan 댓글에 찍히지 않는다. 1 → 2: PR 댓글에 값이 드러나 교체했다
 resource "random_password" "origin_verify" {
   length  = 40
   special = false
+
+  keepers = {
+    rotation = 2
+  }
 }
 
 locals {
