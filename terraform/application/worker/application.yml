@@ -3,5 +3,5 @@
 nova:
   worker:
     concurrency:
-      # worker 하나의 동시 요청 상한 = per-mock(16) × 이 값. mock 은 singleton 이라 1 이다. mock 을 늘리면 함께 바꾼다
-      mock-max-instances: 1
+      # worker 하나의 동시 요청 상한 = per-mock(16) × 이 값. mock 의 scaling.max 와 같게 둔다(그 안에서 스스로 조절한다)
+      mock-max-instances: 5
