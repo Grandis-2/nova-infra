@@ -1,5 +1,5 @@
 # 서비스별 태스크 역할 — terraform/application/<서비스>/service.yml 에서 만든다
-#   queues  → 보내기 · 받기 · DLQ 권한
+#   queues  → 보내기 · 받기 · DLQ 들여다보기 · DLQ 에 바로 넣기 권한
 #   uploads → 이미지 업로드 버킷 쓰기
 # KMS 권한은 주지 않는다. JWT 서명은 시크릿의 PEM 개인키로 한다.
 
@@ -15,6 +15,7 @@ module "task_role" {
   send_queue_arns    = [for q in each.value.queues.send : local.queues[q].arn]
   consume_queue_arns = [for q in each.value.queues.consume : local.queues[q].arn]
   dlq_arns           = [for q in each.value.queues.dlq : local.queues[q].dlq_arn]
+  dlq_send_arns      = [for q in each.value.queues.dlq_send : local.queues[q].dlq_arn]
 
   uploads           = each.value.uploads
   upload_bucket_arn = local.upload_bucket

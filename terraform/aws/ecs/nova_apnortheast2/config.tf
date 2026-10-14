@@ -41,7 +41,7 @@ locals {
         "spring.data.redis.ssl.enabled" = "true" # 전송 구간 암호화를 켠 클러스터다
       } : {},
       # 리전만 준다. 엔드포인트를 지정하지 않아야 태스크 역할로 SQS 에 붙는다
-      length(concat(v.queues.send, v.queues.consume, v.queues.dlq)) > 0 ? {
+      length(concat(v.queues.send, v.queues.consume, v.queues.dlq, v.queues.dlq_send)) > 0 ? {
         "nova.sqs.region"                = var.aws_region
         "spring.cloud.aws.region.static" = var.aws_region
       } : {},

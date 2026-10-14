@@ -4,6 +4,7 @@ variable "queues" {
   default = [
     "preorder-register",  # preorder → worker : 외부 예약 등록
     "preorder-cancel",    # preorder → worker : 외부 예약 취소
+    "draw-register",      # order → worker : 럭키드로우 응모 전달 · 추첨 요청
     "preorder-events",    # order, waitingroom, catalog → preorder
     "order-events",       # preorder, catalog, payment → order
     "payment-events",     # order → payment

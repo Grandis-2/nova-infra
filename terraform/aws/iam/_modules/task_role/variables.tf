@@ -35,6 +35,12 @@ variable "dlq_arns" {
   default     = []
 }
 
+variable "dlq_send_arns" {
+  description = "확정 거절을 바로 넣을 DLQ (보내기만 한다)"
+  type        = list(string)
+  default     = []
+}
+
 variable "upload_bucket_arn" {
   description = "이미지 업로드 버킷. uploads 가 true 일 때만 권한을 준다"
   type        = string

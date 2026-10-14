@@ -1,5 +1,6 @@
-# 사전예약 외부 동기화 — preorder-register · preorder-cancel 을 소비해 mock(외부 예약 시스템)에 등록 · 취소한다
-# 상태는 메시지 속성에 있다. 결과는 preorder-events 로 보낸다
+# mock(외부 시스템) 연동 — 큐를 소비해 mock 을 부르고 결과를 이벤트로 돌려준다. 상태는 메시지 속성에 있다
+#   사전예약: preorder-register · preorder-cancel → 외부 예약 등록 · 취소 → preorder-events
+#   럭키드로우: draw-register → 응모 전달 · 응모 수 대조 · 추첨 → order-events
 deploy: true
 image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
 cpu: 1024
@@ -21,7 +22,7 @@ scaling:
   min: 1
   max: 4                      # mock 1대당 동시 16 × worker 4대 기준. 더 늘려도 mock 이 받지 못한다
   backlog:
-    queues: [preorder-register, preorder-cancel]   # 두 큐의 합. 취소만 쌓여도 늘어난다
+    queues: [preorder-register, preorder-cancel, draw-register]   # 세 큐의 합. 어느 하나만 쌓여도 늘어난다
     per_task: 50              # 추정값. 부하 시험 뒤 다시 정한다
 
 calls:
@@ -31,6 +32,8 @@ calls:
 db: shop
 
 queues:
-  consume: [preorder-register, preorder-cancel]
-  # 결과 이벤트는 preorder-events, 재시도는 같은 큐에 지연을 두고 다시 보낸다
-  send: [preorder-events, preorder-register, preorder-cancel]
+  consume: [preorder-register, preorder-cancel, draw-register]
+  # 결과 이벤트는 preorder-events(사전예약) · order-events(추첨 결과), 재시도는 같은 큐에 지연을 두고 다시 보낸다
+  send: [preorder-events, order-events, preorder-register, preorder-cancel, draw-register]
+  # 다시 보내도 같은 확정 거절(be 계약 contracts/draw-entry-sync.md)은 재시도하지 않고 DLQ 에 바로 넣는다
+  dlq_send: [draw-register]
