@@ -52,6 +52,7 @@ output "service_permissions" {
       send_queues    = v.queues.send
       consume_queues = v.queues.consume
       dlq            = v.queues.dlq
+      dlq_send       = v.queues.dlq_send
       uploads        = v.uploads
     }
   }

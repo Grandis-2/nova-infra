@@ -48,7 +48,7 @@ calls:                    # Spring 속성: 호출할 서비스
 db: null                  # DB 이름
 extra_databases: {}       # 같은 계정으로 붙는 추가 DB: 속성 접두사
 redis: null               # 캐시 클러스터 키 (main)
-queues: { send: [], consume: [], dlq: [] }
+queues: { send: [], consume: [], dlq: [], dlq_send: [] }   # dlq: DLQ 들여다보기 · 옮기기, dlq_send: 확정 거절을 그 큐의 DLQ 에 바로 넣기(본 큐 이름)
 uploads: false            # true면 업로드 버킷 쓰기 권한
 generated_secrets: {}     # 아래 '비밀' 참고
 environment: {}

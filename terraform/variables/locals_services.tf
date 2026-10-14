@@ -110,6 +110,8 @@ locals {
         send    = [for q in try(s.queues.send, []) : tostring(q)]
         consume = [for q in try(s.queues.consume, []) : tostring(q)]
         dlq     = [for q in try(s.queues.dlq, []) : tostring(q)]
+        # 재시도해도 같은 확정 거절을 받은 메시지를 바로 넣을 DLQ. 본 큐 이름으로 적는다
+        dlq_send = [for q in try(s.queues.dlq_send, []) : tostring(q)]
       }
       generated_secrets = { for e, t in try(s.generated_secrets, {}) : e => tostring(t) } # 환경변수 -> 만드는 방식
       uploads           = try(tobool(s.uploads), false)                                   # 이미지 업로드 버킷 쓰기 권한

@@ -48,7 +48,7 @@ locals {
 }
 
 resource "aws_iam_role_policy" "queue" {
-  count = length(concat(var.send_queue_arns, var.consume_queue_arns, var.dlq_arns)) > 0 ? 1 : 0
+  count = length(concat(var.send_queue_arns, var.consume_queue_arns, var.dlq_arns, var.dlq_send_arns)) > 0 ? 1 : 0
 
   name = "queue"
   role = aws_iam_role.this.id
@@ -73,6 +73,12 @@ resource "aws_iam_role_policy" "queue" {
         Effect   = "Allow"
         Action   = local.queue_read_actions
         Resource = var.dlq_arns
+      }] : [],
+      length(var.dlq_send_arns) > 0 ? [{
+        Sid      = "SendToDlq"
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage", "sqs:GetQueueUrl", "sqs:GetQueueAttributes"]
+        Resource = var.dlq_send_arns
       }] : [],
     )
   })
