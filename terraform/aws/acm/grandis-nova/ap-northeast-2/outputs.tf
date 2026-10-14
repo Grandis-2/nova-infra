@@ -12,3 +12,17 @@ output "cloudfront_certificate_arn" {
 output "domain_name" {
   value = var.domain_name
 }
+
+output "grafana_domain_name" {
+  value = local.grafana_enabled ? var.grafana_domain_name : ""
+}
+
+output "grafana_alb_certificate_arn" {
+  description = "monitoring/lgtm 스택이 ALB 리스너에 SNI 로 붙인다"
+  value       = local.grafana_enabled ? try(aws_acm_certificate_validation.grafana_alb[0].certificate_arn, aws_acm_certificate.grafana_alb[0].arn) : ""
+}
+
+output "grafana_cloudfront_certificate_arn" {
+  description = "edge 스택의 Grafana CloudFront 가 쓴다"
+  value       = local.grafana_enabled ? try(aws_acm_certificate_validation.grafana_cloudfront[0].certificate_arn, aws_acm_certificate.grafana_cloudfront[0].arn) : ""
+}

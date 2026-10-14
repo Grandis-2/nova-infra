@@ -2,7 +2,7 @@
 # 태스크는 monitoring 스택이 만들고, 이 SG 만 여기 둔다 (서비스 SG 를 참조해야 해서).
 #
 # 인바운드는 OTLP 두 포트(4317 gRPC · 4318 HTTP)를 서비스 SG 참조로만 연다. 앱은 Service Connect(otel.<네임스페이스>)로 붙는다.
-# Grafana(3000) 는 열지 않는다. 사람은 ECS Exec 포트 포워딩으로 들어온다.
+# Grafana(3000) 는 ALB 에서만 연다(NV-517). ALB 리스너 규칙이 Cognito 로그인을 거친 요청만 넘긴다.
 # (SG 설명 문자열은 바꾸면 SG 가 다시 만들어지므로 처음 값 그대로 둔다)
 resource "aws_security_group" "obs" {
   name        = "${local.name_prefix}-obs-sg"
@@ -25,6 +25,25 @@ resource "aws_vpc_security_group_ingress_rule" "obs_otlp" {
   ip_protocol                  = "tcp"
   from_port                    = each.value.port
   to_port                      = each.value.port
+}
+
+# Grafana — ALB(Cognito 인증) 에서만 받는다. 대상 그룹 · 리스너 규칙은 monitoring/lgtm 스택이 만든다
+resource "aws_vpc_security_group_ingress_rule" "obs_grafana_from_alb" {
+  security_group_id            = aws_security_group.obs.id
+  description                  = "Grafana from ALB (Cognito authenticated)"
+  referenced_security_group_id = aws_security_group.alb.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3000
+  to_port                      = 3000
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_to_obs_grafana" {
+  security_group_id            = aws_security_group.alb.id
+  description                  = "to Grafana on obs tasks"
+  referenced_security_group_id = aws_security_group.obs.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3000
+  to_port                      = 3000
 }
 
 # 나가는 것은 둘이다.

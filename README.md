@@ -149,7 +149,7 @@ Atlantis 서버는 별도 저장소 **[Grandis-2/atlantis-deploy](https://github
 └── terraform/
     ├── application/<서비스>/  service.yml(인프라), application.yml(Spring 설정)
     ├── variables/             공용 변수, 서비스 목록
-    ├── aws/<스택>/            init · kms · vpc · securitygroup · s3 · sqs · ecr · acm · secretsmanager
+    ├── aws/<스택>/            init · kms · vpc · securitygroup · s3 · sqs · ecr · acm · cognito · secretsmanager
     │                          elasticache · iam · ecs · edge · cdn · scheduler · monitoring · bastion
     └── ncp/database/          Cloud DB for MySQL
 ```
