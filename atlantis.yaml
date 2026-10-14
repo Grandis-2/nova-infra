@@ -4,14 +4,14 @@
 #
 # 폴더 구조
 #   <서비스>/grandis-nova                     계정 단위 (init, iam, s3, edge, cdn)
-#   <서비스>/grandis-nova/ap-northeast-2      리전 단위 (kms, ecr, sqs, acm, secretsmanager)
+#   <서비스>/grandis-nova/ap-northeast-2      리전 단위 (kms, ecr, sqs, acm, cognito, secretsmanager)
 #   <서비스>/nova_apnortheast2                VPC 단위 (vpc, securitygroup, elasticache, ecs, bastion, scheduler, monitoring)
 #   monitoring/<cloudwatch|lgtm>/nova_apnortheast2   관측은 도구별로 한 단계 더 나눈다
 #
 # 적용 순서: execution_order_group 이 낮은 층부터 적용한다.
 #   0 init, sops      최초 적용은 관리자가 직접 한다
 #   1 vpc             최초 적용은 관리자가 직접 한다
-#   2 securitygroup, s3, sqs, ecr, acm, secretsmanager
+#   2 securitygroup, s3, sqs, ecr, acm, cognito, secretsmanager
 #   3 ncp-database, elasticache, cdn
 #   4 iam
 #   5 ecs, bastion
@@ -118,6 +118,17 @@ projects:
     autoplan:
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf"]
       enabled: true # 이 스택을 올리는 PR 에서 true
+    apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
+
+  # Grafana 로그인 (Cognito 사용자 풀 · users.yml, NV-517)
+  - name: cognito
+    dir: terraform/aws/cognito/grandis-nova/ap-northeast-2
+    execution_order_group: 2
+    workspace: default
+    terraform_version: v1.16.0
+    autoplan:
+      when_modified: ["*.tf", "*.tfvars", "*.yml", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf"]
+      enabled: true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
   # 서비스 비밀 (application/*/secrets.sops.yml · generated_secrets → Secrets Manager)

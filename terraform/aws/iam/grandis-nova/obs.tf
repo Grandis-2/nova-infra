@@ -85,7 +85,7 @@ resource "aws_iam_role_policy_attachment" "obs_execution_managed" {
   policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 정책 이름은 처음 만든 그대로 둔다(바꾸면 지웠다 다시 만든다). Grafana 와 mysqld_exporter 비밀을 읽는다
+# 정책 이름은 처음 만든 그대로 둔다(바꾸면 지웠다 다시 만든다). Grafana(admin · OAuth) 와 mysqld_exporter 비밀을 읽는다
 resource "aws_iam_role_policy" "obs_execution_secret" {
   name = "read-grafana-secret"
   role = aws_iam_role.obs_execution.id
@@ -105,6 +105,13 @@ resource "aws_iam_role_policy" "obs_execution_secret" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = ["arn:${local.partition}:secretsmanager:${var.aws_region}:${local.account_id}:secret:${local.name_prefix}/db/exporter-??????"]
+      },
+      # Grafana 의 Cognito OAuth 클라이언트 secret (cognito 스택). 같은 이유로 이름 규칙으로 준다
+      {
+        Sid      = "GrafanaOAuthClientSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:${local.partition}:secretsmanager:${var.aws_region}:${local.account_id}:secret:${local.name_prefix}/ops/grafana/oauth-client-secret-??????"]
       },
     ]
   })

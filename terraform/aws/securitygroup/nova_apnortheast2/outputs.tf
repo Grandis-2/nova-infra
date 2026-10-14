@@ -32,7 +32,7 @@ output "service_access" {
 }
 
 output "obs_security_group_id" {
-  description = "관측 스택(obs) 태스크 SG. 서비스 SG 에서 4317 · 4318 만 받는다"
+  description = "관측 스택(obs) 태스크 SG. 서비스 SG 에서 4317 · 4318, ALB 에서 3000(Grafana) 만 받는다"
   value       = aws_security_group.obs.id
 }
 

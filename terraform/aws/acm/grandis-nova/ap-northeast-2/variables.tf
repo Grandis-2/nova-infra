@@ -21,3 +21,9 @@ variable "route53_zone_name" {
   type        = string
   default     = ""
 }
+
+variable "grafana_domain_name" {
+  description = "Grafana 공개 주소(NV-517). 비우면 Grafana 인증서를 만들지 않는다"
+  type        = string
+  default     = ""
+}

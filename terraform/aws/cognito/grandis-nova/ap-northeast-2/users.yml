@@ -1,0 +1,6 @@
+# Grafana 사용자. 이메일: 역할
+#   admin  → grafana-admin 그룹 (Grafana Admin)
+#   editor → grafana-editor 그룹 (Grafana Editor, Explore 사용)
+#   viewer → 그룹 없음 (Grafana Viewer, 대시보드 보기만)
+# 추가하면 임시 비밀번호가 메일로 간다. 지우면 계정이 사라진다.
+users: {}

@@ -54,6 +54,39 @@ resource "aws_acm_certificate" "cloudfront" {
   }
 }
 
+# Grafana (NV-517). API 인증서와 따로 둔다 — 이름을 API 인증서에 더하면 인증서를 다시 만든다.
+# Grafana 전용 CloudFront 는 Host 를 그대로 넘기므로 CloudFront → ALB 검증도 이 이름으로 한다. 그래서 ALB 쪽에도 한 장 둔다
+locals {
+  grafana_enabled = local.enabled && var.grafana_domain_name != ""
+}
+
+resource "aws_acm_certificate" "grafana_alb" {
+  count = local.grafana_enabled ? 1 : 0
+
+  domain_name       = var.grafana_domain_name
+  validation_method = "DNS"
+
+  tags = { Name = "${local.name_prefix}-grafana-alb" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_acm_certificate" "grafana_cloudfront" {
+  provider = aws.us_east_1
+  count    = local.grafana_enabled ? 1 : 0
+
+  domain_name       = var.grafana_domain_name
+  validation_method = "DNS"
+
+  tags = { Name = "${local.name_prefix}-grafana-cloudfront" }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # 두 인증서의 검증 레코드를 도메인별로 하나씩만 만든다.
 # 키는 변수로 이미 아는 도메인 목록으로 정한다 — 인증서를 만들기 전에는 검증 정보를 몰라서,
 # 그걸로 키를 만들면 첫 plan 이 for_each 를 계산하지 못해 실패한다.
@@ -61,11 +94,13 @@ resource "aws_acm_certificate" "cloudfront" {
 locals {
   validation_domains = local.enabled && local.route53_zone_id != "" ? toset(distinct(concat(
     [var.domain_name], var.subject_alternative_names, [local.origin_host],
+    local.grafana_enabled ? [var.grafana_domain_name] : [],
   ))) : toset([])
 
   validation_options = local.enabled ? concat(
     tolist(aws_acm_certificate.alb[0].domain_validation_options),
     tolist(aws_acm_certificate.cloudfront[0].domain_validation_options),
+    local.grafana_enabled ? tolist(aws_acm_certificate.grafana_alb[0].domain_validation_options) : [],
   ) : []
 }
 
@@ -97,6 +132,27 @@ resource "aws_acm_certificate_validation" "cloudfront" {
   certificate_arn = aws_acm_certificate.cloudfront[0].arn
   validation_record_fqdns = [
     for opt in aws_acm_certificate.cloudfront[0].domain_validation_options :
+    aws_route53_record.validation[opt.domain_name].fqdn
+  ]
+}
+
+resource "aws_acm_certificate_validation" "grafana_alb" {
+  count = local.grafana_enabled && local.route53_zone_id != "" ? 1 : 0
+
+  certificate_arn = aws_acm_certificate.grafana_alb[0].arn
+  validation_record_fqdns = [
+    for opt in aws_acm_certificate.grafana_alb[0].domain_validation_options :
+    aws_route53_record.validation[opt.domain_name].fqdn
+  ]
+}
+
+resource "aws_acm_certificate_validation" "grafana_cloudfront" {
+  provider = aws.us_east_1
+  count    = local.grafana_enabled && local.route53_zone_id != "" ? 1 : 0
+
+  certificate_arn = aws_acm_certificate.grafana_cloudfront[0].arn
+  validation_record_fqdns = [
+    for opt in aws_acm_certificate.grafana_cloudfront[0].domain_validation_options :
     aws_route53_record.validation[opt.domain_name].fqdn
   ]
 }
