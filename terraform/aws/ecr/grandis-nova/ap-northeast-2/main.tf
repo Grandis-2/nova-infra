@@ -1,11 +1,13 @@
 # 이미지 저장소. 이름은 백엔드 CI(be release.yml 의 ECR_NAMESPACE)가 푸시하는 nova/<이름> 과 같아야 한다.
 #   서비스마다 하나 (application/<서비스>/service.yml)
 #   migration — Flyway 와 마이그레이션 SQL. release 가 배포 전에 마이그레이션 태스크로 돌린다 (ecs 스택 migration.tf)
+#   mock-migration — mock 저장소의 Flyway(external_mock). mock release 가 올리고 돌린다 (NV-523)
 # 배포는 커밋 SHA 태그를 쓰므로 태그를 덮어쓸 수 없게 하고, CI 가 함께 올리는 latest 만 예외로 둔다.
 locals {
   repositories = merge(
     { for k, v in local.services : k => { name = v.name, image_tag = v.image_tag } },
     { migration = { name = "migration", image_tag = "latest" } },
+    { mock-migration = { name = "mock-migration", image_tag = "latest" } },
   )
 }
 
