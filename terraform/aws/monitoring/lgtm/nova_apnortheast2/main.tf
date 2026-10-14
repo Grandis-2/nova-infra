@@ -115,13 +115,15 @@ locals {
           { name = "TEMPO_OTLP_ENDPOINT", value = "127.0.0.1:${local.obs_ports.tempo_otlp}" },
           { name = "MIMIR_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.mimir_http}/otlp" },
           { name = "MYSQLD_EXPORTER_TARGET", value = local.obs_mysqld_exporter ? "localhost:${local.obs_ports.mysqld_metrics}" : "" },
+          { name = "OBS_DATA_MOUNT_PATH", value = local.obs_mount_path },
         ]
         # Service Connect 가 이 이름으로 앱 요청을 받는다
         portMappings = [
           { name = "otlp-grpc", containerPort = local.obs_ports.otlp_grpc, protocol = "tcp", appProtocol = "grpc" },
           { name = "otlp-http", containerPort = local.obs_ports.otlp_http, protocol = "tcp", appProtocol = "http" },
         ]
-        mountPoints            = local.obs_config_mount
+        # hostmetrics 가 호스트의 /proc · 마운트 정보를 읽는다(읽기 전용). 컨테이너는 UID 10001 · 권한 없음이라 누구나 읽을 수 있는 파일만 본다
+        mountPoints            = concat(local.obs_config_mount, [{ sourceVolume = "hostfs", containerPath = "/hostfs", readOnly = true }])
         dependsOn              = concat(local.obs_after_config, [{ containerName = "loki", condition = "START" }])
         readonlyRootFilesystem = true
         logConfiguration       = local.obs_log["otel-collector"]
@@ -317,6 +319,12 @@ resource "aws_ecs_task_definition" "obs" {
       scope  = "task"
       driver = "local"
     }
+  }
+
+  # obs 호스트 지표(Collector 의 hostmetrics). 컨테이너에는 읽기 전용으로 붙인다
+  volume {
+    name      = "hostfs"
+    host_path = "/"
   }
 
   # 데이터 EBS 의 디렉터리 (ecs 스택 obs.tf 의 부팅 스크립트가 만들고 소유자를 맞춘다)

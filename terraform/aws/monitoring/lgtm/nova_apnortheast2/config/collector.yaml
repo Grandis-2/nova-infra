@@ -5,6 +5,7 @@
 #   TEMPO_OTLP_ENDPOINT  Tempo 의 OTLP gRPC 수신 주소. localhost:14317
 #   MIMIR_OTLP_ENDPOINT  Mimir 의 OTLP 수신 주소. http://localhost:9009/otlp
 #   MYSQLD_EXPORTER_TARGET  mysqld_exporter 주소(localhost:9104). 띄우지 않으면 비운다 — 그때는 아무것도 긁지 않는다
+#   OBS_DATA_MOUNT_PATH  obs 인스턴스의 데이터 EBS 경로(/data/obs). hostmetrics 가 루트와 함께 이 디스크의 사용률을 본다
 #
 # 포트: 4317 · 4318 (OTLP 수신), 8888 (자체 지표, localhost), 13133 (헬스체크 — 작업 정의의 컨테이너 헬스체크가 부른다)
 #
@@ -26,6 +27,7 @@ receivers:
   #   otel-collector: 이 Collector 자신(수신 · 거부 · 내보내기 실패 수). obs 수집 경로 경보가 쓴다.
   #     Mimir 에서는 job="otelcol-contrib" 다(자기 지표의 service.name 이 job_name 보다 우선한다)
   #   mysqld: NCP DB(mysqld_exporter). MYSQLD_EXPORTER_TARGET 이 비면 대상이 없다
+  #   loki · tempo · mimir · grafana: 관측 스택 자신(같은 태스크의 localhost). job 라벨이 그대로 이 이름이다
   prometheus/scrape:
     config:
       scrape_configs:
@@ -42,6 +44,59 @@ receivers:
             - source_labels: [__address__]
               regex: ""
               action: drop
+        # 관측 스택 자신. 화면(LGTM 스택 대시보드)과 경보가 보는 것만 남긴다(전부 받으면 한가할 때도 약 7천 시계열)
+        - job_name: loki
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["localhost:3100"]
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "loki_(distributor_(bytes|lines)_received_total|discarded_(samples|bytes)_total|ingester_memory_(streams|chunks)|ingester_flush_queue_length|ingester_wal_disk_full_failures_total|request_duration_seconds_(count|sum))|process_(resident_memory_bytes|cpu_seconds_total)"
+              action: keep
+        - job_name: tempo
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["localhost:3200"]
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "tempo_(distributor_spans_received_total|discarded_spans_total|ingester_live_traces|ingester_failed_flushes_total|request_duration_seconds_(count|sum))|tempodb_(compaction|retention)_errors_total|process_(resident_memory_bytes|cpu_seconds_total)"
+              action: keep
+        - job_name: mimir
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["localhost:9009"]
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "cortex_(distributor_received_samples_total|discarded_samples_total|ingester_memory_series|query_scheduler_(queue_length|queue_duration_seconds_(count|sum)|queue_max_wait_seconds)|request_duration_seconds_(count|sum)|ingester_tsdb_(wal_writes_failed|compactions_failed)_total)|thanos_objstore_bucket_operation_failures_total|process_(resident_memory_bytes|cpu_seconds_total)"
+              action: keep
+        - job_name: grafana
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["localhost:3000"]
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "grafana_(alerting_rule_evaluations_total|alerting_rule_evaluation_failures_total|http_request_duration_seconds_(count|sum)|datasource_request_total)|process_(resident_memory_bytes|cpu_seconds_total)"
+              action: keep
+
+  # obs EC2 호스트(CPU · 메모리 · 디스크). 작업 정의가 호스트 / 를 읽기 전용으로 /hostfs 에 붙인다.
+  # 디스크는 루트(이미지 · 로그)와 데이터 EBS(Loki · Tempo · Mimir · Grafana)만 본다
+  hostmetrics:
+    root_path: /hostfs
+    collection_interval: 30s
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization: {enabled: true}
+      memory:
+        metrics:
+          system.memory.utilization: {enabled: true}
+      load: {}
+      filesystem:
+        metrics:
+          system.filesystem.utilization: {enabled: true}
+        include_mount_points:
+          match_type: strict
+          mount_points: ["/", "${env:OBS_DATA_MOUNT_PATH}"]
 
 processors:
   # 컨테이너 메모리 한도(1 GiB) 안에서 GC 여유를 남긴다. tail_sampling 이 결정 전 트레이스를 메모리에 든다.
@@ -51,6 +106,13 @@ processors:
     spike_limit_mib: 192
   batch:
     timeout: 1s
+
+  # hostmetrics 에는 서비스 이름이 없어 Mimir 의 job 라벨이 비고 다른 시계열과 섞인다. job="obs-host" 가 되게 한다
+  resource/obs-host:
+    attributes:
+      - key: service.name
+        value: obs-host
+        action: upsert
 
   # 카디널리티 예산. 리소스 속성은 남길 것만 고른다(빼는 방식이 아니라 남기는 방식).
   # 여기를 통과한 리소스 속성은 Loki 에서 인덱스 라벨(loki.yaml 의 index_label)이거나
@@ -225,6 +287,10 @@ service:
     metrics:
       receivers: [otlp, prometheus/scrape]
       processors: [memory_limiter, transform/resource-allowlist, batch]
+      exporters: [otlphttp/mimir]
+    metrics/host:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resource/obs-host, batch]
       exporters: [otlphttp/mimir]
   telemetry:
     logs:

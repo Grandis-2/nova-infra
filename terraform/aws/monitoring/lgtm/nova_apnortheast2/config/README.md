@@ -10,6 +10,8 @@ nova 관측 스택(OTel Collector · Loki · Tempo · Mimir · Grafana)의 설�
                                                           ├─ 트레이스(샘플링) ──▶ tempo :3200 ──▶ S3 (tempo 버킷)
                                                           └─ 지표 ─────────────▶ mimir :9009 ──▶ S3 (mimir 버킷)
                           mysqld_exporter :9104 ◀── Collector 가 긁음 (NCP DB 지표)
+              loki · tempo · mimir · grafana /metrics ◀── Collector 가 긁음 (관측 스택 자신, 필요한 것만)
+                          obs 호스트 /hostfs (읽기 전용) ◀── Collector hostmetrics (CPU · 메모리 · 디스크)
                                      grafana :3000 ── loki · tempo · mimir 조회   (ECS Exec 포트 포워딩으로만 접속)
 ```
 
@@ -33,8 +35,8 @@ Tempo · Mimir 의 링은 메모리에 둔다. Tempo 는 memberlist 를 띄우�
 | `collector.yaml` | Collector. 로그: `memory_limiter` → 리소스 허용 목록 → 저장 전 마스킹 → `batch` → Loki. 트레이스: `memory_limiter` → 리소스 허용 목록 → tail sampling → 스팬 마스킹 → `batch` → Tempo |
 | `loki.yaml` | Loki 단일 바이너리. S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
 | `tempo.yaml` | Tempo 단일 바이너리. S3 저장, 보존 기간(compactor), WAL, 정상 종료 때 블록 업로드 |
-| `mimir.yaml` | Mimir 단일 바이너리(`-target=all`). S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로, 보존 기간, 정상 종료 때 블록 업로드, OTLP 이름 접미사 |
-| `grafana/provisioning/datasources/` | Grafana 데이터소스: Loki(trace_id → Tempo 링크), Tempo(트레이스 → 로그), Mimir(exemplar → Tempo) |
+| `mimir.yaml` | Mimir 단일 바이너리(`-target=all`). S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로, 보존 기간, 정상 종료 때 블록 업로드, OTLP 이름 접미사, 조회 대기열 1000 · 쿼리 샤딩 끔(한 대라 쪼개도 빨라지지 않는다) |
+| `grafana/provisioning/datasources/` | Grafana 데이터소스: Loki(trace_id → Tempo 링크), Tempo(트레이스 → 로그), Mimir(exemplar → Tempo), CloudWatch(AWS 관리형 지표, 태스크 역할) |
 | `grafana/provisioning/dashboards/nova.yaml` | 대시보드 프로비저닝. `/config/grafana/dashboards` 를 `nova` 폴더로 읽는다(화면에서 고쳐도 저장되지 않는다) |
 | `grafana/dashboards/` | 서비스별 대시보드 `<서비스>.json` 8개. 같은 틀이라 패널을 고치면 8개를 같이 고친다 |
 | `grafana/provisioning/alerting/` | 경보: `rules.yaml`(규칙 5개), `notify.yaml`(SNS 알림 대상 · 기본 경로 · Chatbot 템플릿) |
@@ -50,6 +52,7 @@ Tempo · Mimir 의 링은 메모리에 둔다. Tempo 는 memberlist 를 띄우�
 | otel-collector | `TEMPO_OTLP_ENDPOINT` | `127.0.0.1:14317` (gRPC, TLS 없음. localhost 는 ::1 부터 붙어 실패 로그를 남긴다) |
 | otel-collector | `MIMIR_OTLP_ENDPOINT` | `http://localhost:9009/otlp` |
 | otel-collector | `MYSQLD_EXPORTER_TARGET` | `localhost:9104`. mysqld_exporter 를 띄우지 않으면 **빈 문자열** — 그때는 긁지 않는다 |
+| otel-collector | `OBS_DATA_MOUNT_PATH` | `/data/obs` (ecs 스택 출력 `obs_data_mount_path`). hostmetrics 가 이 디스크와 루트의 사용률을 본다. 호스트 `/` 를 `/hostfs` 에 읽기 전용으로 붙인다 |
 | loki | `LOKI_S3_BUCKET` · `LOKI_S3_REGION` | s3 스택 출력 `loki_bucket` 의 버킷, `ap-northeast-2` |
 | loki | `LOKI_RETENTION_PERIOD` | `2160h` (90일). 조회 가능 범위(`max_query_lookback`)도 같은 값이다 |
 | loki | `LOKI_S3_ENDPOINT` · `LOKI_S3_FORCE_PATH_STYLE` · `LOKI_S3_INSECURE` | 운영에서는 넘기지 않는다(S3 호환 저장소용) |
