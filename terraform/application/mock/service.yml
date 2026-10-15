@@ -21,7 +21,7 @@ health:
   path: /actuator/health/readiness
 
 # 바깥(CloudFront → ALB)에서 목업을 직접 부를 때 쓴다. worker 는 지금처럼 Service Connect 로 부른다.
-# 설정 · 결함 · 초기화(/external/config · faults · reset)는 ALB 가 403 으로 막는다(ecs 스택 alb.tf)
+# 설정 · 결함 · 초기화(/external/config · faults · reset)는 프런트에서 온 요청(Origin)만 받고 나머지는 ALB 가 403 으로 막는다(ecs 스택 alb.tf)
 routes:
   - priority: 60
     paths: ["/external*"]

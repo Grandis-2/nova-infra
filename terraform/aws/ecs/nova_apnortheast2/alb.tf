@@ -88,12 +88,56 @@ locals {
   routing_listener_arn = local.alb_certificate_arn == "" ? aws_lb_listener.http[0].arn : aws_lb_listener.https[0].arn
 }
 
-# ── 목업 관리 경로 막기 ──────────────────────────────────────
+# ── 목업 관리 경로 ────────────────────────────────────────
 # 목업(application/mock)의 /external* 는 바깥에서 부를 수 있게 열었다. 그중 지연 · 실패 설정, 결함 주입, 기록 초기화는
-# 인증이 없어 막는다. worker 는 Service Connect 로 부르므로 이 규칙을 지나지 않는다.
-# 목업 경로 규칙(priority 60)보다 먼저 걸리도록 우선순위를 앞에 둔다.
+# 인증이 없어 프런트(관리자 Mock 설정 화면)에서 온 요청만 목업으로 보내고 나머지는 403 으로 막는다.
+#   58 프런트 Origin 이면 목업으로 → 59 그 밖은 403 → 60 목업의 /external* (service.yml)
+# Origin 은 클라이언트가 넣는 헤더라 curl 로 흉내 낼 수 있다. 실수로 부르는 것을 막는 장치이고 인증이 아니다.
+# worker 는 Service Connect 로 부르므로 이 규칙들을 지나지 않는다.
 locals {
+  mock_admin_paths          = ["/external/config*", "/external/faults*", "/external/reset*"]
+  mock_admin_allow_priority = 58
   mock_admin_block_priority = 59
+}
+
+# ALB 규칙 하나의 조건 값은 5개까지다: 경로 3 + Origin 1 + 원본 확인 헤더 1
+resource "aws_lb_listener_rule" "mock_admin_from_frontend" {
+  listener_arn = local.routing_listener_arn
+  priority     = local.mock_admin_allow_priority
+
+  action {
+    type             = "forward"
+    target_group_arn = module.service["mock"].target_group_arns["0-blue"]
+  }
+
+  condition {
+    path_pattern {
+      values = local.mock_admin_paths
+    }
+  }
+
+  condition {
+    http_header {
+      http_header_name = "Origin"
+      values           = [var.mock_admin_allowed_origin]
+    }
+  }
+
+  condition {
+    http_header {
+      http_header_name = local.origin_verify_header
+      values           = [random_password.origin_verify.result]
+    }
+  }
+
+  tags = { Service = "mock" }
+
+  lifecycle {
+    precondition {
+      condition     = !contains(local._all_priorities, local.mock_admin_allow_priority)
+      error_message = "서비스 route priority 가 목업 관리 경로 허용 규칙(58)과 겹친다. service.yml 의 priority 를 바꾼다."
+    }
+  }
 }
 
 resource "aws_lb_listener_rule" "mock_admin_block" {
@@ -112,7 +156,7 @@ resource "aws_lb_listener_rule" "mock_admin_block" {
 
   condition {
     path_pattern {
-      values = ["/external/config*", "/external/faults*", "/external/reset*"]
+      values = local.mock_admin_paths
     }
   }
 

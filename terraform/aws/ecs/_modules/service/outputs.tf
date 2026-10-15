@@ -18,3 +18,8 @@ output "target_group_arn_suffixes" {
   description = "\"<순번>-<색>\" -> 타깃 그룹 ARN 접미사 (지표 차원)"
   value       = { for k, tg in aws_lb_target_group.this : k => tg.arn_suffix }
 }
+
+output "target_group_arns" {
+  description = "\"<순번>-<색>\" -> 타깃 그룹 ARN (서비스 밖에서 규칙을 더 걸 때)"
+  value       = { for k, tg in aws_lb_target_group.this : k => tg.arn }
+}

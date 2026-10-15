@@ -106,3 +106,9 @@ variable "otel_metrics_enabled" {
   type        = bool
   default     = true
 }
+
+variable "mock_admin_allowed_origin" {
+  description = "목업 관리 경로(/external/config · faults · reset)를 받아 줄 요청의 Origin 헤더 패턴(ALB 와일드카드). 프런트 도메인(grandis-nova.link · www)"
+  type        = string
+  default     = "https://*grandis-nova.link"
+}
