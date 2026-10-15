@@ -26,7 +26,7 @@ receivers:
   # 지표를 OTLP 로 내지 않는 것들은 긁어 온다(30초).
   #   otel-collector: 이 Collector 자신(수신 · 거부 · 내보내기 실패 수). obs 수집 경로 경보가 쓴다.
   #     Mimir 에서는 job="otelcol-contrib" 다(자기 지표의 service.name 이 job_name 보다 우선한다)
-  #   mysqld: NCP DB(mysqld_exporter). MYSQLD_EXPORTER_TARGET 이 비면 대상이 없다
+  #   mysqld: DB(mysqld_exporter). MYSQLD_EXPORTER_TARGET 이 비면 대상이 없다
   #   loki · tempo · mimir · grafana: 관측 스택 자신(같은 태스크의 localhost). job 라벨이 그대로 이 이름이다
   prometheus/scrape:
     config:
@@ -43,6 +43,12 @@ receivers:
           relabel_configs:
             - source_labels: [__address__]
               regex: ""
+              action: drop
+          # 다이제스트(SQL 형태)마다 붙는 지표 중 화면 · 경보가 쓰지 않는 것과 메모리 할당 · 해제 누적은 버린다.
+          # 다이제스트 지표는 형태 하나에 한 벌씩 생겨 남기는 것만으로 수백 시계열이다
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "mysql_perf_schema_events_statements_((cpu_time_seconds|rows_affected|sort_merge_passes|sort_rows|tmp_tables|warnings)_total|latency(_sum|_count)?)|mysql_perf_schema_memory_events_(alloc|free)_bytes_total"
               action: drop
         # 관측 스택 자신. 화면(LGTM 스택 대시보드)과 경보가 보는 것만 남긴다(전부 받으면 한가할 때도 약 7천 시계열)
         - job_name: loki

@@ -1,7 +1,7 @@
 {
   "uid": "nova-mysql",
-  "title": "nova · MySQL (NCP)",
-  "description": "NCP Cloud DB for MySQL. obs 태스크의 mysqld_exporter(READ 계정)가 SHOW GLOBAL STATUS · VARIABLES 를 읽는다",
+  "title": "nova · MySQL",
+  "description": "엔진 지표는 obs 의 mysqld_exporter(Mimir), 서버 지표는 RDS CloudWatch. RDS 에서만 나오는 패널은 설명에 적었다",
   "tags": [
     "nova",
     "data"
@@ -28,13 +28,35 @@
     }
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "name": "rds",
+        "label": "RDS 인스턴스",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "cloudwatch"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "regex": "",
+        "query": {
+          "refId": "rds",
+          "queryType": "dimensionValues",
+          "region": "default",
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensionKey": "DBInstanceIdentifier",
+          "dimensionFilters": {}
+        }
+      }
+    ]
   },
   "panels": [
     {
       "type": "stat",
       "title": "exporter 연결",
-      "description": "1 이면 obs 의 mysqld_exporter 가 DB 에 붙어 있다. 0 이면 아래 지표가 모두 멈춘다",
+      "description": "1 이면 obs 의 mysqld_exporter 가 DB 에 붙어 있다. 0 이거나 비면 엔진 지표가 모두 멈춘다. 경보: MySQL 수집 끊김",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -108,8 +130,126 @@
     },
     {
       "type": "stat",
+      "title": "TPS",
+      "description": "초당 트랜잭션(커밋 + 롤백, 최근 5분). 자동 커밋 문장도 하나로 센다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=~\"commit|rollback\"}[5m]))",
+          "legendFormat": ""
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "QPS",
+      "description": "초당 클라이언트 문장 수(Questions, 최근 5분)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_questions{job=\"mysqld\"}[5m])",
+          "legendFormat": ""
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
       "title": "연결 사용률",
-      "description": "현재 연결 / max_connections. 서비스 태스크 수 × Hikari 풀(maximum-pool-size)이 여기로 모인다",
+      "description": "현재 연결 / max_connections. 서비스 태스크 수 × Hikari 풀이 여기로 모인다. 경보: 80% 초과 10분",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -130,7 +270,7 @@
               },
               {
                 "color": "red",
-                "value": 0.85
+                "value": 0.8
               }
             ]
           },
@@ -164,76 +304,18 @@
           "legendFormat": ""
         }
       ],
-      "id": 2,
+      "id": 4,
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 4,
-        "y": 0
-      }
-    },
-    {
-      "type": "stat",
-      "title": "max_connections",
-      "description": "NCP 사양(메모리)에 따라 정해진다",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "A",
-          "expr": "mysql_global_variables_max_connections{job=\"mysqld\"}",
-          "legendFormat": ""
-        }
-      ],
-      "id": 3,
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 9,
+        "w": 4,
+        "x": 12,
         "y": 0
       }
     },
     {
       "type": "stat",
       "title": "실행 중 스레드",
-      "description": "지금 쿼리를 실행 중인 연결 수. vCPU(2) 보다 오래 크게 머물면 DB 가 밀린다",
+      "description": "지금 쿼리를 실행 중인 연결 수. vCPU 수보다 오래 크게 머물면 DB 가 밀린다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -288,18 +370,18 @@
           "legendFormat": ""
         }
       ],
-      "id": 4,
+      "id": 5,
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 14,
+        "w": 4,
+        "x": 16,
         "y": 0
       }
     },
     {
       "type": "stat",
       "title": "느린 쿼리",
-      "description": "선택한 기간 동안 long_query_time 을 넘은 쿼리 수. 어떤 쿼리인지는 트러블슈팅의 느린 DB 쿼리 표",
+      "description": "선택한 기간 동안 long_query_time 을 넘은 쿼리 수. 어떤 SQL 인지는 아래 상위 SQL",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -321,6 +403,302 @@
               {
                 "color": "red",
                 "value": 100
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "increase(mysql_global_status_slow_queries{job=\"mysqld\"}[$__range])",
+          "legendFormat": ""
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CPU (RDS)",
+      "description": "DB 인스턴스 CPU(5분 최대). 경보: monitoring/cloudwatch 스택",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "여유 메모리 (RDS)",
+      "description": "OS 가 바로 내줄 수 있는 메모리(5분 최소). 버퍼 풀이 인스턴스 메모리의 대부분을 쓰므로 수백 MB 가 정상이다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 268435456
+              },
+              {
+                "color": "green",
+                "value": 536870912
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "FreeableMemory",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Minimum",
+          "expression": ""
+        }
+      ],
+      "id": 8,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "남은 스토리지 (RDS)",
+      "description": "남은 디스크(5분 최소). 스토리지 자동 확장을 켜도 확장 사이에는 줄어든다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5368709120
+              },
+              {
+                "color": "green",
+                "value": 10737418240
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "FreeStorageSpace",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Minimum",
+          "expression": ""
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "max_connections",
+      "description": "RDS 는 인스턴스 메모리로 정해진다(DBInstanceClassMemory / 12582880). 파라미터 그룹에서 바꿀 수 있다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
               }
             ]
           },
@@ -350,28 +728,721 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "increase(mysql_global_status_slow_queries{job=\"mysqld\"}[$__range])",
+          "expr": "mysql_global_variables_max_connections{job=\"mysqld\"}",
           "legendFormat": ""
         }
       ],
-      "id": 5,
+      "id": 10,
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 19,
-        "y": 0
+        "w": 4,
+        "x": 12,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "mysqld 메모리",
+      "description": "mysqld 가 지금 잡고 있는 메모리(performance_schema 메모리 계측 합). 버퍼 풀 포함. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "수집 안 됨"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(mysql_perf_schema_memory_events_used_bytes{job=\"mysqld\"})",
+          "legendFormat": ""
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "오래 도는 쿼리",
+      "description": "실행 중인 쿼리들이 지금 상태에 머문 시간의 합 중 가장 큰 것. 한 쿼리가 오래 돌거나 같은 상태에 여럿이 몰리면 커진다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "수집 안 됨"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "max(mysql_info_schema_processlist_seconds{job=\"mysqld\", command=\"query\"})",
+          "legendFormat": ""
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 4
       }
     },
     {
       "type": "row",
-      "title": "연결",
-      "id": 6,
+      "title": "처리량",
+      "id": 13,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 8
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "TPS · QPS",
+      "description": "TPS 는 커밋 + 롤백, QPS 는 클라이언트가 보낸 문장 수",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=~\"commit|rollback\"}[$__rate_interval]))",
+          "legendFormat": "TPS"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "rate(mysql_global_status_questions{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "QPS"
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "명령별 쿼리",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (command) (rate(mysql_global_status_commands_total{job=\"mysqld\", command=~\"select|insert|update|delete|replace|commit|rollback\"}[$__rate_interval]))",
+          "legendFormat": "{{command}}"
+        }
+      ],
+      "id": 15,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 9
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "롤백 비율",
+      "description": "트랜잭션 중 롤백된 비율. 갑자기 오르면 앱 오류(예외로 인한 롤백)나 잠금 시간 초과를 의심한다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=\"rollback\"}[$__rate_interval])) / sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=~\"commit|rollback\"}[$__rate_interval]))",
+          "legendFormat": "롤백 비율"
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 9
+      }
+    },
+    {
+      "type": "row",
+      "title": "상위 SQL",
+      "id": 17,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "상위 SQL (선택한 기간, 총 시간 순)",
+      "description": "SQL 형태(다이제스트)별 합계. 값 자리는 ? 로 바뀌어 있다. 검사 행 / 보낸 행이 크면 인덱스를 확인하고, 인덱스 없이가 0 이 아니면 EXPLAIN 을 본다. 최근 하루 동안 본 것 중 시간 순 100개를 모은다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_total{job=\"mysqld\"}[$__range])) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "(sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])) / (sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_total{job=\"mysqld\"}[$__range])) > 0)) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "D",
+          "expr": "(sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_rows_examined_total{job=\"mysqld\"}[$__range])) / (sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_total{job=\"mysqld\"}[$__range])) > 0)) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "E",
+          "expr": "(sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_rows_sent_total{job=\"mysqld\"}[$__range])) / (sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_total{job=\"mysqld\"}[$__range])) > 0)) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "F",
+          "expr": "sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_no_index_used_total{job=\"mysqld\"}[$__range])) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "G",
+          "expr": "sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_errors_total{job=\"mysqld\"}[$__range])) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "H",
+          "expr": "sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_lock_time_seconds_total{job=\"mysqld\"}[$__range])) and on (digest) topk(20, sum by (digest, schema, digest_text) (increase(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "총 시간"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "평균 시간"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "잠금 대기"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "실행 수"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "검사 행 / 실행"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "보낸 행 / 실행"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "인덱스 없이"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "오류"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SQL"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 520
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "스키마"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "총 시간",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "digest": true
+            },
+            "renameByName": {
+              "Value #A": "총 시간",
+              "Value #B": "실행 수",
+              "Value #C": "평균 시간",
+              "Value #D": "검사 행 / 실행",
+              "Value #E": "보낸 행 / 실행",
+              "Value #F": "인덱스 없이",
+              "Value #G": "오류",
+              "Value #H": "잠금 대기",
+              "digest_text": "SQL",
+              "schema": "스키마"
+            }
+          }
+        }
+      ],
+      "id": 18,
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "SQL 별 시간 (상위 10)",
+      "description": "초당 쓴 실행 시간. 1 이면 평균 한 연결이 그 SQL 만 계속 돌린 것과 같다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "topk(10, sum by (digest_text) (rate(mysql_perf_schema_events_statements_seconds_total{job=\"mysqld\"}[$__rate_interval])))",
+          "legendFormat": "{{digest_text}}"
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "SQL 별 실행 수 (상위 10)",
+      "description": "RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "topk(10, sum by (digest_text) (rate(mysql_perf_schema_events_statements_total{job=\"mysqld\"}[$__rate_interval])))",
+          "legendFormat": "{{digest_text}}"
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      }
+    },
+    {
+      "type": "row",
+      "title": "연결",
+      "id": 21,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 37
       },
       "panels": []
     },
@@ -433,18 +1504,18 @@
           "legendFormat": "max_connections"
         }
       ],
-      "id": 7,
+      "id": 22,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 5
+        "y": 38
       }
     },
     {
       "type": "timeseries",
-      "title": "실행 중 스레드",
-      "description": "",
+      "title": "계정별 연결",
+      "description": "DB 계정(서비스)별 연결 수. 어느 서비스가 연결을 쥐고 있는지 본다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -454,7 +1525,10 @@
           "unit": "short",
           "custom": {
             "fillOpacity": 10,
-            "showPoints": "never"
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
           },
           "min": 0
         },
@@ -477,22 +1551,22 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "mysql_global_status_threads_running{job=\"mysqld\"}",
-          "legendFormat": "실행 중"
+          "expr": "sum by (mysql_user) (mysql_info_schema_processlist_processes_by_user{job=\"mysqld\"})",
+          "legendFormat": "{{mysql_user}}"
         }
       ],
-      "id": 8,
+      "id": 23,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 5
+        "y": 38
       }
     },
     {
       "type": "timeseries",
       "title": "연결 실패 · 끊김",
-      "description": "접속 실패가 늘면 계정 · 비밀번호 · 허용 IP(NAT) 를, 끊김이 늘면 앱의 커넥션 수명(Hikari maxLifetime)과 wait_timeout 을 본다",
+      "description": "접속 실패가 늘면 계정 · 비밀번호 · 보안 그룹을, 끊김이 늘면 앱의 커넥션 수명(Hikari maxLifetime)과 wait_timeout 을 본다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -547,30 +1621,17 @@
           "legendFormat": "오류 {{error}}"
         }
       ],
-      "id": 9,
+      "id": 24,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 5
+        "y": 38
       }
     },
     {
-      "type": "row",
-      "title": "쿼리",
-      "id": 10,
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 13
-      },
-      "panels": []
-    },
-    {
       "type": "timeseries",
-      "title": "쿼리 수 (명령별)",
+      "title": "실행 중 스레드",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -578,7 +1639,55 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ops",
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_global_status_threads_running{job=\"mysqld\"}",
+          "legendFormat": "실행 중"
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 46
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "쿼리 상태별 스레드",
+      "description": "실행 중인 쿼리가 어떤 상태에 있는지. waiting_for_* 가 쌓이면 잠금 경합이다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
           "custom": {
             "fillOpacity": 10,
             "showPoints": "never",
@@ -607,21 +1716,186 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (command) (rate(mysql_global_status_commands_total{job=\"mysqld\", command=~\"select|insert|update|delete|replace|commit|rollback\"}[$__rate_interval]))",
-          "legendFormat": "{{command}}"
+          "expr": "sum by (state) (mysql_info_schema_processlist_threads{job=\"mysqld\", command=\"query\"})",
+          "legendFormat": "{{state}}"
         }
       ],
-      "id": 11,
+      "id": 26,
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 14
+        "w": 8,
+        "x": 8,
+        "y": 46
       }
     },
     {
       "type": "timeseries",
-      "title": "전체 쿼리 수",
+      "title": "쿼리 상태별 누적 시간",
+      "description": "그 상태의 쿼리들이 지금까지 머문 시간의 합. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (state) (mysql_info_schema_processlist_seconds{job=\"mysqld\", command=\"query\"})",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "id": 27,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 46
+      }
+    },
+    {
+      "type": "row",
+      "title": "InnoDB",
+      "id": 28,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 54
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "버퍼 풀 적중률",
+      "description": "디스크에서 읽지 않고 메모리에서 찾은 비율. 0.99 아래로 오래 머물면 버퍼 풀(메모리)이 작다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "적중률"
+        }
+      ],
+      "id": 29,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 55
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "버퍼 풀 페이지",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (state) (mysql_global_status_buffer_pool_pages{job=\"mysqld\"})",
+          "legendFormat": "{{state}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "mysql_global_status_buffer_pool_dirty_pages{job=\"mysqld\"}",
+          "legendFormat": "dirty"
+        }
+      ],
+      "id": 30,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 55
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "행 작업",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -655,8 +1929,56 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "rate(mysql_global_status_queries{job=\"mysqld\"}[$__rate_interval])",
-          "legendFormat": "queries"
+          "expr": "sum by (operation) (rate(mysql_global_status_innodb_row_ops_total{job=\"mysqld\"}[$__rate_interval]))",
+          "legendFormat": "{{operation}}"
+        }
+      ],
+      "id": 31,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 55
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "행 잠금 대기",
+      "description": "같은 행을 동시에 바꾸려는 요청(재고 차감 등)이 몰리면 는다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "대기 횟수"
         },
         {
           "datasource": {
@@ -664,22 +1986,127 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "rate(mysql_global_status_questions{job=\"mysqld\"}[$__rate_interval])",
-          "legendFormat": "questions(클라이언트가 보낸 것)"
+          "expr": "mysql_global_status_innodb_row_lock_current_waits{job=\"mysqld\"}",
+          "legendFormat": "지금 기다리는 수"
         }
       ],
-      "id": 12,
+      "id": 32,
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 14
+        "w": 8,
+        "x": 0,
+        "y": 63
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "행 잠금 평균 대기 시간",
+      "description": "innodb_row_lock_time(밀리초) 증가분 / 대기 횟수",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "rate(mysql_global_status_innodb_row_lock_time{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval]) / 1000",
+          "legendFormat": "평균"
+        }
+      ],
+      "id": 33,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 63
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "교착 상태 · 잠금 시간 초과",
+      "description": "구간별 횟수. 교착 상태는 InnoDB 가 한쪽을 롤백한다(앱에는 Deadlock 예외). RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "increase(mysql_info_schema_innodb_metrics_lock_lock_deadlocks_total{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "교착 상태"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "increase(mysql_info_schema_innodb_metrics_lock_lock_timeouts_total{job=\"mysqld\"}[$__rate_interval])",
+          "legendFormat": "잠금 시간 초과"
+        }
+      ],
+      "id": 34,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 63
       }
     },
     {
       "type": "timeseries",
       "title": "느린 쿼리 · 임시 디스크 테이블",
-      "description": "0 이 아니면 해당 쿼리의 실행 계획(EXPLAIN)을 본다",
+      "description": "0 이 아니면 상위 SQL 표에서 해당 SQL 을 찾아 실행 계획(EXPLAIN)을 본다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -743,28 +2170,31 @@
           "legendFormat": "정렬 병합(sort buffer 부족)"
         }
       ],
-      "id": 13,
+      "id": 35,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 71
       }
     },
     {
       "type": "timeseries",
-      "title": "네트워크",
-      "description": "",
+      "title": "mysqld 메모리 (상위 이벤트)",
+      "description": "메모리를 가장 많이 잡은 내부 영역. 보통 innodb 버퍼 풀이 맨 위다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "Bps",
+          "unit": "bytes",
           "custom": {
             "fillOpacity": 10,
-            "showPoints": "never"
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
           },
           "min": 0
         },
@@ -787,54 +2217,62 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "rate(mysql_global_status_bytes_received{job=\"mysqld\"}[$__rate_interval])",
-          "legendFormat": "받음"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "B",
-          "expr": "rate(mysql_global_status_bytes_sent{job=\"mysqld\"}[$__rate_interval])",
-          "legendFormat": "보냄"
+          "expr": "topk(8, mysql_perf_schema_memory_events_used_bytes{job=\"mysqld\"})",
+          "legendFormat": "{{event_name}}"
         }
       ],
-      "id": 14,
+      "id": 36,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 22
+        "y": 71
       }
     },
     {
       "type": "row",
-      "title": "InnoDB",
-      "id": 15,
+      "title": "서버 (RDS)",
+      "id": 37,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 79
       },
       "panels": []
     },
     {
       "type": "timeseries",
-      "title": "버퍼 풀 적중률",
-      "description": "디스크에서 읽지 않고 메모리에서 찾은 비율. 0.99 아래로 오래 머물면 버퍼 풀(메모리)이 작다",
+      "title": "CPU",
+      "description": "",
       "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
+          "unit": "percent",
           "custom": {
             "fillOpacity": 10,
-            "showPoints": "never"
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
           }
         },
         "overrides": []
@@ -852,33 +2290,68 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
           "refId": "A",
-          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval])",
-          "legendFormat": "적중률"
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "평균",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "최대",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUUtilization",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
         }
       ],
-      "id": 16,
+      "id": 38,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 31
+        "y": 80
       }
     },
     {
       "type": "timeseries",
-      "title": "버퍼 풀 페이지",
-      "description": "",
+      "title": "메모리",
+      "description": "스왑이 늘면 메모리가 모자란 것이다(버퍼 풀이 너무 크거나 연결이 많다)",
       "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "bytes",
           "custom": {
             "fillOpacity": 10,
             "showPoints": "never"
@@ -900,86 +2373,64 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
           "refId": "A",
-          "expr": "sum by (state) (mysql_global_status_buffer_pool_pages{job=\"mysqld\"})",
-          "legendFormat": "{{state}}"
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "여유 메모리",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "FreeableMemory",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Minimum",
+          "expression": ""
         },
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
           "refId": "B",
-          "expr": "mysql_global_status_buffer_pool_dirty_pages{job=\"mysqld\"}",
-          "legendFormat": "dirty"
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "스왑 사용",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "SwapUsage",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
         }
       ],
-      "id": 17,
+      "id": 39,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 31
+        "y": 80
       }
     },
     {
       "type": "timeseries",
-      "title": "행 작업",
-      "description": "",
+      "title": "연결 (RDS)",
+      "description": "CloudWatch 가 센 연결 수. 엔진 지표의 연결 수와 같아야 한다",
       "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "A",
-          "expr": "sum by (operation) (rate(mysql_global_status_innodb_row_ops_total{job=\"mysqld\"}[$__rate_interval]))",
-          "legendFormat": "{{operation}}"
-        }
-      ],
-      "id": 18,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 31
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "행 잠금 대기",
-      "description": "같은 행을 동시에 바꾸려는 요청(재고 차감 등)이 몰리면 는다",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "fieldConfig": {
         "defaults": {
@@ -1005,38 +2456,128 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
           "refId": "A",
-          "expr": "rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval])",
-          "legendFormat": "대기 횟수"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "연결",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "DatabaseConnections",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
           },
-          "refId": "B",
-          "expr": "mysql_global_status_innodb_row_lock_current_waits{job=\"mysqld\"}",
-          "legendFormat": "지금 기다리는 수"
+          "matchExact": true,
+          "statistic": "Maximum",
+          "expression": ""
         }
       ],
-      "id": 19,
+      "id": 40,
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 39
+        "w": 8,
+        "x": 16,
+        "y": 80
       }
     },
     {
       "type": "timeseries",
-      "title": "행 잠금 평균 대기 시간",
-      "description": "innodb_row_lock_time(밀리초) 증가분 / 대기 횟수",
+      "title": "IOPS",
+      "description": "gp3 기본 3000 IOPS. 넘으면 지연이 는다",
       "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "읽기",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "ReadIOPS",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "쓰기",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "WriteIOPS",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        }
+      ],
+      "id": 41,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 88
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "디스크 지연",
+      "description": "I/O 하나의 평균 시간. 수 ms 를 넘어 오래 머물면 스토리지가 밀린다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
       },
       "fieldConfig": {
         "defaults": {
@@ -1062,20 +2603,398 @@
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
           },
           "refId": "A",
-          "expr": "rate(mysql_global_status_innodb_row_lock_time{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval]) / 1000",
-          "legendFormat": "평균"
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "읽기",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "ReadLatency",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "쓰기",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "WriteLatency",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
         }
       ],
-      "id": 20,
+      "id": 42,
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 39
+        "w": 8,
+        "x": 8,
+        "y": 88
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "디스크 대기열 · 처리량",
+      "description": "대기열(왼쪽 축)이 계속 1 을 넘으면 IOPS · 처리량 한도에 닿았다. 처리량은 오른쪽 축",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "대기열",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "DiskQueueDepth",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "읽기",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "ReadThroughput",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "C",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "쓰기",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "WriteThroughput",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        }
+      ],
+      "id": 43,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 88
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "남은 스토리지",
+      "description": "",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "남은 공간",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "FreeStorageSpace",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Minimum",
+          "expression": ""
+        }
+      ],
+      "id": 44,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 96
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "네트워크",
+      "description": "",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "받음",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "NetworkReceiveThroughput",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "보냄",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "NetworkTransmitThroughput",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        }
+      ],
+      "id": 45,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 96
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU 크레딧 잔액",
+      "description": "버스트형(t 계열) 인스턴스일 때만 나온다. 바닥나면 기준 성능으로 묶인다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "잔액",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUCreditBalance",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Minimum",
+          "expression": ""
+        }
+      ],
+      "id": 46,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 96
       }
     }
   ],
