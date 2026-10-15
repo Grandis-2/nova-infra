@@ -327,8 +327,9 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
 
         metric_stat {
           metric {
-            namespace   = "ECS/ContainerInsights"
-            metric_name = "RunningTaskCount"
+            # 서비스 CPU 지표(AWS/ECS, 무료)의 1분 표본 수 = 실행 중 태스크 수
+            namespace   = "AWS/ECS"
+            metric_name = "CPUUtilization"
 
             dimensions {
               name  = "ClusterName"
@@ -341,13 +342,13 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
             }
           }
 
-          stat = "Average"
+          stat = "SampleCount"
         }
 
         return_data = false
       }
 
-      # 태스크가 0 이거나 지표가 비어도(Container Insights 공백) 나누는 수를 1 로 본다.
+      # 태스크가 0 이거나 지표가 비어도(태스크가 없으면 표본이 없다) 나누는 수를 1 로 본다.
       # MAX([tasks, 1]) 은 시계열과 상수를 섞어 CloudWatch 가 거절한다
       metrics {
         id          = "backlog"

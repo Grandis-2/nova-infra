@@ -127,7 +127,7 @@ variable "request_count_target" {
 }
 
 variable "queue_backlog" {
-  description = "큐 적체 기반 스케일링 설정. 컨슈머 전용. 큐가 여럿이면 메시지 수를 더한다. Container Insights 의 RunningTaskCount 를 쓰므로 클러스터에서 켜져 있어야 한다"
+  description = "큐 적체 기반 스케일링 설정. 컨슈머 전용. 큐가 여럿이면 메시지 수를 더한다. 태스크 수는 서비스 CPU 지표(AWS/ECS)의 1분 표본 수로 센다"
   type = object({
     queue_names     = list(string)
     target_per_task = number
