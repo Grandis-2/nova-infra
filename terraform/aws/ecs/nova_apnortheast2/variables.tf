@@ -101,6 +101,16 @@ variable "otel_services" {
   default     = ["*"] # preorder 에서 확인한 뒤(NV-435) 배포하는 서비스 전부로 넓혔다(NV-438)
 }
 
+variable "profiling_services" {
+  description = <<-EOT
+    프로파일(Pyroscope)을 보낼 서비스 키(NV-540). OTel 에이전트가 켜진 서비스여야 한다.
+    이미지에 확장 jar(/otel/pyroscope-otel.jar)가 들어 있어야 한다. 없는 이미지에 켜면 에이전트가 확장을 못 찾는다.
+    한 서비스씩 켜서 CPU · 메모리 증가를 잰 뒤 넓힌다.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "otel_metrics_enabled" {
   description = "에이전트가 지표도 보낸다. 지표 전송만 끌 때 false (로그 · 트레이스는 그대로)"
   type        = bool

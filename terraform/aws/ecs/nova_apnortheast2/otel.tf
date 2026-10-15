@@ -19,6 +19,25 @@ locals {
   otel_unknown  = [for k in var.otel_services : k if k != "*" && !contains(keys(local.services), k)]
   otel_endpoint = "http://otel.${var.namespace_name}:4318"
 
+  # 프로파일(NV-540). 확장 jar 를 OTel 에이전트가 읽어 Pyroscope(obs, Service Connect pyroscope.<네임스페이스>)로 보낸다.
+  # 스팬 ID 를 프로파일에 붙여 Grafana 에서 느린 스팬 → 그동안의 플레임 그래프로 간다.
+  # Fargate 는 perf_events 를 막아 CPU 는 itimer 로 받는다. 할당 · 락 프로파일은 그대로 된다
+  profiling_unknown = [for k in var.profiling_services : k if !contains(keys(local.services), k)]
+  profiling_env = {
+    for k, v in local.deployed_services : k => local.otel_enabled[k] && contains(var.profiling_services, k) ? {
+      OTEL_JAVAAGENT_EXTENSIONS      = "/otel/pyroscope-otel.jar"
+      OTEL_PYROSCOPE_START_PROFILING = "true"
+      PYROSCOPE_APPLICATION_NAME     = v.name
+      PYROSCOPE_SERVER_ADDRESS       = "http://pyroscope.${var.namespace_name}:4040"
+      PYROSCOPE_LABELS               = "service_namespace=nova,deployment_environment=${var.env}"
+      PYROSCOPE_PROFILER_EVENT       = "itimer"
+      PYROSCOPE_FORMAT               = "jfr"
+      PYROSCOPE_PROFILER_ALLOC       = "512k"
+      PYROSCOPE_PROFILER_LOCK        = "10ms"
+      PYROSCOPE_UPLOAD_INTERVAL      = "15s"
+    } : {}
+  }
+
   otel_env = {
     for k, v in local.deployed_services : k => local.otel_enabled[k] ? {
       JDK_JAVA_OPTIONS            = "-javaagent:/otel/javaagent.jar"
@@ -54,6 +73,14 @@ resource "terraform_data" "otel_check" {
     precondition {
       condition     = length(local.otel_unknown) == 0
       error_message = "otel_services 에 없는 서비스 키: ${join(", ", local.otel_unknown)}"
+    }
+    precondition {
+      condition     = length(local.profiling_unknown) == 0
+      error_message = "profiling_services 에 없는 서비스 키: ${join(", ", local.profiling_unknown)}"
+    }
+    precondition {
+      condition     = alltrue([for k in var.profiling_services : !contains(keys(local.deployed_services), k) || local.otel_enabled[k]])
+      error_message = "profiling_services 의 서비스는 otel_services 에도 있어야 한다(확장은 OTel 에이전트가 읽는다)."
     }
   }
 }

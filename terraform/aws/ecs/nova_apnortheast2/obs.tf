@@ -29,10 +29,11 @@ locals {
 
   # 데이터 디렉터리 -> 소유자 (uid:gid). monitoring 스택 obs.tf 의 컨테이너 user 와 같아야 한다
   obs_data_dirs = {
-    loki    = "10001:10001"
-    tempo   = "10001:10001"
-    mimir   = "10001:10001"
-    grafana = "472:472"
+    loki      = "10001:10001"
+    tempo     = "10001:10001"
+    mimir     = "10001:10001"
+    grafana   = "472:472"
+    pyroscope = "10001:10001" # 프로파일(NV-540). v2 메타스토어(raft)가 디스크에 남아야 한다
   }
 }
 
