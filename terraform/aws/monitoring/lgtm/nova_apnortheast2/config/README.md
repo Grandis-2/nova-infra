@@ -72,7 +72,7 @@ Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(1152 MiB
 
 ```mermaid
 flowchart LR
-  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 빈 SQS 롱폴링?"}
+  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 SQS 롱폴링?"}
   noise -- "예" --> drop["버림 (오류여도)"]
   noise -- "아니오" --> err{"ERROR 스팬?"}
   err -- "예" --> keep["남김"]
@@ -81,7 +81,7 @@ flowchart LR
   slow -- "아니오" --> pct["10% 남김"]
 ```
 
-헬스체크는 `url.path` 가 `/actuator/*` 인 서버 스팬, 빈 롱폴링은 오류 없이 메시지 0건으로 끝난 `ReceiveMessage` 다. 결정을 기다리는 트레이스는 메모리에 최대 5만 건 둔다. 넘치면 오래된 것부터 결정 없이 버린다.
+헬스체크는 `url.path` 가 `/actuator/*` 인 서버 스팬, 롱폴링은 오류 없이 끝난 `ReceiveMessage` 클라이언트 스팬이다. 에이전트가 이 스팬에 받은 메시지 수를 붙이지 않아 빈 폴링과 가르지 않는다. 길이는 메시지를 기다린 시간일 뿐이고, 메시지 처리는 컨슈머 스팬으로 따로 남는다. 결정을 기다리는 트레이스는 메모리에 최대 5만 건 둔다. 넘치면 오래된 것부터 결정 없이 버린다.
 
 **5. APM 지표는 샘플링 전에 만든다.**
 Tempo 에 남는 트레이스는 일부라서, 거기서 센 요청 수 · 지연은 오류와 느린 요청 쪽으로 기운다. 그래서 Collector 가 트레이스를 두 갈래로 복제해 한쪽에서는 모든 스팬으로 지표를 만들고, 다른 쪽에서만 샘플링한다.
@@ -91,7 +91,7 @@ flowchart LR
   recv["트레이스 수신<br/>memory_limiter · 리소스 허용 목록"] --> apm & smp
   subgraph apm["APM 갈래 (모든 스팬)"]
     direction LR
-    f["INTERNAL 스팬 · 헬스체크 ·<br/>빈 SQS 롱폴링 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
+    f["INTERNAL 스팬 · 헬스체크 ·<br/>SQS 롱폴링 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
     f --> sg["servicegraph<br/>서비스 · DB · 외부 호출 간선"]
   end
   subgraph smp["저장 갈래"]
