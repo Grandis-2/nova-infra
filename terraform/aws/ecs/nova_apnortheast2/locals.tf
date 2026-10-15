@@ -49,6 +49,7 @@ locals {
       },
       local.otel_env[k], # otel.tf. service.yml 의 environment 가 같은 이름이면 그쪽이 이긴다
       v.environment,
+      local.profiling_env[k], # otel.tf. 프로파일 설정은 서비스 environment 가 덮지 못하게 마지막에 둔다
     )
   }
 

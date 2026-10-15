@@ -52,6 +52,7 @@ queues: { send: [], consume: [], dlq: [], dlq_send: [] }   # dlq: DLQ 들여다�
 uploads: false            # true면 업로드 버킷 쓰기 권한
 generated_secrets: {}     # 아래 '비밀' 참고
 environment: {}
+profiling: false          # true면 프로파일(Pyroscope)을 보냄. 이미지에 /otel/pyroscope-otel.jar 가 있어야 함
 ```
 
 모르는 필드가 있거나 필수 필드가 빠지면 plan이 실패합니다.

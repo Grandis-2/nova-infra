@@ -2,6 +2,7 @@
 # 태스크는 monitoring 스택이 만들고, 이 SG 만 여기 둔다 (서비스 SG 를 참조해야 해서).
 #
 # 인바운드는 OTLP 두 포트(4317 gRPC · 4318 HTTP)를 서비스 SG 참조로만 연다. 앱은 Service Connect(otel.<네임스페이스>)로 붙는다.
+# 프로파일(4040, Pyroscope · NV-540)은 service.yml 에 profiling: true 인 서비스에서만 받는다.
 # Grafana(3000) 는 ALB 에서만 연다(NV-517). ALB 리스너 규칙이 Cognito 로그인을 거친 요청만 넘긴다.
 # (SG 설명 문자열은 바꾸면 SG 가 다시 만들어지므로 처음 값 그대로 둔다)
 resource "aws_security_group" "obs" {
@@ -25,6 +26,18 @@ resource "aws_vpc_security_group_ingress_rule" "obs_otlp" {
   ip_protocol                  = "tcp"
   from_port                    = each.value.port
   to_port                      = each.value.port
+}
+
+# 프로파일 — profiling: true 인 서비스만(Service Connect pyroscope.<네임스페이스>)
+resource "aws_vpc_security_group_ingress_rule" "obs_pyroscope" {
+  for_each = { for k, v in local.services : k => v if v.profiling }
+
+  security_group_id            = aws_security_group.obs.id
+  description                  = "Pyroscope profiles from ${each.value.name}"
+  referenced_security_group_id = module.service[each.key].security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 4040
+  to_port                      = 4040
 }
 
 # Grafana — ALB(Cognito 인증) 에서만 받는다. 대상 그룹 · 리스너 규칙은 monitoring/lgtm 스택이 만든다

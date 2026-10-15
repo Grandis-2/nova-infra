@@ -21,6 +21,7 @@ locals {
   _service_fields = [
     "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "stop_timeout", "scaling",
     "health", "routes", "jwt", "calls", "db", "extra_databases", "redis", "queues", "uploads", "generated_secrets", "environment",
+    "profiling",
   ]
 
   # 형식 검사. 오류가 있으면 services.name 계산에서 해당 폴더 이름과 함께 plan 을 멈춘다
@@ -35,6 +36,8 @@ locals {
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && can(length(r.paths)) ? "" : "route 마다 priority(숫자)와 paths(목록)가 필요"],
       contains(["rolling", "blue_green", "singleton"], try(s.deployment, "rolling")) ? "" : "deployment 는 rolling | blue_green | singleton",
       contains(["sign", "verify", "none"], try(s.jwt, "none")) ? "" : "jwt 는 sign | verify | none",
+      # 오타(treu) · 문자열("true")이 조용히 false 가 되지 않게 YAML 불리언만 받는다. 비우면(null) false
+      contains(["true", "false", "null"], jsonencode(try(s.profiling, false))) ? "" : "profiling 은 true | false",
       try(s.deployment, "rolling") != "blue_green" || length(try(s.routes, [])) > 0 ? "" : "blue_green 은 routes 가 필요",
       length(try(s.routes, [])) == 0 || can(tonumber(s.health.port)) ? "" : "routes 가 있으면 health(port, path) 가 필요",
       [for r in try(s.routes, []) : length(try(r.paths, [])) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
@@ -77,6 +80,9 @@ locals {
       blue_green = try(s.deployment, "rolling") == "blue_green"
       singleton  = try(s.deployment, "rolling") == "singleton"
       spot       = try(tobool(s.spot), true)
+      # 프로파일(Pyroscope, NV-540)을 보낸다. 이미지에 확장 jar(/otel/pyroscope-otel.jar)가 있어야 한다.
+      # ecs 스택이 환경 변수를, securitygroup 스택이 obs 4040 인바운드를 이 값으로 만든다
+      profiling = try(s.profiling, false) == true
       # SIGTERM 뒤 SIGKILL 까지 기다리는 시간(초). 비우면 ECS 기본값(30초). 정상 종료에 오래 걸리는 컨슈머만 늘린다
       stop_timeout = try(tonumber(s.stop_timeout), null)
 
