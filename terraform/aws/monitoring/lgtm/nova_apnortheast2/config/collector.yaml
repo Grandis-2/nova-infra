@@ -5,6 +5,7 @@
 #   TEMPO_OTLP_ENDPOINT  Tempo 의 OTLP gRPC 수신 주소. localhost:14317
 #   MIMIR_OTLP_ENDPOINT  Mimir 의 OTLP 수신 주소. http://localhost:9009/otlp
 #   MYSQLD_EXPORTER_TARGET  mysqld_exporter 주소(localhost:9104). 띄우지 않으면 비운다 — 그때는 아무것도 긁지 않는다
+#   PYROSCOPE_TARGET     Pyroscope 주소(localhost:4040). 띄우지 않으면 비운다
 #   OBS_DATA_MOUNT_PATH  obs 인스턴스의 데이터 EBS 경로(/data/obs). hostmetrics 가 루트와 함께 이 디스크의 사용률을 본다
 #
 # 포트: 4317 · 4318 (OTLP 수신), 8888 (자체 지표, localhost), 13133 (헬스체크 — 작업 정의의 컨테이너 헬스체크가 부른다)
@@ -27,7 +28,7 @@ receivers:
   #   otel-collector: 이 Collector 자신(수신 · 거부 · 내보내기 실패 수). obs 수집 경로 경보가 쓴다.
   #     Mimir 에서는 job="otelcol-contrib" 다(자기 지표의 service.name 이 job_name 보다 우선한다)
   #   mysqld: DB(mysqld_exporter). MYSQLD_EXPORTER_TARGET 이 비면 대상이 없다
-  #   loki · tempo · mimir · grafana: 관측 스택 자신(같은 태스크의 localhost). job 라벨이 그대로 이 이름이다
+  #   loki · tempo · mimir · grafana · pyroscope: 관측 스택 자신(같은 태스크의 localhost). job 라벨이 그대로 이 이름이다. pyroscope 는 PYROSCOPE_TARGET 이 비면 대상이 없다
   prometheus/scrape:
     config:
       scrape_configs:
@@ -74,6 +75,19 @@ receivers:
           metric_relabel_configs:
             - source_labels: [__name__]
               regex: "cortex_(distributor_received_samples_total|discarded_samples_total|ingester_memory_series|query_scheduler_(queue_length|queue_duration_seconds_(count|sum)|queue_max_wait_seconds)|request_duration_seconds_(count|sum)|ingester_tsdb_(wal_writes_failed|compactions_failed)_total)|thanos_objstore_bucket_operation_failures_total|process_(resident_memory_bytes|cpu_seconds_total)"
+              action: keep
+        # 프로파일 저장소(NV-540). 받은 프로파일 수와 프로세스 자원만 남긴다
+        - job_name: pyroscope
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["${env:PYROSCOPE_TARGET}"]
+          relabel_configs:
+            - source_labels: [__address__]
+              regex: ""
+              action: drop
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "pyroscope_distributor_profiles_received_total|process_(resident_memory_bytes|cpu_seconds_total)"
               action: keep
         - job_name: grafana
           scrape_interval: 30s
