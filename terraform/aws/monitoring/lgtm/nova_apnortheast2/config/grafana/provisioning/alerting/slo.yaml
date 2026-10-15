@@ -1,0 +1,404 @@
+# SLO 기록 규칙과 경보(NV-541). 알림은 notify.yaml(SNS → Chatbot → Slack)로 간다.
+#
+# SLO(30일 창, 서비스별 = job)
+#   가용성     5xx 가 아닌 응답 99.9%   (예산 0.1%)
+#   응답 시간  95% 가 0.5초 안           (예산 5%. 0.5초는 히스토그램 버킷 경계라 근사가 없다)
+#   헬스체크(/actuator)는 뺀다. 목표값은 예시로 둔 기본값이다 — 서비스별 값은 팀과 정한다.
+#
+# 기록 규칙: 5m · 30m · 1h · 6h 창의 요청 · 5xx · 0.5초 초과 비율의 재료(초당 수)를 1분마다 미리 계산해 Mimir 에 쓴다.
+#   Grafana 관리 기록 규칙이다(targetDatasourceUid: mimir). 경보 · SLO 대시보드가 이것을 읽어 매번 30일 · 6시간을 다시 계산하지 않는다.
+#
+# 소진 속도 경보(다중 창): 긴 창과 짧은 창이 모두 넘을 때만 울린다. 짧은 창이 있어 문제가 끝나면 빨리 해소된다.
+#   critical  1시간 & 5분 > 14.4배   (이 속도면 이틀 안에 30일 예산을 다 쓴다)
+#   warning   6시간 & 30분 > 6배     (닷새 안에 다 쓴다)
+#   긴 창에 요청이 1시간 60건(초당 0.0167) 미만이면 보지 않는다. 몇 건의 오류로 비율이 튀어 울리는 것을 막는다.
+#
+# 평소 대비 경보: 기준선은 지난 3주 같은 요일 · 같은 시각의 평균(offset 1w · 2w · 3w). 3주치가 없으면 지난주 하나로 본다.
+#   원본 HTTP 지표(90일 보존)로 계산해 기록 규칙이 쌓이기를 기다리지 않는다.
+#
+# 경보마다 runbook_url 로 README 의 "경보 대응" 항목을 건다. summary 는 Grafana 템플릿이다(달러 기호를 쓰지 않는다).
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: nova-slo-rec
+    folder: nova
+    interval: 1m
+    rules:
+      - uid: slo-rec-requests-5m
+        title: nova:http_requests:rate5m
+        record:
+          metric: nova:http_requests:rate5m
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[5m]))'
+      - uid: slo-rec-errors-5m
+        title: nova:http_errors:rate5m
+        record:
+          metric: nova:http_errors:rate5m
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_response_status_code=~"5.."}[5m]))'
+      - uid: slo-rec-slow-5m
+        title: nova:http_slow:rate5m
+        record:
+          metric: nova:http_slow:rate5m
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[5m])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[5m]))'
+      - uid: slo-rec-requests-30m
+        title: nova:http_requests:rate30m
+        record:
+          metric: nova:http_requests:rate30m
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m]))'
+      - uid: slo-rec-errors-30m
+        title: nova:http_errors:rate30m
+        record:
+          metric: nova:http_errors:rate30m
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_response_status_code=~"5.."}[30m]))'
+      - uid: slo-rec-slow-30m
+        title: nova:http_slow:rate30m
+        record:
+          metric: nova:http_slow:rate30m
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[30m]))'
+      - uid: slo-rec-requests-1h
+        title: nova:http_requests:rate1h
+        record:
+          metric: nova:http_requests:rate1h
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[1h]))'
+      - uid: slo-rec-errors-1h
+        title: nova:http_errors:rate1h
+        record:
+          metric: nova:http_errors:rate1h
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_response_status_code=~"5.."}[1h]))'
+      - uid: slo-rec-slow-1h
+        title: nova:http_slow:rate1h
+        record:
+          metric: nova:http_slow:rate1h
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[1h])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[1h]))'
+      - uid: slo-rec-requests-6h
+        title: nova:http_requests:rate6h
+        record:
+          metric: nova:http_requests:rate6h
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[6h]))'
+      - uid: slo-rec-errors-6h
+        title: nova:http_errors:rate6h
+        record:
+          metric: nova:http_errors:rate6h
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_response_status_code=~"5.."}[6h]))'
+      - uid: slo-rec-slow-6h
+        title: nova:http_slow:rate6h
+        record:
+          metric: nova:http_slow:rate6h
+          from: A
+          targetDatasourceUid: mimir
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[6h])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[6h]))'
+  - orgId: 1
+    name: nova-slo
+    folder: nova
+    interval: 1m
+    rules:
+      - uid: slo-availability-fast
+        title: SLO 가용성 예산 빠르게 소진
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "가용성 SLO(99.9%) 예산을 평소의 14배 넘는 속도로 쓰고 있다(1시간 · 5분 모두). 이대로면 이틀 안에 30일 예산을 다 쓴다 — 1시간 5xx 비율 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#slo-가용성-예산-소진"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 21600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: '(nova:http_errors:rate1h / nova:http_requests:rate1h > 0.0144) and (nova:http_errors:rate5m / nova:http_requests:rate5m > 0.0144) and (nova:http_requests:rate1h > 0.0167)'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: slo-availability-slow
+        title: SLO 가용성 예산 소진
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "가용성 SLO(99.9%) 예산을 평소의 6배 넘는 속도로 쓰고 있다(6시간 · 30분 모두). 닷새 안에 30일 예산을 다 쓴다 — 6시간 5xx 비율 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#slo-가용성-예산-소진"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 21600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: '(nova:http_errors:rate6h / nova:http_requests:rate6h > 0.006) and (nova:http_errors:rate30m / nova:http_requests:rate30m > 0.006) and (nova:http_requests:rate6h > 0.0167)'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: slo-latency-fast
+        title: SLO 응답 시간 예산 빠르게 소진
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "응답 시간 SLO(95% 가 0.5초 안) 예산을 평소의 14배 넘는 속도로 쓰고 있다(1시간 · 5분 모두) — 1시간 동안 0.5초 넘은 요청 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#slo-응답-시간-예산-소진"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 21600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: '(nova:http_slow:rate1h / nova:http_requests:rate1h > 0.72) and (nova:http_slow:rate5m / nova:http_requests:rate5m > 0.72) and (nova:http_requests:rate1h > 0.0167)'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: slo-latency-slow
+        title: SLO 응답 시간 예산 소진
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "응답 시간 SLO(95% 가 0.5초 안) 예산을 평소의 6배 넘는 속도로 쓰고 있다(6시간 · 30분 모두) — 6시간 동안 0.5초 넘은 요청 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#slo-응답-시간-예산-소진"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 21600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: '(nova:http_slow:rate6h / nova:http_requests:rate6h > 0.3) and (nova:http_slow:rate30m / nova:http_requests:rate30m > 0.3) and (nova:http_requests:rate6h > 0.0167)'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: traffic-drop
+        title: 요청 급감 (평소 대비)
+        condition: C
+        for: 20m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "최근 30분 요청이 지난 3주 같은 시각 평균의 30% 아래다(현재 / 평소 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}). 평소 30분에 30건 넘게 오는 시간대만 본다 — 앞단(CloudFront · WAF · ALB) 차단이나 클라이언트 문제를 먼저 본다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#요청-급감"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 1900000, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: '(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m])) / ((sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w))) / 3 or sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w))) < 0.3) and (((sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w))) / 3 or sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w))) > 0.0167)'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: latency-vs-baseline
+        title: 응답 시간 급증 (평소 대비)
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "최근 30분 P99 가 지난 3주 같은 시각 평균의 2배를 넘고 0.5초 이상이다(현재 / 평소 {{ with .Values.B }}{{ humanize .Value }}{{ end }}배)"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#응답-시간-급증"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 1900000, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: '(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m]))) / ((histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w)))) / 3 or histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)))) > 2) and (histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m]))) > 0.5)'
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}

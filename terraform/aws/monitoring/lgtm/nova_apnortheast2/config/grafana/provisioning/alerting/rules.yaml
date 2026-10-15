@@ -12,39 +12,6 @@ groups:
     folder: nova
     interval: 1m
     rules:
-      - uid: nova-http-5xx
-        title: HTTP 5xx 비율
-        condition: C
-        for: 5m
-        noDataState: OK
-        execErrState: Error
-        labels:
-          severity: critical
-        annotations:
-          summary: "5분 동안 5xx 응답이 5% 를 넘었다 — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
-        data:
-          - refId: A
-            datasourceUid: mimir
-            relativeTimeRange: {from: 3600, to: 0}
-            model:
-              refId: A
-              instant: true
-              expr: "sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_response_status_code=~\"5..\"}[5m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\"}[5m]))"
-          - refId: B
-            datasourceUid: __expr__
-            model:
-              refId: B
-              type: reduce
-              reducer: last
-              expression: A
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              refId: C
-              type: threshold
-              expression: B
-              conditions:
-                - evaluator: {type: gt, params: [0.05]}
       - uid: nova-http-p99
         title: HTTP P99 응답 시간
         condition: C
@@ -55,6 +22,7 @@ groups:
           severity: warning
         annotations:
           summary: "10분 동안 P99 가 2초를 넘었다 — 값 {{ with .Values.B }}{{ humanizeDuration .Value }}{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#http-p99-응답-시간"
         data:
           - refId: A
             datasourceUid: mimir
@@ -88,6 +56,7 @@ groups:
           severity: warning
         annotations:
           summary: "10분 동안 힙이 한도의 90% 를 넘었다(태스크 {{ .Labels.instance }}) — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#jvm-힙-사용률"
         data:
           - refId: A
             datasourceUid: mimir
@@ -121,6 +90,7 @@ groups:
           severity: critical
         annotations:
           summary: "지난 1시간 안에 지표를 보내던 서비스가 5분 넘게 아무것도 보내지 않는다 — 태스크가 죽었거나 obs 로 보내지 못한다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#서비스-지표-끊김"
         data:
           - refId: A
             datasourceUid: mimir
@@ -154,6 +124,7 @@ groups:
           severity: warning
         annotations:
           summary: "Collector 가 받기를 거부하거나 저장소로 보내지 못한다(메모리 한도 · Loki/Tempo/Mimir 오류). 로그 · 트레이스 · 지표가 빠지고 있다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#obs-수집-실패"
         data:
           - refId: A
             datasourceUid: mimir
@@ -190,6 +161,7 @@ groups:
           severity: critical
         annotations:
           summary: "MySQL 지표가 들어오지 않는다 — exporter 가 DB 에 붙지 못하거나(DB 중단 · 네트워크 · 계정) exporter 컨테이너가 응답하지 않는다. MySQL 대시보드 지표도 멈춘다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#mysql-수집-끊김"
         data:
           - refId: A
             datasourceUid: mimir
@@ -225,6 +197,7 @@ groups:
           severity: warning
         annotations:
           summary: "10분 동안 연결이 max_connections 의 80% 를 넘었다 — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}. 서비스 태스크 수 × Hikari 풀을 확인한다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#mysql-연결-사용률"
         data:
           - refId: A
             datasourceUid: mimir
@@ -258,6 +231,7 @@ groups:
           severity: warning
         annotations:
           summary: "obs 호스트 {{ .Labels.mountpoint }} 가 80% 를 넘었다 — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}. 가득 차면 Loki · Tempo · Mimir 가 쓰기를 못 한다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#obs-디스크-사용률"
         data:
           - refId: A
             datasourceUid: mimir
@@ -291,6 +265,7 @@ groups:
           severity: warning
         annotations:
           summary: "{{ .Labels.job }} 가 받은 데이터를 버리고 있다(이유 {{ .Labels.reason }}). LGTM 스택 대시보드의 '저장소가 버린 데이터'"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#obs-저장소-거부"
         data:
           - refId: A
             datasourceUid: mimir
@@ -324,6 +299,7 @@ groups:
           severity: warning
         annotations:
           summary: "{{ .Labels.state }} 상태 쿼리들의 실행 시간 합이 1분을 넘었다(한 쿼리가 오래 돌거나 여럿이 같은 상태에 몰림) — 값 {{ with .Values.B }}{{ humanizeDuration .Value }}{{ end }}. MySQL 대시보드의 쿼리 상태별 스레드 · 상위 SQL 을 본다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#mysql-오래-도는-쿼리"
         data:
           - refId: A
             datasourceUid: mimir
@@ -348,3 +324,9 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [60]}
+
+# 파일에서 규칙을 빼도 Grafana 는 지우지 않는다. 지울 규칙은 여기 적는다.
+#   nova-http-5xx(5분 5xx 5%) — SLO 가용성 소진 속도 경보(slo.yaml)로 대신한다(NV-541)
+deleteRules:
+  - orgId: 1
+    uid: nova-http-5xx
