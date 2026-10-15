@@ -72,8 +72,8 @@ Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(1152 MiB
 
 ```mermaid
 flowchart LR
-  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 SQS 롱폴링?"}
-  noise -- "예" --> drop["버림 (오류여도)"]
+  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 오류 없는 SQS 롱폴링?"}
+  noise -- "예" --> drop["버림<br/>(헬스체크는 오류여도)"]
   noise -- "아니오" --> err{"ERROR 스팬?"}
   err -- "예" --> keep["남김"]
   err -- "아니오" --> slow{"1초 초과?"}
@@ -91,7 +91,7 @@ flowchart LR
   recv["트레이스 수신<br/>memory_limiter · 리소스 허용 목록"] --> apm & smp
   subgraph apm["APM 갈래 (모든 스팬)"]
     direction LR
-    f["INTERNAL 스팬 · 헬스체크 ·<br/>SQS 롱폴링 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
+    f["INTERNAL 스팬 · 헬스체크 ·<br/>오류 없는 SQS 롱폴링 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
     f --> sg["servicegraph<br/>서비스 · DB · 외부 호출 간선"]
   end
   subgraph smp["저장 갈래"]
