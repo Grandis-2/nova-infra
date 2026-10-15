@@ -1471,7 +1471,7 @@
     },
     {
       "type": "row",
-      "title": "서비스별 추이",
+      "title": "서비스 맵",
       "id": 20,
       "collapsed": false,
       "gridPos": {
@@ -1479,6 +1479,49 @@
         "w": 24,
         "x": 0,
         "y": 35
+      },
+      "panels": []
+    },
+    {
+      "type": "nodeGraph",
+      "title": "서비스 맵",
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "description": "서비스 사이 · 서비스에서 DB 와 외부 호출로 가는 요청. 노드의 숫자는 초당 요청과 평균 응답 시간, 붉은 테두리는 실패 비율이다. 노드를 누르면 그 서비스의 지표 · 트레이스로 간다. 샘플링 전 모든 요청으로 센다",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "refId": "A",
+          "queryType": "serviceMap"
+        }
+      ],
+      "options": {
+        "nodes": {},
+        "edges": {}
+      },
+      "id": 21,
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      }
+    },
+    {
+      "type": "row",
+      "title": "서비스별 추이",
+      "id": 22,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
       },
       "panels": []
     },
@@ -1539,12 +1582,60 @@
           "exemplar": true
         }
       ],
-      "id": 21,
+      "id": 23,
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
-        "y": 36
+        "y": 49
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "동시 처리 요청",
+      "description": "지금 처리 중인 요청 수(서비스의 모든 태스크 합). TPS 는 그대로인데 이 값이 오르면 요청이 안에서 막혀 있다 — DB 연결 · 외부 호출 대기를 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (service) (label_replace(http_server_active_requests{service_namespace=\"nova\"}, \"service\", \"$1\", \"job\", \"nova/(.+)\"))",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "id": 24,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 49
       }
     },
     {
@@ -1587,12 +1678,12 @@
           "legendFormat": "{{service_name}}"
         }
       ],
-      "id": 22,
+      "id": 25,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 36
+        "w": 12,
+        "x": 0,
+        "y": 57
       }
     },
     {
@@ -1651,12 +1742,12 @@
           "legendFormat": "{{service}}"
         }
       ],
-      "id": 23,
+      "id": 26,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 36
+        "w": 12,
+        "x": 12,
+        "y": 57
       }
     }
   ],

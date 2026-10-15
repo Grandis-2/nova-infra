@@ -12,7 +12,7 @@ nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보
 |---|---|---|---|---|
 | 로그 | 앱 → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
 | 트레이스 | 앱 → OTLP | tail sampling(오류 · 1초 초과는 전부, 나머지 10%), 마스킹 | Tempo → S3 | 14일 |
-| 지표 | 앱 → OTLP, Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
+| 지표 | 앱 → OTLP, Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트), Collector 가 트레이스로 만든 것(span metrics · 서비스 그래프) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
 | AWS 관리형 지표 | Grafana 가 CloudWatch 를 직접 조회 | — | CloudWatch | CloudWatch 기본 |
 
 ```mermaid
@@ -63,7 +63,7 @@ Collector 는 LGTM 구성 요소와 Grafana 의 `/metrics`, obs 호스트의 CPU
 한 호스트의 디렉터리를 쓰기 때문에 배포는 이전 태스크를 내린 뒤 새 태스크를 띄운다. 그동안 몇 분은 수집이 끊긴다.
 
 **3. 손실을 허용하는 경로.**
-Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(768 MiB)를 넘으면 받기를 거부한다. 감사 기록이나 정본(outbox 등)의 근거로 쓰지 않는다.
+Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(1152 MiB)를 넘으면 받기를 거부한다. 감사 기록이나 정본(outbox 등)의 근거로 쓰지 않는다.
 빠지는 데이터는 숨기지 않고 지표(`otelcol_receiver_refused_*`, `*_discarded_*`)와 경보로 드러낸다.
 
 **4. 샘플링은 Collector 에서, 트레이스가 끝난 뒤에.**
@@ -83,34 +83,58 @@ flowchart LR
 
 헬스체크는 `url.path` 가 `/actuator/*` 인 서버 스팬, 빈 롱폴링은 오류 없이 메시지 0건으로 끝난 `ReceiveMessage` 다. 결정을 기다리는 트레이스는 메모리에 최대 5만 건 둔다. 넘치면 오래된 것부터 결정 없이 버린다.
 
-**5. 개인정보는 저장하기 전에 지운다.**
+**5. APM 지표는 샘플링 전에 만든다.**
+Tempo 에 남는 트레이스는 일부라서, 거기서 센 요청 수 · 지연은 오류와 느린 요청 쪽으로 기운다. 그래서 Collector 가 트레이스를 두 갈래로 복제해 한쪽에서는 모든 스팬으로 지표를 만들고, 다른 쪽에서만 샘플링한다.
+
+```mermaid
+flowchart LR
+  recv["트레이스 수신<br/>memory_limiter · 리소스 허용 목록"] --> apm & smp
+  subgraph apm["APM 갈래 (모든 스팬)"]
+    direction LR
+    f["INTERNAL 스팬 · 헬스체크 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
+    f --> sg["servicegraph<br/>서비스 · DB · 외부 호출 간선"]
+  end
+  subgraph smp["저장 갈래"]
+    direction LR
+    tail["tail sampling"] --> mask["마스킹"]
+  end
+  sm & sg --> mimir[("Mimir")]
+  mask --> tempo[("Tempo")]
+```
+
+- span metrics(`traces_spanmetrics_*`)는 서버 · 클라이언트 · 메시지 스팬을 `span_name` · `span_kind` · `status_code` 와 HTTP 상태 · DB · 메시징 종류로 나눠 센다. 사용자 ID 같은 값은 차원에 넣지 않고, 조합이 2000개를 넘으면 나머지는 overflow 한 줄로 묶는다.
+- 서비스 그래프(`traces_service_graph_*`)는 클라이언트 스팬과 서버 스팬을 짝지어 간선을 만든다. 상대가 계측되지 않은 DB · SQS · 외부 API 는 `db.name` · `server.address` 같은 속성으로 가상 노드를 세운다. Grafana 서비스 맵(Tempo 데이터소스의 `serviceMap`)이 이 지표를 읽는다.
+- 대가는 Collector 메모리다. 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 들고 있어 Collector 에 1.5 GiB 를 준다.
+- 샘플링된 트레이스로도 TraceQL 지표(`{...} | rate() by (span.http.route)`, `quantile_over_time`)를 볼 수 있다. Tempo 의 `local-blocks` 프로세서가 최근 블록에서 바로 계산하며 따로 저장하지 않는다. Traces Drilldown 이 이것을 쓴다. 샘플링된 표본이라 비율 · 분포를 볼 때 쓰고, 정확한 수는 span metrics 로 본다.
+
+**6. 개인정보는 저장하기 전에 지운다.**
 조회할 때 가리면 Loki API 를 직접 부를 때 원문이 보인다. 그래서 Collector 에서 원문을 바꿔 저장하고, 되돌릴 수 없다(아래 "저장 전 마스킹").
 
-**6. 카디널리티를 설정으로 묶는다.**
+**7. 카디널리티를 설정으로 묶는다.**
 - Loki 인덱스 라벨은 `service_name` · `service_namespace` · `deployment_environment` 셋뿐이다. 요청마다 다른 값(trace_id, event_id)은 structured metadata 로 둔다.
 - 리소스 속성은 허용 목록에 있는 것만 남긴다. AWS 리소스 감지가 붙이는 `aws.ecs.*` · `cloud.account.id` 에는 계정 ID 가 들어 있어 이것도 버린다.
 - LGTM 자체 `/metrics` 는 대시보드와 경보에 쓰는 지표만 남긴다(`metric_relabel_configs` keep).
 
-**7. 한 대에 맞춘 Mimir 쿼리 설정.**
+**8. 한 대에 맞춘 Mimir 쿼리 설정.**
 쿼리 샤딩은 끈다. 코어가 몇 개 안 되는 한 대에서는 쪼개도 빨라지지 않고 대기열만 찬다.
 테넌트 대기열 한도(`max_outstanding_requests_per_tenant`)는 1000이다. 대시보드 몇 개를 동시에 열어 패널 수십 개가 한꺼번에 조회해도 여유가 있는 값이다. 한도를 넘은 조회는 HTTP 429 로 실패하므로 LGTM 대시보드의 "Mimir 쿼리 대기열"로 지켜본다.
 
-**8. 설정 파일에는 환경마다 다른 값을 넣지 않는다.**
+**9. 설정 파일에는 환경마다 다른 값을 넣지 않는다.**
 버킷 · 보존 기간 · 엔드포인트는 환경 변수로 받는다(`-config.expand-env=true`). 이미지는 태그와 다이제스트로 고정한다.
 
 ## 파일
 
 | 경로 | 내용 |
 |---|---|
-| `collector.yaml` | 수신(OTLP), 긁기(mysqld · LGTM 자체 · hostmetrics), 처리(memory_limiter → 리소스 허용 목록 → tail sampling · 마스킹 → batch), 내보내기(Loki · Tempo · Mimir) |
+| `collector.yaml` | 수신(OTLP), 긁기(mysqld · LGTM 자체 · hostmetrics), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir) |
 | `loki.yaml` | S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
-| `tempo.yaml` | S3 저장, 보존 기간(compactor), WAL, 종료할 때 블록 업로드 |
+| `tempo.yaml` | S3 저장, 보존 기간(compactor), WAL, 종료할 때 블록 업로드, TraceQL 지표(`local-blocks`) |
 | `mimir.yaml` | `-target=all`. S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로 나눔, OTLP 이름 접미사, 쿼리 대기열 · 샤딩 |
-| `grafana/provisioning/datasources/` | Loki · Tempo · Mimir(서로 링크로 이어짐), CloudWatch(태스크 역할) |
+| `grafana/provisioning/datasources/` | Loki · Tempo · Mimir(서로 링크로 이어짐, Tempo 서비스 맵은 Mimir 를 읽음), CloudWatch(태스크 역할) |
 | `grafana/provisioning/dashboards/nova.yaml` | `grafana/dashboards/` 의 하위 디렉터리를 같은 이름의 Grafana 폴더로 읽는다 |
 | `grafana/dashboards/` | 대시보드 JSON (아래 "대시보드") |
 | `grafana/provisioning/alerting/` | `rules.yaml`(경보 규칙), `notify.yaml`(SNS 연락처 · 알림 경로 · Chatbot 메시지 템플릿) |
-| `grafana/provisioning/plugins/none.yaml` | 빈 파일. S3 에는 빈 디렉터리가 없어 이 파일이 없으면 Grafana 가 기동할 때마다 오류 로그를 남긴다 |
+| `grafana/provisioning/plugins/none.yaml` | 빈 설정. 앱 플러그인은 `GF_PLUGINS_PREINSTALL` 로 받는다. S3 에는 빈 디렉터리가 없어 이 파일이 없으면 Grafana 가 기동할 때마다 오류 로그를 남긴다 |
 
 ## 대시보드
 
@@ -118,7 +142,7 @@ flowchart LR
 
 | 폴더 | 대시보드 (uid) | 언제 보나 |
 |---|---|---|
-| `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 모자란 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보 |
+| `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 모자란 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보, 서비스 맵, 서비스별 P99 · 동시 처리 요청 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 HTTP · 외부 호출 · JVM · HikariCP · 로그 · 트레이스 |
 | `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 목표 미달 · 재시작 · 배포, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
@@ -183,11 +207,15 @@ OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_INSTRUMENTATION_AWS_SDK_EXPERIMENTAL_USE_PROPAGATOR_FOR_MESSAGING=true
 OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_MDC_ATTRIBUTES_INCLUDED=traceId
 OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED=event_id,aggregate_type,aggregate_id,event_type,destination
+OTEL_INSTRUMENTATION_HTTP_SERVER_EMIT_EXPERIMENTAL_TELEMETRY=true
+OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trace-id
 ```
 
 - `JAVA_TOOL_OPTIONS` 는 쓰지 않는다. 이미지의 힙 옵션이 그 변수에 들어 있어 덮어쓰면 사라진다.
 - 엔드포인트와 프로토콜은 짝을 맞춘다. `otel.nova.local:4318` 은 `http/protobuf`, gRPC 는 `otel-grpc.nova.local:4317` 이다. 어긋나면 앱 로그에 실패가 한 줄 남을 뿐 아무것도 오지 않는다.
 - MDC 는 `traceId`(요청 ID)만 넘긴다. `subject`(회원 ID)는 넘기지 않는다.
+- 실험 텔레메트리는 동시 처리 요청(`http_server_active_requests`)을 위해 켠다. 같이 켜지는 요청 · 응답 본문 크기 히스토그램은 쓰지 않아 Collector 가 버린다(`filter/unused-metrics`).
+- 요청 헤더 두 개를 스팬 속성(`http.request.header.x-amz-cf-id` · `x-amzn-trace-id`)으로 남긴다. CloudFront · ALB 로그의 요청 ID 와 트레이스를 잇는 열쇠다. 클라이언트가 같은 이름의 헤더를 보내면 그 값이 섞여 들어올 수 있어, Collector 가 AWS 형식만 남긴다(아래 "저장 전 마스킹").
 
 ## 조회
 
@@ -206,6 +234,23 @@ OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED=event_id,aggr
 
 **트레이스.** 로그 줄을 펼쳐 trace_id 의 Tempo 링크로 가거나, 지표 그래프의 exemplar 점에서 바로 간다. 스팬에서는 "Logs for this span" 으로 같은 trace_id 의 로그를 연다.
 
+**APM 지표.** 샘플링 전 모든 스팬에서 센 값이다. `job` 은 앱 지표와 같다.
+
+```
+# 경로별 초당 호출 (서버 스팬)
+sum by (span_name) (rate(traces_spanmetrics_calls_total{job="nova/preorder", span_kind="SPAN_KIND_SERVER"}[5m]))
+# preorder 가 부르는 상대(서비스 · DB · 외부)별 실패 비율
+sum by (server) (rate(traces_service_graph_request_failed_total{client="preorder"}[5m]))
+  / sum by (server) (rate(traces_service_graph_request_total{client="preorder"}[5m]))
+```
+
+**TraceQL 지표.** Tempo 에 남은 트레이스로 계산한다. Explore 의 Tempo TraceQL 편집기에 그대로 넣거나 Traces Drilldown 에서 본다.
+
+```
+{resource.service.name="preorder" && kind=server} | quantile_over_time(duration, .99) by (span.http.route)
+{span.http.request.header.x-amz-cf-id != nil && status=error} | rate()
+```
+
 ## 저장 전 마스킹
 
 Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 표시로 바꾼다(`collector.yaml` 의 `transform/mask`, `transform/mask-spans`). **되돌릴 수 없다.**
@@ -218,7 +263,7 @@ Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 �
 | 휴대전화 `010` · `011` · `016`~`019`, 괄호 · 구분자(`-` `.` 공백) 허용 | `<masked:phone>` |
 
 - **적용 범위**: 로그 본문(맵 · 목록 본문은 JSON 문자열로 바꾼 뒤 적용)과 로그 속성의 모든 문자열 값(`exception.message` · `exception.stacktrace` 포함).
-- **트레이스**: 스팬 속성, 스팬 이벤트 속성(예외), 상태 메시지에 같은 패턴을 적용한다. URL 쿼리 문자열(`url.query` · `url.full` · `http.url` · `http.target`)은 토큰이 패턴에 걸리지 않으므로 값을 모두 지운다. SQL 리터럴은 에이전트가 `?` 로 바꿔 보낸다.
+- **트레이스**: 스팬 속성, 스팬 이벤트 속성(예외), 상태 메시지에 같은 패턴을 적용한다. 엣지 요청 ID 헤더는 형식으로 거른다. `x-amz-cf-id` 는 CloudFront ID 형식(영숫자 · `_` `=` `-` 20~100자)일 때만, `x-amzn-trace-id` 는 `Root=1-<16진 8자리>-<16진 24자리>` 부분만 문자열 하나로 남기고 나머지는 버린다. URL 쿼리 문자열(`url.query` · `url.full` · `http.url` · `http.target`)은 토큰이 패턴에 걸리지 않으므로 값을 모두 지운다. SQL 리터럴은 에이전트가 `?` 로 바꿔 보낸다.
 - **경계**: 번호 앞뒤가 16진수 문자이면 건드리지 않는다. 그래서 UUID · trace ID 안의 숫자는 걸리지 않는다.
 - **`error_mode: ignore`**: 문 하나가 실패하면 그 문만 건너뛴다. `propagate` 로 두면 배치 전체를 버린다(503).
 - **잡지 못하는 것**: 실명 · 주소 · 유선 전화 · 외국 번호, 16진수 글자에 바로 붙은 번호(`phone010…`), 같은 줄에 `for key` 가 없는 중복 키 값, 맵 · 목록 속성 안의 값, 바이트 본문, 스코프 속성.
@@ -286,7 +331,8 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 ### 작업 정의 제약 (`../main.tf`)
 
 - 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`(셋 다 UID 10001), grafana `/var/lib/grafana`(UID 472).
-- Collector 메모리는 1 GiB 이상 준다. tail sampling 이 결정 전 트레이스(최대 5만 건)를 메모리에 들고 있다.
+- Collector 메모리는 1.5 GiB 를 준다. tail sampling 이 결정 전 트레이스(최대 5만 건)를, servicegraph 가 짝을 기다리는 간선을 메모리에 들고 있다. `memory_limiter` 는 이 값의 75%(1152 MiB)다.
+- Grafana 는 기동할 때 Drilldown 앱(Traces · Logs · Metrics · Profiles)을 grafana.com 에서 받는다. `GF_PLUGINS_PREINSTALL` 로 버전을 고정해 재배포마다 화면이 바뀌지 않게 한다. 올릴 때는 이 값을 바꾼다.
 
 ### admin 비밀번호 교체
 

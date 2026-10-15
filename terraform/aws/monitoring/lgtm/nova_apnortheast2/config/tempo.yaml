@@ -62,6 +62,27 @@ storage:
     local:
       path: /var/tempo/blocks
 
+# TraceQL 지표 쿼리({ … } | rate() 등). Grafana Traces Drilldown 이 이것으로 속성별 처리량 · 오류 · 지연을 그린다.
+# local-blocks 가 최근 스팬을 따로 블록으로 들고 최근 구간 질의에 답한다. 지난 구간은 S3 의 블록을 읽는다.
+# 받은 스팬(샘플링 뒤)만 보므로 비율 · 처리량의 기준은 Collector 의 spanmetrics 다. 여기는 오류 · 느린 요청의 속성 비교에 쓴다.
+metrics_generator:
+  ring:
+    kvstore:
+      store: inmemory
+  processor:
+    local_blocks:
+      filter_server_spans: false
+      flush_to_storage: false
+  traces_storage:
+    path: /var/tempo/generator/traces
+  storage:
+    path: /var/tempo/generator/wal
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [local-blocks]
+
 # 사용 통계를 grafana.com 으로 보내지 않는다.
 usage_report:
   reporting_enabled: false

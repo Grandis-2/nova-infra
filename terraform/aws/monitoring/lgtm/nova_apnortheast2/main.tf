@@ -134,8 +134,9 @@ locals {
         name      = "otel-collector"
         image     = local.obs_images.otel_collector
         essential = true
-        memory    = 1024
-        command   = ["--config=/config/collector.yaml"]
+        # tail_sampling(결정 전 트레이스)과 servicegraph(짝을 기다리는 스팬)가 메모리를 쓴다. memory_limiter 는 이 안에서 1152 MiB
+        memory  = 1536
+        command = ["--config=/config/collector.yaml"]
         environment = [
           { name = "LOKI_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.loki_http}/otlp" },
           # gRPC 는 localhost 를 ::1 부터 붙어 한 번씩 실패 로그를 남긴다. IPv4 로 고정한다
@@ -250,6 +251,8 @@ locals {
           { name = "GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES", value = "false" },
           { name = "GF_NEWS_NEWS_FEED_ENABLED", value = "false" },
           { name = "GF_PLUGINS_PLUGIN_ADMIN_ENABLED", value = "false" },
+          # Drilldown 앱(로그 · 트레이스 · 지표 · 프로파일)은 기동 때 grafana.com 에서 받는다. 버전을 고정해 재배포마다 바뀌지 않게 한다
+          { name = "GF_PLUGINS_PREINSTALL", value = "grafana-exploretraces-app@2.2.1,grafana-lokiexplore-app@2.6.0,grafana-metricsdrilldown-app@2.5.1,grafana-pyroscope-app@2.3.1" },
           { name = "LOKI_URL", value = "http://localhost:${local.obs_ports.loki_http}" },
           { name = "TEMPO_URL", value = "http://localhost:${local.obs_ports.tempo_http}" },
           { name = "MIMIR_URL", value = "http://localhost:${local.obs_ports.mimir_http}/prometheus" },
