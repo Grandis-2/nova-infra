@@ -30,7 +30,7 @@ db: shop
 redis: main
 
 queues:
-  send: [preorder-register, preorder-cancel, order-events, waitingroom-events]
+  send: [preorder-register, preorder-cancel, order-events, waitingroom-events, notification]
   consume: [preorder-events]
   dlq: [preorder-events]          # DLQ 메시지를 DB 로 옮긴다
 

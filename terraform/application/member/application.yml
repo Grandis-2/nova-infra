@@ -1,5 +1,5 @@
 # member — 인증 · 회원 · JWKS 게시
-# 인프라가 채우는 값(이름, 포트, DB · Redis 주소)과 비밀은 적지 않는다.
+# 인프라가 채우는 값(이름, 포트, DB · Redis 주소, SQS 리전)과 비밀은 적지 않는다.
 # 비밀: JWT_PRIVATEKEY · ADMIN_PASSWORDHASH (service.yml generated_secrets), KAKAO_CLIENTSECRET (secrets.sops.yml)
 spring:
   datasource:
@@ -83,3 +83,20 @@ jwt:
   private-key: ${JWT_PRIVATEKEY}
   access-token-validity: 30m
   refresh-token-validity: 14d
+
+nova:
+  sqs:
+    api-call-timeout: 3s
+    # 알림 저장(contracts/notification-events.md). 큐는 이름으로 찾는다(리전은 인프라가 채운다)
+    consumer:
+      enabled: true
+      queue: notification
+      concurrency: 2         # 한 건 100ms 안팎(NCP 왕복, 추정)이라 초당 20건쯤. 밀리면 member.notifications.lag 가 는다. DB 풀 10 안에서
+      wait-seconds: 20
+      # 한 묶음은 차례로 처리한다. DB 가 끊기면 건마다 연결 대기(Hikari 기본 30s)가 걸려 5건이면 150s — 가시성이 그보다 짧으면
+      # 처리 중인 메시지가 다시 보여 다른 작업이 받고, 받은 횟수가 헛되이 올라 일시 오류인데도 DLQ 로 간다
+      max-messages: 5
+      visibility: 3m
+      # 일시 오류(DB 순단)는 5번 다시 받다가 DLQ 로 간다. 30s 면 그때까지 6~12분이라 짧은 순단에 DLQ 가 차지 않는다(5s 면 1~3분)
+      backoff-base: 30s
+      backoff-max: 5m

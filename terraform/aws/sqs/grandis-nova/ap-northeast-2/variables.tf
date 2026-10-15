@@ -8,7 +8,7 @@ variable "queues" {
     "preorder-events",    # order, waitingroom, catalog → preorder
     "order-events",       # preorder, catalog, payment → order
     "payment-events",     # order → payment
-    "notification",       # → worker : 알림
+    "notification",       # preorder, order → member : 알림
     "waitingroom-events", # preorder → waitingroom
   ]
 }

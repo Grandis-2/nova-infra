@@ -35,5 +35,5 @@ db: shop
 redis: main                     # 토큰 폐기 여부 확인
 
 queues:
-  send: [payment-events, preorder-events, order-events, draw-register]   # order-events 는 지연 재처리(defer)할 때 자기 큐에 다시 넣는다. draw-register 는 드로우 응모 · 추첨 요청
+  send: [payment-events, preorder-events, order-events, draw-register, notification]   # order-events 는 지연 재처리(defer)할 때 자기 큐에 다시 넣는다. draw-register 는 드로우 응모 · 추첨 요청
   consume: [order-events]

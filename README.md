@@ -35,7 +35,7 @@
 | API 진입 | CloudFront + WAF (`api.grandis-nova.link`) → ALB (HTTPS) → ECS |
 | 이미지 | S3 업로드 버킷 → CloudFront (`cdn.grandis-nova.link`, OAC) |
 | 애플리케이션 | ECS Fargate Spot, 2 AZ (2a · 2c) |
-| 캐시 · 메시지 | ElastiCache Valkey 9.1 (TLS), SQS 큐 7개 + DLQ |
+| 캐시 · 메시지 | ElastiCache Valkey 9.1 (TLS), SQS 큐 8개 + DLQ |
 | DB | NCP Cloud DB for MySQL. NAT 인스턴스 2대의 고정 IP로만 접속 (TLS) |
 | 서브넷 | public (ALB, NAT) · app (ECS) · db (Valkey), AZ마다 하나씩 총 6개 |
 
