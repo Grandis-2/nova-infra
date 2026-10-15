@@ -258,6 +258,9 @@ flowchart LR
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회 자체가 실패하면 Error 상태 알림이 따로 간다.
 - 엣지 문제는 CloudWatch 경보가 본다(monitoring/cloudwatch 스택 `certs_alb.tf`): 인증서 만료 14일 전(ALB · CloudFront 인증서, 트래픽과 무관), ALB 가 직접 만든 4xx 비율 50% 초과(원본 확인 헤더 · 리스너 규칙 어긋남, 요청 5분 20건 이상일 때 15분 연속. 기준은 `alb_elb_4xx_ratio_threshold`).
 - RDS 의 CPU · 여유 메모리 · 남은 스토리지도 CloudWatch 경보(`rds_instance_ids`)가 맡는다.
+- ECS 서비스 상태는 CloudWatch 가 본다(monitoring/cloudwatch 스택). 서비스별 "태스크 0개"(`AWS/ECS` `LiveTaskCount` < 1, 5분)와
+  ECS 이벤트 경보(`ecs_events.tf`) — 배포 실패(되돌림), 태스크 배치 · 설정 실패, 태스크 죽음(필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패. 배포 · 스케일 인 · Spot 회수는 뺀다).
+  Container Insights 를 쓰지 않아 "목표 대비 모자란 태스크" 수치 대신 원인이 되는 사건을 알린다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식일 때만 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 그 JSON 을 만든다.
 
 ## 경보 대응

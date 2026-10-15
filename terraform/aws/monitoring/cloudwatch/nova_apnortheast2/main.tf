@@ -113,10 +113,11 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
 resource "aws_cloudwatch_metric_alarm" "no_running_tasks" {
   for_each = local.service_names
 
-  alarm_name          = "${local.name_prefix}-${each.key}-no-tasks"
-  alarm_description   = "${each.value} has no running tasks. Check stopped task reasons and logs"
-  namespace           = "ECS/ContainerInsights"
-  metric_name         = "RunningTaskCount"
+  alarm_name        = "${local.name_prefix}-${each.key}-no-tasks"
+  alarm_description = "${each.value} has no running tasks. Check stopped task reasons and logs"
+  # AWS/ECS 의 무료 태스크 수 지표. Container Insights 를 쓰지 않는다
+  namespace           = "AWS/ECS"
+  metric_name         = "LiveTaskCount"
   statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 5 # 배포 · singleton 재시작으로 잠깐 0 이 되는 것은 넘긴다

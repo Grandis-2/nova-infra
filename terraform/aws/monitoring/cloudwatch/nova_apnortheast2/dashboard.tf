@@ -51,14 +51,15 @@ resource "aws_cloudwatch_dashboard" "this" {
         width  = 12
         height = 6
         properties = {
-          title  = "서비스별 실행 태스크 수"
+          # AWS/ECS 의 무료 태스크 수 지표(Container Insights 를 쓰지 않는다)
+          title  = "서비스별 활성 태스크 수"
           region = var.aws_region
           view   = "timeSeries"
-          stat   = "Average"
+          stat   = "Maximum"
           period = 60
           metrics = [
             for name in values(local.service_names) :
-            ["ECS/ContainerInsights", "RunningTaskCount", "ClusterName", local.cluster_name, "ServiceName", name]
+            ["AWS/ECS", "LiveTaskCount", "ClusterName", local.cluster_name, "ServiceName", name]
           ]
         }
       },
