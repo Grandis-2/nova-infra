@@ -83,7 +83,7 @@ resource "aws_cloudwatch_event_target" "ecs" {
   arn       = aws_sns_topic.alerts.arn
 
   input_transformer {
-    input_paths    = each.value.paths
+    input_paths = each.value.paths
     # jsonencode 는 < > 를 \u003c \u003e 로 바꾼다. 그러면 EventBridge 가 <자리> 를 채우지 못해 되돌린다
     input_template = replace(replace(jsonencode({ version = "1.0", source = "custom", content = { title = each.value.title, description = each.value.template } }), "\\u003c", "<"), "\\u003e", ">")
   }
