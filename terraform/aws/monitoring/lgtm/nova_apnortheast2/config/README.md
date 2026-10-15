@@ -91,7 +91,7 @@ flowchart LR
   recv["트레이스 수신<br/>memory_limiter · 리소스 허용 목록"] --> apm & smp
   subgraph apm["APM 갈래 (모든 스팬)"]
     direction LR
-    f["INTERNAL 스팬 · 헬스체크 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
+    f["INTERNAL 스팬 · 헬스체크 ·<br/>빈 SQS 롱폴링 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
     f --> sg["servicegraph<br/>서비스 · DB · 외부 호출 간선"]
   end
   subgraph smp["저장 갈래"]
