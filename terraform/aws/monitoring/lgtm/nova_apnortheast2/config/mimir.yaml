@@ -131,6 +131,11 @@ limits:
   # 보내는 순서가 섞이면 이미 받은 시각보다 이른 샘플이 온다. 이 창이 없으면 그 샘플을 버린다(err-mimir-sample-out-of-order).
   # 게이트웨이 재시도(15분)와 배포 때 두 태스크가 겹치는 시간을 덮는다
   out_of_order_time_window: 30m
+  # 수집 한도. 값은 기본값이고, 경보(rules.yaml obs-cardinality-limit)가 이 숫자로 사용률을 낸다 — 바꾸면 경보 식도 같이 바꾼다.
+  # 넘으면 새 시계열 · 샘플을 버린다(cortex_discarded_samples_total 의 reason, 경보 obs-storage-rejects)
+  max_global_series_per_user: 150000
+  ingestion_rate: 10000
+  ingestion_burst_size: 200000
 
 # 사용 통계를 grafana.com 으로 보내지 않는다.
 usage_stats:

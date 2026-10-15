@@ -1,7 +1,7 @@
 {
   "uid": "nova-compute",
   "title": "nova · ECS · 컴퓨팅",
-  "description": "nova-prod 클러스터의 서비스 · 태스크와 NAT · obs EC2. CloudWatch(Container Insights · AWS/ECS · AWS/EC2)와 앱 지표",
+  "description": "nova-prod 클러스터의 서비스 · 태스크와 NAT · obs EC2. CloudWatch(AWS/ECS · AWS/EC2)와 앱 지표",
   "tags": [
     "nova",
     "platform"
@@ -101,7 +101,7 @@
     {
       "type": "stat",
       "title": "실행 중 태스크",
-      "description": "nova-prod 클러스터 전체(obs 포함)",
+      "description": "nova-prod 클러스터 전체(obs · 게이트웨이 포함). AWS/ECS 서비스 CPU 지표의 표본 수로 센다. 서비스가 원하는 수보다 모자라면 CloudWatch '태스크 0개' 경보와 ECS 이벤트 경보(배포 · 배치 실패, 컨테이너 종료)가 알린다",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -149,28 +149,28 @@
           "region": "default",
           "id": "",
           "period": "300",
-          "label": "실행 중 태스크",
+          "label": "태스크",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"RunningTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300))",
+          "expression": "SUM(SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"CPUUtilization\" ClusterName=\"nova-prod\"', 'SampleCount', 300) / 5)",
           "statistic": "Average"
         }
       ],
       "id": 1,
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 8,
         "x": 0,
         "y": 0
       }
     },
     {
       "type": "stat",
-      "title": "목표 태스크",
-      "description": "서비스 목표 수의 합. 오토스케일링이 바꾼다",
+      "title": "새로 뜬 태스크 (기간 합)",
+      "description": "선택한 기간에 처음 지표를 보낸 앱 태스크 수(배포 · 스케일 아웃 · 장애 재시작). 배포가 없는데 늘면 태스크가 죽고 다시 뜨는 중이다",
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "mimir"
       },
       "fieldConfig": {
         "defaults": {
@@ -181,6 +181,14 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
               }
             ]
           },
@@ -207,240 +215,20 @@
       "targets": [
         {
           "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
+            "type": "prometheus",
+            "uid": "mimir"
           },
           "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "목표 태스크",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"DesiredTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300))",
-          "statistic": "Average"
+          "expr": "sum(count_over_time((count by (job, instance) (target_info{job=~\"nova/.+\"}) unless count by (job, instance) (target_info{job=~\"nova/.+\"} offset 5m))[$__range:5m])) or vector(0)",
+          "legendFormat": "",
+          "instant": true
         }
       ],
       "id": 2,
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 0
-      }
-    },
-    {
-      "type": "stat",
-      "title": "모자란 태스크",
-      "description": "목표 - 실행 중. 배포 · 교체 중에는 잠깐 1 이상일 수 있다. 오래 남으면 태스크가 뜨지 못하는 것이다(이미지 · 헬스체크 · 용량)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "모자람",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"DesiredTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300)) - SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"RunningTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300))",
-          "statistic": "Average"
-        }
-      ],
-      "id": 3,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
+        "w": 8,
         "x": 8,
-        "y": 0
-      }
-    },
-    {
-      "type": "stat",
-      "title": "뜨는 중 (Pending)",
-      "description": "자리를 기다리거나 이미지를 받는 중인 태스크",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "뜨는 중 (Pending)",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"PendingTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300))",
-          "statistic": "Average"
-        }
-      ],
-      "id": 4,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 0
-      }
-    },
-    {
-      "type": "stat",
-      "title": "재시작 (기간 합)",
-      "description": "선택한 기간 동안 컨테이너가 다시 시작한 횟수(OOM · 헬스체크 실패 등)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 5
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "재시작 (기간 합)",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"RestartCount\" ClusterName=\"nova-prod\"', 'Sum', 300))",
-          "statistic": "Average"
-        }
-      ],
-      "id": 5,
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
         "y": 0
       }
     },
@@ -561,18 +349,18 @@
           "statistic": "Average"
         }
       ],
-      "id": 6,
+      "id": 3,
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 20,
+        "w": 8,
+        "x": 16,
         "y": 0
       }
     },
     {
       "type": "row",
       "title": "서비스별 부하",
-      "id": 7,
+      "id": 4,
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -666,7 +454,7 @@
           }
         }
       ],
-      "id": 8,
+      "id": 5,
       "gridPos": {
         "h": 9,
         "w": 8,
@@ -758,7 +546,7 @@
           }
         }
       ],
-      "id": 9,
+      "id": 6,
       "gridPos": {
         "h": 9,
         "w": 8,
@@ -843,7 +631,7 @@
           }
         }
       ],
-      "id": 10,
+      "id": 7,
       "gridPos": {
         "h": 9,
         "w": 8,
@@ -854,7 +642,7 @@
     {
       "type": "row",
       "title": "서비스별 추이",
-      "id": 11,
+      "id": 8,
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -927,7 +715,7 @@
           "statistic": "Average"
         }
       ],
-      "id": 12,
+      "id": 9,
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -998,7 +786,7 @@
           "statistic": "Average"
         }
       ],
-      "id": 13,
+      "id": 10,
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -1009,7 +797,7 @@
     {
       "type": "timeseries",
       "title": "실행 중 태스크",
-      "description": "오토스케일링 · 배포로 바뀐다",
+      "description": "오토스케일링 · 배포로 바뀐다. 배포 중에는 옛 · 새 태스크가 겹쳐 잠깐 는다",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -1052,25 +840,25 @@
           "label": "${PROP('Dim.ServiceName')}",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"RunningTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300)",
+          "expression": "SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"CPUUtilization\" ClusterName=\"nova-prod\"', 'SampleCount', 300) / 5",
           "statistic": "Average"
         }
       ],
-      "id": 14,
+      "id": 11,
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
         "y": 23
       }
     },
     {
       "type": "timeseries",
-      "title": "재시작",
-      "description": "5분마다 다시 시작한 컨테이너 수",
+      "title": "새로 뜬 태스크",
+      "description": "5분마다 처음 보인 앱 태스크 수. 배포 표시 없이 계속 생기면 태스크가 죽고 다시 뜨는 중이다(OOM · 헬스체크 실패)",
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "mimir"
       },
       "fieldConfig": {
         "defaults": {
@@ -1096,265 +884,32 @@
       "targets": [
         {
           "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
+            "type": "prometheus",
+            "uid": "mimir"
           },
           "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.ServiceName')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"RestartCount\" ClusterName=\"nova-prod\"', 'Sum', 300)",
-          "statistic": "Average"
+          "expr": "sum by (service) (label_replace(count by (job, instance) (target_info{job=~\"nova/.+\"}) unless count by (job, instance) (target_info{job=~\"nova/.+\"} offset 5m), \"service\", \"$1\", \"job\", \"nova/(.+)\"))",
+          "legendFormat": "{{service}}"
         }
       ],
-      "id": 15,
+      "id": 12,
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
+        "w": 12,
+        "x": 12,
         "y": 23
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "배포 중",
-      "description": "서비스의 배포 수. 2 이상이면 새 배포가 진행 중이다(롤링 · Blue/Green)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.ServiceName')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"DeploymentCount\" ClusterName=\"nova-prod\"', 'Maximum', 300)",
-          "statistic": "Average"
-        }
-      ],
-      "id": 16,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 23
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "네트워크 받음",
-      "description": "",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "Bps",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.ServiceName')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"NetworkRxBytes\" ClusterName=\"nova-prod\"', 'Sum', 300) / 300",
-          "statistic": "Average"
-        }
-      ],
-      "id": 17,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 31
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "네트워크 보냄",
-      "description": "",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "Bps",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.ServiceName')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"NetworkTxBytes\" ClusterName=\"nova-prod\"', 'Sum', 300) / 300",
-          "statistic": "Average"
-        }
-      ],
-      "id": 18,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 31
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "임시 스토리지 사용",
-      "description": "태스크 로컬 디스크(Fargate 기본 20 GiB). 로그 · 임시 파일이 쌓이면 는다",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "decgbytes",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.ServiceName')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"EphemeralStorageUtilized\" ClusterName=\"nova-prod\"', 'Maximum', 300)",
-          "statistic": "Average"
-        }
-      ],
-      "id": 19,
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 31
       }
     },
     {
       "type": "row",
       "title": "EC2 (NAT · obs)",
-      "id": 20,
+      "id": 13,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 31
       },
       "panels": []
     },
@@ -1427,12 +982,12 @@
           "expression": ""
         }
       ],
-      "id": 21,
+      "id": 14,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 40
+        "y": 32
       }
     },
     {
@@ -1488,12 +1043,12 @@
           "expression": ""
         }
       ],
-      "id": 22,
+      "id": 15,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 40
+        "y": 32
       }
     },
     {
@@ -1549,12 +1104,12 @@
           "expression": ""
         }
       ],
-      "id": 23,
+      "id": 16,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 40
+        "y": 32
       }
     },
     {
@@ -1610,12 +1165,12 @@
           "expression": ""
         }
       ],
-      "id": 24,
+      "id": 17,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 48
+        "y": 40
       }
     },
     {
@@ -1687,12 +1242,12 @@
           "expression": ""
         }
       ],
-      "id": 25,
+      "id": 18,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 48
+        "y": 40
       }
     },
     {
@@ -1770,12 +1325,12 @@
           "expression": ""
         }
       ],
-      "id": 26,
+      "id": 19,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 48
+        "y": 40
       }
     }
   ],

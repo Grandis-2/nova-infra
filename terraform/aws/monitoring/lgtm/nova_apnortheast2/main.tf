@@ -500,11 +500,12 @@ resource "aws_ecs_service" "obs" {
 # ── obs 자체 감시 (CloudWatch) ───────────────────────────────
 # obs 가 죽으면 Grafana 경보도 같이 죽는다. 그래서 obs 자신은 CloudWatch 로 본다
 resource "aws_cloudwatch_metric_alarm" "obs_no_task" {
-  alarm_name          = "${local.obs_name}-no-tasks"
-  alarm_description   = "Observability stack has no running task. Logs, traces and metrics are being dropped"
-  namespace           = "ECS/ContainerInsights"
-  metric_name         = "RunningTaskCount"
-  statistic           = "Maximum"
+  alarm_name        = "${local.obs_name}-no-tasks"
+  alarm_description = "Observability stack has no running task. Dashboards and Grafana alerts are down, the OTel gateway is queueing"
+  # 서비스 CPU 지표(AWS/ECS, 무료)는 태스크마다 1분에 한 번 찍힌다. 표본 수 = 실행 중 태스크 수, 태스크가 없으면 결측
+  namespace           = "AWS/ECS"
+  metric_name         = "CPUUtilization"
+  statistic           = "SampleCount"
   period              = 60
   evaluation_periods  = 10 # 배포 때 옛 태스크를 먼저 내리므로 잠깐 0 이 된다
   threshold           = 1

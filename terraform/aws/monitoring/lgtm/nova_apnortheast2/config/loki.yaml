@@ -69,6 +69,11 @@ limits_config:
   # 보존 기간보다 먼 과거를 물으면 지워진 구간을 빈 결과로 돌려주는 대신 범위를 잘라 준다.
   max_query_lookback: ${LOKI_RETENTION_PERIOD}
   allow_structured_metadata: true
+  # 수집 한도. 값은 기본값이고, 경보(rules.yaml obs-cardinality-limit)가 스트림 수를 이 숫자로 나눈다 — 바꾸면 경보 식도 같이 바꾼다.
+  # 넘으면 버린다(loki_discarded_samples_total 의 reason)
+  max_global_streams_per_user: 5000
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 6
   volume_enabled: true
   # 삭제 요청 API 를 끈다. 보존 기간에 따른 삭제(compactor)와는 별개다.
   # Loki API 에는 인증이 없어(auth_enabled: false) 같은 컨테이너 망의 누구든 지울 수 있게 되기 때문이다.

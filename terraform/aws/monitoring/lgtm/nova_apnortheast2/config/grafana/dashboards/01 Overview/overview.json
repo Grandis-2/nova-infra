@@ -604,11 +604,11 @@
     },
     {
       "type": "stat",
-      "title": "모자란 태스크",
-      "description": "목표 태스크 수 - 실행 중 태스크 수(모든 서비스). 배포 · 교체 중에는 잠깐 1 이상일 수 있다. CloudWatch",
+      "title": "새로 뜬 태스크 (1시간)",
+      "description": "최근 1시간에 처음 지표를 보낸 앱 태스크 수(배포 · 스케일 아웃 · 장애 재시작). 배포가 없는데 늘면 태스크가 죽고 다시 뜨는 중이다. 태스크가 아예 뜨지 못하면 CloudWatch 경보(태스크 0개 · ECS 이벤트)가 알린다",
       "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
+        "type": "prometheus",
+        "uid": "mimir"
       },
       "fieldConfig": {
         "defaults": {
@@ -621,8 +621,12 @@
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 5
+              },
+              {
                 "color": "red",
-                "value": 1
+                "value": 20
               }
             ]
           },
@@ -649,19 +653,13 @@
       "targets": [
         {
           "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
+            "type": "prometheus",
+            "uid": "mimir"
           },
           "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "모자람",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"DesiredTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300)) - SUM(SEARCH('{ECS/ContainerInsights,ClusterName,ServiceName} MetricName=\"RunningTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300))",
-          "statistic": "Average"
+          "expr": "sum(count_over_time((count by (job, instance) (target_info{job=~\"nova/.+\"}) unless count by (job, instance) (target_info{job=~\"nova/.+\"} offset 5m))[1h:5m])) or vector(0)",
+          "legendFormat": "",
+          "instant": true
         }
       ],
       "id": 10,

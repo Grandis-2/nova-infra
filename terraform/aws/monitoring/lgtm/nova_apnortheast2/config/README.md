@@ -159,13 +159,13 @@ flowchart LR
 
 | 폴더 | 대시보드 (uid) | 언제 보나 |
 |---|---|---|
-| `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 모자란 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보, 서비스 맵, 서비스별 P99 · 동시 처리 요청. SLO (`nova-slo`): 서비스별 30일 가용성 · 응답 시간, 남은 오류 예산, 소진 속도 |
+| `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 새로 뜬 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보, 서비스 맵, 서비스별 P99 · 동시 처리 요청. SLO (`nova-slo`): 서비스별 30일 가용성 · 응답 시간, 남은 오류 예산, 소진 속도 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 APM 화면. Apdex · 엔드포인트 표(시간 비중 순) · 처리 시간 구성(DB · 외부 · 메시징 · 자체) · 서비스 맵과 호출 상대 · 지난주 대비 · 오류 그룹. JVM · 외부 호출 · HikariCP 는 접힌 행 |
 | `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
-| `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 목표 미달 · 재시작 · 배포, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
+| `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
 | `50 URLs` | URL 목록 (`nova-url`) · URL 그리드 (`nova-url-grid`) · URL 상세 (`nova-url-detail`) | 실제 요청으로 본 API(메서드 + 경로)별 값. 목록은 API × 시간 히트맵, API 표(요청 수 · 지난주 대비 증감 · 성공률 · 4xx · 1초 초과 비율 · P95 · P99 · P99 증감), 새로 생긴 · 사라진 API(최근 7일), 서비스 시간대 잔디, 경로마다 펼쳐 보는 행. 그리드는 API 마다 카드. 상세는 401 · 403 · 404 · 429 수, 응답 코드별 요청량, 지연 분포, 요청량 · P99 · 성공률 지난주 대비, 시간 구성(트레이스 표본), 날짜 × 시각(KST) 잔디, 느린/오류 트레이스 |
-| `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지 |
+| `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지, 카디널리티 · 한도(시계열 · 스트림 한도 사용률, 시계열 많은 지표 · job Top 10, 게이트웨이 전송 큐) |
 
 - 폴더 앞 번호는 목록 순서다. Grafana 는 폴더를 이름순으로만 정렬한다. 사이에 폴더를 끼울 수 있게 10 단위로 띄운다.
 - 장애를 볼 때는 아래 순서로 내려간다. 표의 서비스 이름 · 경로, 서비스 맵의 노드, exemplar 가 다음 화면으로 이어 준다.
@@ -195,7 +195,9 @@ flowchart LR
 - 경로 변수에는 정규식 문자가 든 값(`/orders/{id}`)이 있다. PromQL 은 `http_route=~"$route"` 로 쓴다. All 을 둔 변수는 Grafana 가 값을 정규식 이스케이프해 넣는다.
   TraceQL 은 Grafana 가 값을 그대로 넣고 큰따옴표 문자열은 `\*` 같은 이스케이프를 받지 않는다. 그래서 ``span.http.route=~`${route:regex}` `` 처럼 regex 형식을 백틱 문자열에 넣는다.
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
-  개요와 MySQL 은 Mimir 지표가 주라 1분이다. 개요는 자주 열리는 화면이라 CloudWatch 패널을 셋(ALB 연결 · 모자란 태스크 · DLQ)만 둔다.
+  개요와 MySQL 은 Mimir 지표가 주라 1분이다. 개요는 자주 열리는 화면이라 CloudWatch 패널을 둘(ALB 연결 · DLQ)만 둔다.
+- 태스크 수는 Container Insights 대신 무료 지표로 본다. 실행 중 태스크는 `AWS/ECS` 서비스 CPU 지표의 표본 수(태스크마다 1분에 한 번 찍힌다)이고, 새로 뜬 태스크는 `target_info` 에 처음 보인 instance 수다(배포 · 스케일 아웃 · 장애 재시작을 모두 센다).
+  "목표 대비 모자란 태스크" 는 무료 지표가 없어 두지 않는다. 태스크가 뜨지 못하는 것은 CloudWatch 경보(태스크 0개 · ECS 이벤트)가 알린다.
 - CloudFront 배포는 `Product=nova` 태그, NAT · obs 인스턴스는 이름 태그로 고른다. ID 를 대시보드에 적지 않아 다시 만들어지거나 ASG 가 교체해도 따라간다.
 - `otelcol.json` 은 grafana.com 15983 rev 31 을 가져온 것이다. 원본과 다른 곳은 uid · `nova` 태그 · 데이터소스(Mimir) · job(`otel-gateway`) 기본값뿐이다. obs Collector 는 job 목록에서 `otelcol-contrib` 을 고른다. 새 리비전으로 바꿀 때도 이 네 곳만 다시 맞춘다.
 
@@ -244,9 +246,13 @@ flowchart LR
 | MySQL 수집 끊김 | `mysql_up` 또는 exporter 수집 대상의 `up` < 1 (exporter 를 띄운 환경만) | 5분 | critical |
 | MySQL 연결 사용률 | 연결 수 / max_connections > 80% | 10분 | warning |
 | MySQL 오래 도는 쿼리 | 상태별 실행 중 쿼리 시간 합 > 60초 (RDS 만) | 2분 | warning |
-| obs 수집 실패 | Collector 의 수신 거부 · 내보내기 실패 > 0 | 10분 | warning |
+| obs 수집 실패 | Collector 의 수신 거부 · 내보내기 실패 · 큐가 가득 차 버림 > 0 | 10분 | warning |
 | obs 저장소 거부 | Loki · Tempo · Mimir 가 버린 로그 · 스팬 · 샘플 > 0 (job · reason 별) | 10분 | warning |
 | obs 디스크 사용률 | obs 호스트 마운트별 사용률 > 80% | 15분 | warning |
+| obs 저장 한도 근접 | Mimir 활성 시계열 / 15만, Loki 스트림 / 5000 > 70% | 15분 | warning |
+| Loki 수집량 급증 | 최근 1시간 수집 바이트 > 지난주 같은 시각의 3배 그리고 초당 10 KiB 이상 | 30분 | warning |
+| APM 지표 라벨 조합 넘침 | span metrics 의 `otel_metric_overflow="true"` 시계열이 생김 | 5분 | warning |
+| 게이트웨이 전송 큐 적체 | 내보내기별 큐 사용률 > 50% | 10분 | warning |
 
 - 5xx 비율은 고정 기준(5분 5%) 경보를 두지 않는다. SLO 가용성 소진 속도 경보가 더 일찍(1.44%), 더 적게 울린다. 파일에서 규칙을 빼도 Grafana 는 지우지 않으므로 `rules.yaml` 의 `deleteRules` 로 지운다.
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회 자체가 실패하면 Error 상태 알림이 따로 간다.
@@ -307,6 +313,27 @@ LGTM 대시보드의 "저장소가 버린 데이터"에서 reason 을 본다. �
 ### obs 디스크 사용률
 
 LGTM 대시보드에서 어느 마운트(루트 · 데이터 EBS)인지 본다. 데이터 EBS 면 S3 로 올리지 못한 WAL · 블록이 쌓였는지(저장소 거부 · 내보내기 실패) 먼저 본다.
+
+### obs 저장 한도 근접
+
+한도에 닿으면 새 시계열 · 스트림이 조용히 버려진다(그때는 obs 저장소 거부 경보가 온다).
+
+1. LGTM 대시보드 "카디널리티 · 한도" 의 시계열 많은 지표 · job Top 10 에서 무엇이 늘었는지 본다.
+2. 앱 지표면 라벨에 값이 많은 것(URL 원문 · ID)이 붙지 않았는지, 수집 대상이면 `collector.yaml` 의 긁기 허용 목록을 본다.
+3. 늘어난 것이 정상이면 한도를 올린다. `mimir.yaml` · `loki.yaml` 의 값과 `rules.yaml` 경보 식의 나누는 수, `lgtm.json` 패널 식을 같이 바꾼다.
+
+### Loki 수집량 급증
+
+Explore 에서 `sum by (service_name) (bytes_over_time({service_namespace="nova"}[5m]))` 로 어느 서비스인지 찾는다. 같은 줄이 반복되면(오류 루프 · 디버그 로그) 앱 쪽 문제다. 수집 한도(4 MB/s)에 닿으면 obs 저장소 거부(`rate_limited`)도 같이 온다.
+
+### APM 지표 라벨 조합 넘침
+
+span metrics 라벨(서비스 · 스팬 이름 · 종류 · 상태 · HTTP 상태 · DB · 메시징 시스템) 조합이 게이트웨이 상한(2000)을 넘었다. 넘친 것은 한 시계열로 합쳐져 서비스 상세의 엔드포인트 · 시간 구성이 틀어진다.
+스팬 이름에 경로 템플릿 대신 원문 URL 이 들어오는 서비스가 있는지 시계열 많은 지표 Top 10 과 Tempo 에서 본다. 정상 증가면 `gateway/collector.yaml` 의 `aggregation_cardinality_limit` 를 올린다.
+
+### 게이트웨이 전송 큐 적체
+
+obs 의 Loki · Tempo · Mimir 가 받지 못하는 중이다. obs 태스크가 떠 있는지(CloudWatch `nova-prod-obs-no-tasks`), 받는 쪽 오류(obs 저장소 거부 · LGTM 대시보드)를 본다. 큐가 가득 차면 obs 수집 실패 경보가 버린 양과 함께 온다.
 
 ### MySQL 수집 끊김
 
@@ -484,6 +511,7 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - 게이트웨이 배포 중에는 두 태스크가 1~2분 함께 떠 한 트레이스의 스팬이 나뉠 수 있다. 그동안은 tail sampling 결정이 어긋날 수 있다.
 - 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otel-gateway"`).
 - 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. 서비스 CPU 지표(`AWS/ECS`)가 끊긴 것을 장애로 본다.
+- **게이트웨이와 obs 를 같은 apply 에서 재배포하지 않는다.** obs 가 내려간 사이 게이트웨이 옛 태스크가 교체되면 그 태스크의 큐가 사라진다(NV-543 적용 때 약 650건). `gateway/` 와 `config/` · obs 작업 정의 변경은 PR 을 나눈다.
 - 앱은 `otel-gateway.<네임스페이스>:4318` 로 보낸다(ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT`).
 - **Service Connect 별칭은 태스크가 뜰 때 정해진다.** 그 뒤에 생긴 이름은 이미 떠 있는 태스크에서 풀리지 않는다(`no such host`).
   obs 가 `loki` · `tempo-otlp` · `mimir` 를 새로 내놓거나 이름을 바꾸면 게이트웨이를 다시 띄운다(`update-service --force-new-deployment`). 게이트웨이를 새로 만들 때도 같다.
