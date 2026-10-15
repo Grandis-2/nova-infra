@@ -1,12 +1,14 @@
 # ─────────────────────────────────────────────────────────────
-# OTel Java 에이전트 — 로그 · 트레이스 · 지표를 관측 스택(monitoring 스택의 obs 태스크)으로 보낸다 (NV-425)
+# OTel Java 에이전트 — 로그 · 트레이스 · 지표를 OTel 게이트웨이(monitoring 스택 gateway.tf)로 보낸다 (NV-425, NV-543)
 #
 # jar 은 be 이미지 /otel/javaagent.jar 에 있다 (be NV-356). 켜는 것은 JDK_JAVA_OPTIONS 하나다.
 #   JAVA_TOOL_OPTIONS 는 주지 않는다. 이미지가 그 변수에 힙 옵션(MaxRAMPercentage 등)을 넣어 두어서, 여기서 주면 덮여 사라진다.
 #   JDK_JAVA_OPTIONS 는 이미지가 쓰지 않는 변수라 겹치지 않는다. 없으면 jar 자체가 로드되지 않는다.
 #   이미지의 AOT 캐시는 학습 · 실행 모두 --add-modules=java.instrument 로 맞춰 두어 에이전트를 켜도 쓰인다.
 #
-# 받는 곳은 Service Connect 별칭 otel.<네임스페이스> 다. 앱 태스크는 이미 Service Connect 클라이언트라 그대로 풀린다.
+# 받는 곳은 Service Connect 별칭 otel-gateway.<네임스페이스> 다. 게이트웨이가 obs 의 Loki · Tempo · Mimir 로 넘긴다.
+# 게이트웨이는 obs 와 따로 배포돼 obs 재배포 동안에도 받는다. Service Connect 별칭은 태스크가 뜰 때 정해지므로
+# 앱 태스크가 게이트웨이보다 먼저 떠 있었다면 다시 띄워야 풀린다(이 값이 바뀌면 모든 서비스가 다시 뜬다).
 # 프로토콜과 포트는 짝이다(4318 = http/protobuf, 4317 = grpc). 어긋나면 앱 로그에 한 줄만 남고 아무것도 도착하지 않는다.
 #
 # 기동 시간: 계측을 전부 켜면 캐시가 있어도 약 17.5–20초(로컬, preorder, 1 vCPU). 에이전트 없이 약 8–9초.
@@ -17,7 +19,7 @@ locals {
   otel_all      = contains(var.otel_services, "*")
   otel_enabled  = { for k, v in local.deployed_services : k => local.otel_all || contains(var.otel_services, k) }
   otel_unknown  = [for k in var.otel_services : k if k != "*" && !contains(keys(local.services), k)]
-  otel_endpoint = "http://otel.${var.namespace_name}:4318"
+  otel_endpoint = "http://otel-gateway.${var.namespace_name}:4318"
 
   # 프로파일(NV-540). service.yml 의 profiling: true 인 서비스만. 확장 jar 를 OTel 에이전트가 읽어
   # Pyroscope(obs, Service Connect pyroscope.<네임스페이스>)로 보낸다. 받는 쪽은 lgtm 스택의 pyroscope 컨테이너다.

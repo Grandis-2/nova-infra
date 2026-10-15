@@ -53,7 +53,7 @@ output "service_discovery_namespace_id" {
 }
 
 output "service_discovery_namespace_arn" {
-  description = "Service Connect 네임스페이스. monitoring 스택의 obs 서비스가 otel.<네임스페이스> 로 자신을 내놓는다"
+  description = "Service Connect 네임스페이스. monitoring 스택의 OTel 게이트웨이 · obs 서비스가 otel-gateway · pyroscope 등으로 자신을 내놓는다"
   value       = aws_service_discovery_private_dns_namespace.this.arn
 }
 
