@@ -66,7 +66,8 @@ locals {
 
   # 모든 컨테이너 공통: 리눅스 권한을 모두 버리고(1024 위 포트만 쓴다), 죽으면 태스크를 내리지 않고 그 컨테이너만 다시 띄운다
   obs_common = {
-    linuxParameters = { capabilities = { drop = ["ALL"] } }
+    # add = [] 는 AWS 가 저장할 때 채우는 기본값이다. 적지 않으면 plan 마다 차이로 보여 작업 정의를 다시 만든다(obs 재배포)
+    linuxParameters = { capabilities = { add = [], drop = ["ALL"] } }
     restartPolicy   = { enabled = true, restartAttemptPeriod = 60 }
   }
 
