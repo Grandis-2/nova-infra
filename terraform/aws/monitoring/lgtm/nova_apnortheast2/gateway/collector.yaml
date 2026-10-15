@@ -1,0 +1,310 @@
+# OTel 게이트웨이 Collector(NV-543). 앱의 OTLP 를 받아 로그 → Loki, 트레이스 → Tempo, 지표 → Mimir 로 보낸다.
+# obs 태스크와 따로 도는 ECS 서비스(Fargate, 롤링 배포)라 obs 를 재배포해도 수신은 멈추지 않는다.
+# 그동안 보내지 못한 데이터는 내보내기마다 메모리 전송 큐(sending_queue)에 쌓였다가 최대 15분 동안 다시 보낸다.
+#   디스크 큐(file_storage)는 쓰지 않는다. Fargate 의 디스크는 태스크와 함께 사라져, 게이트웨이 자신이 교체될 때는 디스크 큐도 잃는다.
+#   지키려는 것은 obs 재배포(몇 분) 동안이라 메모리 큐로 충분하다.
+#
+# 설정은 이 파일 그대로 환경 변수 COLLECTOR_CONFIG 로 넣는다(--config=env:COLLECTOR_CONFIG). 바꾸면 작업 정의가 바뀌어 재배포된다.
+# 실행 환경마다 다른 값은 환경 변수로 받는다. 받는 쪽은 Service Connect 로 obs 태스크에 닿는다.
+#   LOKI_OTLP_ENDPOINT   http://loki.<네임스페이스>:3100/otlp
+#   TEMPO_OTLP_ENDPOINT  tempo-otlp.<네임스페이스>:14317 (gRPC)
+#   MIMIR_OTLP_ENDPOINT  http://mimir.<네임스페이스>:9009/otlp
+#
+# 포트: 4317 · 4318 (OTLP 수신, Service Connect otel-gateway · otel-gateway-grpc), 13133 (헬스체크)
+# 자체 지표는 긁을 곳이 없어(obs 밖) 30초마다 Mimir 로 직접 보낸다(service.telemetry). Mimir 에서는 job="otelcol-contrib" 다.
+#
+# 처리(마스킹 · 리소스 허용 목록 · 샘플링 · APM 지표)는 obs Collector 의 것과 같다. 바꿀 때 ../config/README.md 의 설명도 같이 본다.
+# 이 경로는 손실을 허용한다 — 메모리가 차면 memory_limiter 가 받기를 거부하고, 15분 넘게 못 보낸 데이터는 버린다.
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  # 컨테이너 메모리 한도(2 GiB) 안에서 GC 여유를 남긴다. 전송 큐도 이 안에 든다. tail_sampling 이 결정 전 트레이스를, servicegraph 가 짝을 찾는 스팬을 메모리에 든다.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1536
+    spike_limit_mib: 384
+  batch:
+    timeout: 1s
+  # APM 지표(spanmetrics · servicegraph)에 넣지 않는 스팬. 내부(INTERNAL) 스팬은 서비스 경계가 아니고 수가 많다.
+  # 헬스체크 서버 스팬 · SQS 롱폴링은 몇 초마다 생겨 처리량 · 지연을 왜곡한다(tail_sampling 도 같은 기준으로 버린다)
+  filter/apm:
+    error_mode: ignore
+    traces:
+      span:
+        - 'span.kind == SPAN_KIND_INTERNAL'
+        - 'span.kind == SPAN_KIND_SERVER and IsMatch(span.attributes["url.path"], "^/actuator(/|$$)")'
+        # 성공한 SQS 롱폴링(ReceiveMessage 클라이언트 스팬). 길이가 메시지를 기다린 시간이라 나가는 호출 시간을 부풀린다.
+        # 에이전트는 이 스팬에 받은 메시지 수를 붙이지 않아 빈 폴링과 구분하지 않는다. 메시지 처리는 따로 남는 컨슈머 스팬이 센다. 오류는 남긴다
+        - 'span.kind == SPAN_KIND_CLIENT and span.attributes["rpc.method"] == "ReceiveMessage" and span.status.code != STATUS_CODE_ERROR'
+  # 에이전트의 실험 HTTP 지표 중 요청 · 응답 본문 크기 히스토그램은 쓰지 않는다(지연 히스토그램만큼 시계열이 는다).
+  # 같은 스위치로 켜지는 http.server.active_requests(동시 처리 요청)만 남긴다
+  filter/unused-metrics:
+    error_mode: ignore
+    metrics:
+      metric:
+        - 'IsMatch(metric.name, "^http\\.(server|client)\\.(request|response)\\.body\\.size$$")'
+  # 카디널리티 예산. 리소스 속성은 남길 것만 고른다(빼는 방식이 아니라 남기는 방식).
+  # 여기를 통과한 리소스 속성은 Loki 에서 인덱스 라벨(loki.yaml 의 index_label)이거나
+  # structured metadata 가 된다. 목록에 없는 속성은 저장되지 않는다.
+  #
+  # process.pid · process.command_args · os.description 은 조회 축이 아니면서 길거나 재시작마다 바뀐다.
+  # aws.ecs.* 는 넣지 않았다. aws.ecs.task.arn · cluster.arn 에 계정 ID 가 들어 있고,
+  # 태스크를 가리키는 데는 service.instance.id 와 host.name 으로 충분하다.
+  # 로그 · 트레이스 · 지표에 같은 목록을 쓴다.
+  transform/resource-allowlist:
+    error_mode: ignore
+    log_statements:
+      - context: resource
+        statements:
+          - &resource_allowlist keep_keys(attributes, [ "service.name", "service.version", "service.namespace", "service.instance.id", "deployment.environment", "deployment.environment.name", "k8s.cluster.name", "k8s.namespace.name", "k8s.pod.name", "k8s.deployment.name", "host.name" ])
+    trace_statements:
+      - context: resource
+        statements:
+          - *resource_allowlist
+    metric_statements:
+      - context: resource
+        statements:
+          - *resource_allowlist
+  # 저장 전 마스킹. 어느 경로(Grafana · Loki API)로 읽어도 원문이 없게, Loki 에 넘기기 전에 지운다. 되돌릴 수 없다.
+  # 안전망이다 — 1차 방어는 앱이 애초에 남기지 않는 것이다. 결정과 한계는 README.md "저장 전 마스킹".
+  #
+  # 대상
+  #   로그 본문: 맵 · 목록이면 먼저 JSON 문자열로 바꾼다. Loki 는 원래 그 JSON 을 줄로 저장하므로 저장되는 모습은 같고,
+  #     중첩된 값까지 문자열 패턴이 닿는다. 숫자 · 불리언 · 바이트 본문은 그대로 둔다.
+  #   로그 레코드 속성: 문자열 값 전부(exception.message · exception.stacktrace 포함).
+  #     맵 · 목록 속성 안에 중첩된 값은 보지 않는다(replace_all_patterns 는 한 단계만 본다).
+  #   리소스 속성은 위 허용 목록이 서비스 · 호스트 식별자만 남긴다. 스코프 속성은 보지 않는다.
+  #
+  # 순서와 패턴(Go RE2. 앞뒤 보기가 없어 경계 문자를 잡았다가 $${1} · $${2} 로 되돌려 놓는다. $ 는 설정 파일에서 $$ 로 쓴다)
+  #   1. 중복 키: MySQL 의 Duplicate entry '<값>' for key 에서 <값>. 키 이름과 상관없이, 한 줄 안에서만.
+  #   2. 이메일: local@domain.tld 와 URL 인코딩된 local%40domain.tld. 전화보다 먼저 해야 hong.010…@ 이 통째로 가려진다.
+  #   3. +82 전화: +82 · %2B82 · 0082, (0) 허용.  4. 국내 전화: 010 · 011 · 016~019, 괄호 · 구분자(- . 공백) 허용.
+  #   경계: 앞뒤가 16진수 문자가 아니어야 한다(+82 · %2B82 는 + · % 가 앞 경계라서 앞을 보지 않는다). UUID · trace ID · 16진수 ID 의 일부는 걸리지 않고,
+  #     \n · _ · 한글 바로 옆의 번호는 걸린다. 대가: 16진수 글자(a-f) 바로 옆에 붙은 번호(phone010…, 010…abc)는 걸리지 않는다.
+  #   3 · 4 를 두 번씩 하는 것은 경계 문자를 하나 소비해서, 붙어 있는 두 번호 중 뒤의 것이 첫 번에 빠지기 때문이다.
+  #
+  # error_mode: ignore — 문 하나가 실패하면 그 문만 건너뛰고 다음 문으로 간다. propagate 는 배치 전체를 버린다(503).
+  transform/mask:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(log.body, String(log.body)) where IsMap(log.body) or IsList(log.body)
+          - replace_pattern(log.body, "Duplicate entry '[^\\n]*?' for key", "Duplicate entry '<masked>' for key") where IsString(log.body)
+          - replace_pattern(log.body, "[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<masked:email>") where IsString(log.body)
+          - replace_pattern(log.body, "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}") where IsString(log.body)
+          - replace_pattern(log.body, "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}") where IsString(log.body)
+          - replace_pattern(log.body, "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}") where IsString(log.body)
+          - replace_pattern(log.body, "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}") where IsString(log.body)
+          - replace_all_patterns(log.attributes, "value", "Duplicate entry '[^\\n]*?' for key", "Duplicate entry '<masked>' for key")
+          - replace_all_patterns(log.attributes, "value", "[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<masked:email>")
+          - replace_all_patterns(log.attributes, "value", "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(log.attributes, "value", "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(log.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(log.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+  # 트레이스 샘플링. 트레이스가 끝나기를 decision_wait 동안 기다렸다가 남길지 정한다(앱은 모두 보낸다: parentbased_always_on).
+  #   버림(먼저 본다): 헬스체크(/actuator/*) 서버 스팬이 든 트레이스, 성공한 SQS 롱폴링(ReceiveMessage 클라이언트 스팬)이 든 트레이스.
+  #     몇 초마다 생겨 저장량의 대부분을 차지하고 볼 일이 없다. 오류가 난 롱폴링은 남긴다.
+  #     에이전트는 이 스팬에 받은 메시지 수(messaging.batch.message_count)를 붙이지 않아 빈 폴링과 메시지를 받은 폴링을 가르지 않는다.
+  #   남김: 오류(ERROR)가 있는 트레이스, 1초 넘게 걸린 트레이스는 전부. 나머지는 10%.
+  #   앱에서 10% 로 자르면 버려진 90% 안의 오류 트레이스를 다시 찾을 수 없어서 여기서 자른다.
+  # 결정 전의 트레이스를 메모리에 든다. num_traces 를 넘으면 오래된 것부터 결정 없이 버린다(손실 허용).
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 50000
+    expected_new_traces_per_sec: 200
+    policies:
+      - name: drop-noise
+        type: drop
+        drop:
+          drop_sub_policy:
+            - name: health-and-empty-poll
+              type: ottl_condition
+              ottl_condition:
+                error_mode: ignore
+                span:
+                  - 'kind == SPAN_KIND_SERVER and IsMatch(attributes["url.path"], "^/actuator(/|$$)")'
+                  - 'kind == SPAN_KIND_CLIENT and attributes["rpc.method"] == "ReceiveMessage" and status.code != STATUS_CODE_ERROR'
+      - name: errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: slow
+        type: latency
+        latency:
+          threshold_ms: 1000
+      - name: rest
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+  # 스팬 저장 전 마스킹. 로그의 transform/mask 와 같은 패턴 · 순서다(바꿀 때 둘을 같이 바꾼다).
+  #   스팬 속성 · 스팬 이벤트 속성(exception.message · exception.stacktrace) · 상태 메시지의 문자열 값
+  #   URL 쿼리 문자열: 값만 지운다(이름은 남긴다). url.query · url.full 과 옛 이름 http.url · http.target
+  #     토큰 · 개인정보가 쿼리로 오면 패턴에 안 걸리는 값도 있어서 쿼리 값은 통째로 지운다.
+  #   SQL(db.query.text · db.statement)의 리터럴은 에이전트가 ? 로 바꿔 보낸다(기본값). 여기서는 위 패턴만 더 건다.
+  transform/mask-spans:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # 엣지 요청 ID 헤더(에이전트가 문자열 배열로 남긴다)는 AWS 가 만든 형식만 문자열 하나로 남긴다.
+          # 클라이언트가 같은 이름의 헤더를 보내면 CloudFront · ALB 를 지나 그대로 들어올 수 있다(ALB 는 Self 만 고친다).
+          #   x-amz-cf-id      CloudFront 요청 ID 형식이 아니면 버린다
+          #   x-amzn-trace-id  Root=1-<8자리 16진>-<24자리 16진> 만 남긴다. 나머지 필드(Self · 클라이언트가 붙인 값)는 버린다
+          - set(span.attributes["nova.tmp.cf_id"], span.attributes["http.request.header.x-amz-cf-id"][0]) where span.attributes["http.request.header.x-amz-cf-id"] != nil
+          - delete_key(span.attributes, "http.request.header.x-amz-cf-id")
+          - set(span.attributes["http.request.header.x-amz-cf-id"], span.attributes["nova.tmp.cf_id"]) where IsMatch(span.attributes["nova.tmp.cf_id"], "^[A-Za-z0-9_=-]{20,100}$$")
+          - delete_key(span.attributes, "nova.tmp.cf_id")
+          - set(span.attributes["nova.tmp.amzn_trace"], span.attributes["http.request.header.x-amzn-trace-id"][0]) where span.attributes["http.request.header.x-amzn-trace-id"] != nil
+          - delete_key(span.attributes, "http.request.header.x-amzn-trace-id")
+          - set(span.attributes["http.request.header.x-amzn-trace-id"], ExtractPatterns(span.attributes["nova.tmp.amzn_trace"], "(?P<root>Root=1-[0-9a-f]{8}-[0-9a-f]{24})")["root"]) where span.attributes["nova.tmp.amzn_trace"] != nil
+          - delete_key(span.attributes, "nova.tmp.amzn_trace")
+          - replace_pattern(span.attributes["url.query"], "([^=&]+)=[^&]*", "$${1}=<masked>")
+          - replace_pattern(span.attributes["url.full"], "([?&][^=&#]+)=[^&#]*", "$${1}=<masked>")
+          - replace_pattern(span.attributes["http.url"], "([?&][^=&#]+)=[^&#]*", "$${1}=<masked>")
+          - replace_pattern(span.attributes["http.target"], "([?&][^=&#]+)=[^&#]*", "$${1}=<masked>")
+          - replace_all_patterns(span.attributes, "value", "Duplicate entry '[^\\n]*?' for key", "Duplicate entry '<masked>' for key")
+          - replace_all_patterns(span.attributes, "value", "[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<masked:email>")
+          - replace_all_patterns(span.attributes, "value", "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(span.attributes, "value", "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(span.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(span.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_pattern(span.status.message, "Duplicate entry '[^\\n]*?' for key", "Duplicate entry '<masked>' for key")
+          - replace_pattern(span.status.message, "[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<masked:email>")
+          - replace_pattern(span.status.message, "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_pattern(span.status.message, "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_pattern(span.status.message, "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_pattern(span.status.message, "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+      - context: spanevent
+        statements:
+          - replace_all_patterns(spanevent.attributes, "value", "Duplicate entry '[^\\n]*?' for key", "Duplicate entry '<masked>' for key")
+          - replace_all_patterns(spanevent.attributes, "value", "[A-Za-z0-9._%+-]+(?:@|%40)[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "<masked:email>")
+          - replace_all_patterns(spanevent.attributes, "value", "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(spanevent.attributes, "value", "(?:\\+|%2[Bb]|(^|[^0-9A-Fa-f])00)82[-. ]?(?:\\(0\\)[-. ]?)?0?1[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(spanevent.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+          - replace_all_patterns(spanevent.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
+# 트레이스를 두 갈래로 나눈다.
+#   traces/apm     : 샘플링 전 모든 스팬으로 지표를 만든다(처리량 · 오류율 · 지연이 정확하다)
+#   traces/sampled : tail_sampling 을 거쳐 Tempo 에 저장한다(사례를 보는 용도)
+connectors:
+  forward/apm: {}
+  forward/sampled: {}
+  # 스팬마다 RED 지표. Mimir 에서 traces_spanmetrics_calls_total · traces_spanmetrics_duration_seconds_bucket 이다.
+  # 기본 라벨 service · span_name · span_kind · status_code 에 아래 dimensions 를 더한다. URL · SQL 원문 · 사용자 값은 넣지 않는다
+  # (span_name 은 HTTP 는 경로 템플릿, DB 는 "SELECT 스키마.테이블" 이다)
+  spanmetrics:
+    namespace: traces.spanmetrics
+    histogram:
+      unit: s
+      explicit:
+        buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s]
+    dimensions:
+      - name: http.response.status_code
+      - name: db.system
+      - name: messaging.system
+    # 태스크(service.instance.id)마다 따로 세지 않는다. 서비스 단위로 묶는다
+    resource_metrics_key_attributes: [service.name, service.namespace, deployment.environment]
+    # 라벨 조합 상한. 넘는 조합은 otel_metric_overflow="true" 시계열 하나로 모인다
+    aggregation_cardinality_limit: 2000
+    metrics_flush_interval: 30s
+    metrics_expiration: 10m
+    exemplars:
+      enabled: false
+  # 서비스 사이 호출 그래프. client 스팬과 server(또는 producer 와 consumer) 스팬을 trace 안에서 짝지어 간선을 만든다.
+  # 짝이 없는 DB · Valkey · SQS · 외부 호출은 아래 속성으로 이름 붙인 가상 노드가 된다.
+  # Mimir 에서 traces_service_graph_request_total · _failed_total · _server_seconds_bucket · _client_seconds_bucket 이다
+  servicegraph:
+    latency_histogram_buckets: [10ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s]
+    store:
+      # 짝을 기다리는 시간. 서비스마다 내보내는 주기(배치)가 달라 몇 초 어긋난다
+      ttl: 10s
+      max_items: 5000
+    virtual_node_peer_attributes: [peer.service, db.name, db.system, messaging.destination.name, messaging.system, rpc.service, server.address, net.peer.name]
+    metrics_flush_interval: 30s
+exporters:
+  # 내보내기마다 메모리 전송 큐 5000 묶음, 실패하면 5초부터 30초 간격으로 15분까지 다시 보낸다(obs 재배포를 넘긴다)
+  otlphttp/loki:
+    endpoint: ${env:LOKI_OTLP_ENDPOINT}
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 15m
+  # obs 의 Tempo(Service Connect). VPC 안 · SG 로 게이트웨이에만 열려 있어 TLS 를 쓰지 않는다
+  otlp/tempo:
+    endpoint: ${env:TEMPO_OTLP_ENDPOINT}
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 15m
+  # obs 의 Mimir(Service Connect). Mimir 가 OTLP 를 Prometheus 시계열로 바꾼다(단위 접미사 · 리소스 속성은 target_info)
+  otlphttp/mimir:
+    endpoint: ${env:MIMIR_OTLP_ENDPOINT}
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 5000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 15m
+service:
+  extensions: [health_check]
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/resource-allowlist, transform/mask, batch]
+      exporters: [otlphttp/loki]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, transform/resource-allowlist]
+      exporters: [forward/apm, forward/sampled]
+    traces/apm:
+      receivers: [forward/apm]
+      processors: [filter/apm]
+      exporters: [spanmetrics, servicegraph]
+    traces/sampled:
+      receivers: [forward/sampled]
+      processors: [tail_sampling, transform/mask-spans, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp, spanmetrics, servicegraph]
+      processors: [memory_limiter, filter/unused-metrics, transform/resource-allowlist, batch]
+      exporters: [otlphttp/mimir]
+  telemetry:
+    logs:
+      level: info
+    # 자체 지표(수신 · 거부 · 내보내기 실패 · 큐 크기). obs 가 긁을 수 없어 Mimir 로 직접 보낸다
+    metrics:
+      level: normal
+      readers:
+        - periodic:
+            interval: 30000
+            exporter:
+              otlp:
+                protocol: http/protobuf
+                endpoint: ${env:MIMIR_OTLP_ENDPOINT}/v1/metrics

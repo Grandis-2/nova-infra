@@ -129,12 +129,13 @@ flowchart LR
 
 | 경로 | 내용 |
 |---|---|
+| `../gateway/collector.yaml` | OTel 게이트웨이(별도 ECS 서비스) 설정. 앱 OTLP 수신 · 처리는 obs Collector 와 같고, 내보내기마다 메모리 전송 큐 · 15분 재시도, 자체 지표는 Mimir 로 직접 보낸다. `config/` 밖에 두어 obs 태스크를 다시 띄우지 않는다 |
 | `collector.yaml` | 수신(OTLP), 긁기(mysqld · LGTM 자체 · hostmetrics), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir) |
 | `loki.yaml` | S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
 | `pyroscope-ingest.nginx.conf` | 앱이 닿는 수신 전용 프록시. `POST /ingest` 만 Pyroscope 로 넘기고 나머지(조회 API 등)는 403 |
 | `pyroscope.yaml` | 단일 바이너리, 파일시스템 저장(데이터 EBS, 7일), 같은 태스크와 겹치지 않는 포트(gRPC 9094 · memberlist 7948) |
 | `tempo.yaml` | S3 저장, 보존 기간(compactor), WAL, 종료할 때 블록 업로드, TraceQL 지표(`local-blocks`) |
-| `mimir.yaml` | `-target=all`. S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로 나눔, OTLP 이름 접미사, 쿼리 대기열 · 샤딩 |
+| `mimir.yaml` | `-target=all`. S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로 나눔, OTLP 이름 접미사, 쿼리 대기열 · 샤딩, 늦은 샘플 30분 받기(게이트웨이가 다시 보낸 지표의 순서가 섞여도 버리지 않게) |
 | `grafana/provisioning/datasources/` | Loki · Tempo · Mimir(서로 링크로 이어짐, Tempo 서비스 맵은 Mimir 를 읽음), CloudWatch(태스크 역할) |
 | `grafana/provisioning/dashboards/nova.yaml` | `grafana/dashboards/` 의 하위 디렉터리를 같은 이름의 Grafana 폴더로 읽는다 |
 | `grafana/dashboards/` | 대시보드 JSON (아래 "대시보드") |
@@ -417,6 +418,8 @@ Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 �
 | 컨테이너 | 포트 |
 |---|---|
 | otel-collector | 4317 (OTLP gRPC) · 4318 (OTLP HTTP) · 8888 (자체 지표, localhost) · 13133 (헬스체크) |
+| (게이트웨이, 별도 서비스) otel-collector | 4317 · 4318 (Service Connect `otel-gateway-grpc` · `otel-gateway`) · 13133 |
+| loki · tempo · mimir 의 게이트웨이 수신 | 3100 · 14317 · 9009 (Service Connect `loki` · `tempo-otlp` · `mimir`). obs 보안 그룹이 게이트웨이 SG 에만 연다 |
 | loki | 3100 (HTTP) · 9096 (gRPC) |
 | tempo | 3200 (HTTP) · 9097 (gRPC) · 14317 (OTLP gRPC, Collector 전용) |
 | mimir | 9009 (HTTP: OTLP `/otlp`, PromQL `/prometheus`) · 9098 (gRPC) · 7947 (memberlist, 127.0.0.1) |
@@ -459,6 +462,19 @@ exporter 는 `database` 원격 상태의 출력 네 개(`db_address` · `db_port
 
 RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상위 SQL 이 나온다. 정적 값이라 바꾸면 재부팅이 필요하므로 인스턴스를 만들 때 켠다.
 다이제스트 지표는 SQL 형태마다 한 벌씩 생긴다. 최근 하루 동안 본 것 중 시간 순 100개만 모으고, 화면이 쓰지 않는 항목은 Collector 가 버린다(`collector.yaml` 의 mysqld `metric_relabel_configs`).
+
+### OTel 게이트웨이 (`../gateway.tf`, NV-543)
+
+앱의 OTLP 를 obs 태스크 밖에서 받는 Collector 다. obs 는 한 호스트의 디렉터리를 써서 재배포 때 몇 분 비는데, 게이트웨이는 별도 서비스라 그동안에도 받는다.
+
+- Fargate(온디맨드, 0.5 vCPU · 2 GiB), 롤링 배포. Spot 은 쓰지 않는다. 회수되면 다음 태스크가 뜰 때까지 수집이 멈춘다.
+- 설정은 `gateway/collector.yaml` 내용을 환경 변수로 넣는다(`--config=env:COLLECTOR_CONFIG`). S3 내려받기와 태스크 역할이 필요 없고, 설정이 바뀌면 다시 배포된다.
+- obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기마다 메모리 전송 큐(5000 묶음)에 쌓였다가 15분까지 다시 보낸다.
+  디스크 큐는 쓰지 않는다. Fargate 디스크는 태스크와 함께 사라져 게이트웨이 자신이 교체될 때는 디스크 큐도 잃는다. 지키려는 것은 obs 재배포 동안이라 메모리 큐로 충분하다.
+- 게이트웨이 배포 중에는 두 태스크가 1~2분 함께 떠 한 트레이스의 스팬이 나뉠 수 있다. 그동안은 tail sampling 결정이 어긋날 수 있다.
+- 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otelcol-contrib"`, obs Collector 와 instance 로 나뉜다).
+- 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. 서비스 CPU 지표(`AWS/ECS`)가 끊긴 것을 장애로 본다.
+- 앱이 어디로 보내는지는 ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT` 가 정한다.
 
 ### 작업 정의 제약 (`../main.tf`)
 
