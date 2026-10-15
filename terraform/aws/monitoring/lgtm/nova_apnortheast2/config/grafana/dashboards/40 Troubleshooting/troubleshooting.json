@@ -837,7 +837,7 @@
           "queryType": "traceql",
           "limit": 50,
           "tableType": "traces",
-          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~`${route:regex}` && status=error}"
+          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~`${route:regex}` && span.http.response.status_code >= 500}"
         }
       ],
       "id": 12,

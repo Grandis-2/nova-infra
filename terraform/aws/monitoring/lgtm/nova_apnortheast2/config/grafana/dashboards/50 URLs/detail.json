@@ -1517,7 +1517,7 @@
         "type": "prometheus",
         "uid": "mimir"
       },
-      "description": "열은 날짜, 행은 시각(한국 시간). 칸 하나가 그 날 그 시각 한 시간 동안의 요청 수이고 진할수록 많다. 매일 몰리는 시간대 · 요일을 본다",
+      "description": "열은 날짜, 행은 시각(한국 시간). 칸 하나가 그 날 그 시각 한 시간 동안의 요청 수이고 진할수록 많다. 매일 몰리는 시간대 · 요일을 본다. 지금 시각의 칸은 진행 중인 한 시간이라 지금까지의 수다",
       "timeFrom": "now-13d/d",
       "interval": "1h",
       "maxDataPoints": 360,
@@ -1710,7 +1710,7 @@
           "queryType": "traceql",
           "limit": 30,
           "tableType": "traces",
-          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.request.method=~\"$method\" && span.http.route=~`${route:regex}` && status=error}"
+          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.request.method=~\"$method\" && span.http.route=~`${route:regex}` && span.http.response.status_code >= 500}"
         }
       ],
       "id": 24,

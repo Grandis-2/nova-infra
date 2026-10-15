@@ -229,7 +229,7 @@
       "links": [
         {
           "title": "이 URL 상세",
-          "url": "/d/nova-url-detail?var-service=${service}&var-route=${route}&${__url_time_range}"
+          "url": "/d/nova-url-detail?var-service=${service}&var-method=$__all&${route:queryparam}&${__url_time_range}"
         }
       ],
       "repeat": "route",
