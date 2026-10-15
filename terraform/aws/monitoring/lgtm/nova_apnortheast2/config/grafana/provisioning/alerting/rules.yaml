@@ -180,3 +180,137 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0]}
+      - uid: mysql-down
+        title: MySQL 수집 끊김
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL 지표가 들어오지 않는다 — exporter 가 DB 에 붙지 못하거나(DB 중단 · 네트워크 · 계정) exporter 컨테이너가 응답하지 않는다. MySQL 대시보드 지표도 멈춘다"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # exporter 가 멈추면 mysql_up 이 사라지고 Collector 의 up 이 0 이 된다. 둘 중 있는 값을 본다.
+              # exporter 를 띄우지 않는 환경에는 mysqld 수집 대상이 없어 둘 다 비고, NoData 는 정상으로 본다
+              expr: "min by (job) (mysql_up{job=\"mysqld\"} or up{job=\"mysqld\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+      - uid: mysql-connections
+        title: MySQL 연결 사용률
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "10분 동안 연결이 max_connections 의 80% 를 넘었다 — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}. 서비스 태스크 수 × Hikari 풀을 확인한다"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "mysql_global_status_threads_connected{job=\"mysqld\"} / mysql_global_variables_max_connections{job=\"mysqld\"}"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+      - uid: obs-disk
+        title: obs 디스크 사용률
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "obs 호스트 {{ .Labels.mountpoint }} 가 80% 를 넘었다 — 값 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}. 가득 차면 Loki · Tempo · Mimir 가 쓰기를 못 한다"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "max by (mountpoint) (system_filesystem_utilization_ratio{job=\"obs-host\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+      - uid: obs-storage-rejects
+        title: obs 저장소 거부
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ .Labels.job }} 가 받은 데이터를 버리고 있다(이유 {{ .Labels.reason }}). LGTM 스택 대시보드의 '저장소가 버린 데이터'"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "sum by (job, reason) (rate(loki_discarded_samples_total[5m])) or sum by (job, reason) (rate(tempo_discarded_spans_total[5m])) or sum by (job, reason) (rate(cortex_discarded_samples_total[5m]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
