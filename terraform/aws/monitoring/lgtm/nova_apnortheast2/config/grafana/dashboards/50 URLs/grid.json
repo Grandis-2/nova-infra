@@ -1,0 +1,250 @@
+{
+  "uid": "nova-url-grid",
+  "title": "nova · URL 그리드",
+  "description": "서비스 하나의 API 를 카드로 한눈에 본다. 붉은 카드부터 본다",
+  "tags": [
+    "nova",
+    "url"
+  ],
+  "editable": false,
+  "schemaVersion": 39,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "links": [
+    {
+      "title": "nova 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "nova"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "URL 화면",
+      "type": "dashboards",
+      "tags": [
+        "url"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "서비스",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "query": {
+          "query": "label_values(target_info{job=~\"nova/.+\"}, job)",
+          "refId": "service"
+        },
+        "definition": "label_values(target_info{job=~\"nova/.+\"}, job)",
+        "regex": "/^nova\\/(.+)$/",
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "route",
+        "label": "경로",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "hide": 0,
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}, http_route)",
+          "refId": "route"
+        },
+        "definition": "label_values(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}, http_route)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "$route",
+      "description": "요청/초 · 성공률(5xx 가 아닌 비율) · P99. 누르면 이 URL 상세로 간다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.95
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.99
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "horizontal"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval]))",
+          "legendFormat": "요청/초"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "1 - (sum(rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\", http_response_status_code=~\"5..\"}[$__rate_interval])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval]))",
+          "legendFormat": "성공률"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+          "legendFormat": "P99"
+        }
+      ],
+      "links": [
+        {
+          "title": "이 URL 상세",
+          "url": "/d/nova-url-detail?var-service=${service}&var-method=$__all&${route:queryparam}&${__url_time_range}"
+        }
+      ],
+      "repeat": "route",
+      "repeatDirection": "h",
+      "maxPerRow": 4,
+      "id": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}
