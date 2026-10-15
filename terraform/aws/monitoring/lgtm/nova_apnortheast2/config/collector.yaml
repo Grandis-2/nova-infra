@@ -105,11 +105,11 @@ receivers:
           mount_points: ["/", "${env:OBS_DATA_MOUNT_PATH}"]
 
 processors:
-  # 컨테이너 메모리 한도(1 GiB) 안에서 GC 여유를 남긴다. tail_sampling 이 결정 전 트레이스를 메모리에 든다.
+  # 컨테이너 메모리 한도(1.5 GiB) 안에서 GC 여유를 남긴다. tail_sampling 이 결정 전 트레이스를, servicegraph 가 짝을 찾는 스팬을 메모리에 든다.
   memory_limiter:
     check_interval: 1s
-    limit_mib: 768
-    spike_limit_mib: 192
+    limit_mib: 1152
+    spike_limit_mib: 288
   batch:
     timeout: 1s
 
@@ -119,6 +119,23 @@ processors:
       - key: service.name
         value: obs-host
         action: upsert
+
+  # APM 지표(spanmetrics · servicegraph)에 넣지 않는 스팬. 내부(INTERNAL) 스팬은 서비스 경계가 아니고 수가 많다.
+  # 헬스체크 서버 스팬은 몇 초마다 생겨 처리량 · 지연을 왜곡한다(tail_sampling 도 같은 기준으로 버린다)
+  filter/apm:
+    error_mode: ignore
+    traces:
+      span:
+        - 'span.kind == SPAN_KIND_INTERNAL'
+        - 'span.kind == SPAN_KIND_SERVER and IsMatch(span.attributes["url.path"], "^/actuator(/|$$)")'
+
+  # 에이전트의 실험 HTTP 지표 중 요청 · 응답 본문 크기 히스토그램은 쓰지 않는다(지연 히스토그램만큼 시계열이 는다).
+  # 같은 스위치로 켜지는 http.server.active_requests(동시 처리 요청)만 남긴다
+  filter/unused-metrics:
+    error_mode: ignore
+    metrics:
+      metric:
+        - 'IsMatch(metric.name, "^http\\.(server|client)\\.(request|response)\\.body\\.size$$")'
 
   # 카디널리티 예산. 리소스 속성은 남길 것만 고른다(빼는 방식이 아니라 남기는 방식).
   # 여기를 통과한 리소스 속성은 Loki 에서 인덱스 라벨(loki.yaml 의 index_label)이거나
@@ -263,6 +280,47 @@ processors:
           - replace_all_patterns(spanevent.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
           - replace_all_patterns(spanevent.attributes, "value", "(^|[^0-9A-Fa-f])\\(?01[016789]\\)?[-. ]?[0-9]{3,4}[-. ]?[0-9]{4}([^0-9A-Fa-f]|$$)", "$${1}<masked:phone>$${2}")
 
+# 트레이스를 두 갈래로 나눈다.
+#   traces/apm     : 샘플링 전 모든 스팬으로 지표를 만든다(처리량 · 오류율 · 지연이 정확하다)
+#   traces/sampled : tail_sampling 을 거쳐 Tempo 에 저장한다(사례를 보는 용도)
+connectors:
+  forward/apm: {}
+  forward/sampled: {}
+
+  # 스팬마다 RED 지표. Mimir 에서 traces_spanmetrics_calls_total · traces_spanmetrics_duration_seconds_bucket 이다.
+  # 기본 라벨 service · span_name · span_kind · status_code 에 아래 dimensions 를 더한다. URL · SQL 원문 · 사용자 값은 넣지 않는다
+  # (span_name 은 HTTP 는 경로 템플릿, DB 는 "SELECT 스키마.테이블" 이다)
+  spanmetrics:
+    namespace: traces.spanmetrics
+    histogram:
+      unit: s
+      explicit:
+        buckets: [5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s]
+    dimensions:
+      - name: http.response.status_code
+      - name: db.system
+      - name: messaging.system
+    # 태스크(service.instance.id)마다 따로 세지 않는다. 서비스 단위로 묶는다
+    resource_metrics_key_attributes: [service.name, service.namespace, deployment.environment]
+    # 라벨 조합 상한. 넘는 조합은 otel_metric_overflow="true" 시계열 하나로 모인다
+    aggregation_cardinality_limit: 2000
+    metrics_flush_interval: 30s
+    metrics_expiration: 10m
+    exemplars:
+      enabled: false
+
+  # 서비스 사이 호출 그래프. client 스팬과 server(또는 producer 와 consumer) 스팬을 trace 안에서 짝지어 간선을 만든다.
+  # 짝이 없는 DB · Valkey · SQS · 외부 호출은 아래 속성으로 이름 붙인 가상 노드가 된다.
+  # Mimir 에서 traces_service_graph_request_total · _failed_total · _server_seconds_bucket · _client_seconds_bucket 이다
+  servicegraph:
+    latency_histogram_buckets: [10ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s]
+    store:
+      # 짝을 기다리는 시간. 서비스마다 내보내는 주기(배치)가 달라 몇 초 어긋난다
+      ttl: 10s
+      max_items: 5000
+    virtual_node_peer_attributes: [peer.service, db.name, db.system, messaging.destination.name, messaging.system, rpc.service, server.address, net.peer.name]
+    metrics_flush_interval: 30s
+
 exporters:
   otlphttp/loki:
     endpoint: ${env:LOKI_OTLP_ENDPOINT}
@@ -288,11 +346,19 @@ service:
       exporters: [otlphttp/loki]
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, transform/resource-allowlist, tail_sampling, transform/mask-spans, batch]
+      processors: [memory_limiter, transform/resource-allowlist]
+      exporters: [forward/apm, forward/sampled]
+    traces/apm:
+      receivers: [forward/apm]
+      processors: [filter/apm]
+      exporters: [spanmetrics, servicegraph]
+    traces/sampled:
+      receivers: [forward/sampled]
+      processors: [tail_sampling, transform/mask-spans, batch]
       exporters: [otlp/tempo]
     metrics:
-      receivers: [otlp, prometheus/scrape]
-      processors: [memory_limiter, transform/resource-allowlist, batch]
+      receivers: [otlp, prometheus/scrape, spanmetrics, servicegraph]
+      processors: [memory_limiter, filter/unused-metrics, transform/resource-allowlist, batch]
       exporters: [otlphttp/mimir]
     metrics/host:
       receivers: [hostmetrics]

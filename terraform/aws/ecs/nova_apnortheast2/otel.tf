@@ -40,6 +40,10 @@ locals {
       OTEL_INSTRUMENTATION_COMMON_LOGGING_STRUCTURED_ATTRIBUTES_INCLUDED = "event_id,aggregate_type,aggregate_id,event_type,destination"
       # MDC 는 요청 ID(traceId)만. subject(회원 ID)는 받지 않는다
       OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_MDC_ATTRIBUTES_INCLUDED = "traceId"
+      # 동시 처리 중인 요청 수(http.server.active_requests). 같은 스위치로 켜지는 본문 크기 히스토그램은 Collector 가 버린다
+      OTEL_INSTRUMENTATION_HTTP_SERVER_EMIT_EXPERIMENTAL_TELEMETRY = "true"
+      # CloudFront 요청 ID · ALB 추적 ID 를 서버 스팬 속성(http.request.header.*)으로 남긴다. 트레이스를 엣지 접근 로그와 잇는 키다
+      OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS = "x-amz-cf-id,x-amzn-trace-id"
     } : {}
   }
 }
