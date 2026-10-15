@@ -469,7 +469,7 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 
 - Fargate(온디맨드, 0.5 vCPU · 2 GiB), 롤링 배포. Spot 은 쓰지 않는다. 회수되면 다음 태스크가 뜰 때까지 수집이 멈춘다.
 - 설정은 `gateway/collector.yaml` 내용을 환경 변수로 넣는다(`--config=env:COLLECTOR_CONFIG`). S3 내려받기와 태스크 역할이 필요 없고, 설정이 바뀌면 다시 배포된다.
-- obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기마다 메모리 전송 큐(5000 묶음)에 쌓였다가 15분까지 다시 보낸다.
+- obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기마다 메모리 전송 큐(바이트로 세어 128 MiB, 셋 합 384 MiB)에 쌓였다가 15분까지 다시 보낸다. 큐가 차면 새로 들어오는 것을 버린다(`otelcol_exporter_enqueue_failed_*`).
   디스크 큐는 쓰지 않는다. Fargate 디스크는 태스크와 함께 사라져 게이트웨이 자신이 교체될 때는 디스크 큐도 잃는다. 지키려는 것은 obs 재배포 동안이라 메모리 큐로 충분하다.
 - 게이트웨이 배포 중에는 두 태스크가 1~2분 함께 떠 한 트레이스의 스팬이 나뉠 수 있다. 그동안은 tail sampling 결정이 어긋날 수 있다.
 - 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otelcol-contrib"`, obs Collector 와 instance 로 나뉜다).

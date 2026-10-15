@@ -230,7 +230,8 @@ connectors:
     virtual_node_peer_attributes: [peer.service, db.name, db.system, messaging.destination.name, messaging.system, rpc.service, server.address, net.peer.name]
     metrics_flush_interval: 30s
 exporters:
-  # 내보내기마다 메모리 전송 큐 5000 묶음, 실패하면 5초부터 30초 간격으로 15분까지 다시 보낸다(obs 재배포를 넘긴다)
+  # 내보내기마다 메모리 전송 큐 128 MiB(바이트로 센다. 셋 합 384 MiB 가 2 GiB 안에 든다), 실패하면 5초부터 30초 간격으로 15분까지 다시 보낸다.
+  # obs 재배포 몇 분 동안의 양은 이보다 훨씬 작다. 큐가 차면 그 뒤로 들어오는 것을 버린다(otelcol_exporter_enqueue_failed_*)
   otlphttp/loki:
     endpoint: ${env:LOKI_OTLP_ENDPOINT}
     tls:
@@ -238,7 +239,8 @@ exporters:
     sending_queue:
       enabled: true
       num_consumers: 4
-      queue_size: 5000
+      sizer: bytes
+      queue_size: 134217728
     retry_on_failure:
       enabled: true
       initial_interval: 5s
@@ -252,7 +254,8 @@ exporters:
     sending_queue:
       enabled: true
       num_consumers: 4
-      queue_size: 5000
+      sizer: bytes
+      queue_size: 134217728
     retry_on_failure:
       enabled: true
       initial_interval: 5s
@@ -266,7 +269,8 @@ exporters:
     sending_queue:
       enabled: true
       num_consumers: 4
-      queue_size: 5000
+      sizer: bytes
+      queue_size: 134217728
     retry_on_failure:
       enabled: true
       initial_interval: 5s
