@@ -40,7 +40,7 @@ flowchart LR
   slack(["Slack"])
 
   app -- "OTLP" --> col
-  app -. "프로파일 (켠 서비스)" .-> pyro
+  app -. "프로파일 (켠 서비스)<br/>수신 전용 프록시" .-> pyro
   exp -- "긁기" --> col
   ncp --> exp
   col --> loki & tempo & mimir
@@ -131,6 +131,7 @@ flowchart LR
 |---|---|
 | `collector.yaml` | 수신(OTLP), 긁기(mysqld · LGTM 자체 · hostmetrics), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir) |
 | `loki.yaml` | S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
+| `pyroscope-ingest.nginx.conf` | 앱이 닿는 수신 전용 프록시. `POST /ingest` 만 Pyroscope 로 넘기고 나머지(조회 API 등)는 403 |
 | `pyroscope.yaml` | 단일 바이너리, 파일시스템 저장(데이터 EBS, 7일), 같은 태스크와 겹치지 않는 포트(gRPC 9094 · memberlist 7948) |
 | `tempo.yaml` | S3 저장, 보존 기간(compactor), WAL, 종료할 때 블록 업로드, TraceQL 지표(`local-blocks`) |
 | `mimir.yaml` | `-target=all`. S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로 나눔, OTLP 이름 접미사, 쿼리 대기열 · 샤딩 |
@@ -239,6 +240,7 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
   PYROSCOPE_SERVER_ADDRESS=http://pyroscope.<네임스페이스>:4040
   PYROSCOPE_PROFILER_EVENT=itimer   # Fargate 는 perf_events 를 막는다
   ```
+  - 앱은 `pyroscope.<네임스페이스>:4040`(Service Connect 별칭)으로 보내고, 실제로는 수신 전용 프록시(4041)에 닿는다. Pyroscope 4040 은 조회 API 도 내서 앱에 열면 Grafana 인증 없이 다른 서비스의 프로파일을 읽을 수 있기 때문이다. obs 보안 그룹도 4041 만 연다.
   - 확장이 프로파일 샘플에 스팬 ID 를, 스팬에 `pyroscope.profile.id` 를 붙인다. Tempo 의 trace-to-profiles 가 이 둘로 스팬 → 그 시간의 플레임 그래프를 연다.
 - 실험 텔레메트리는 동시 처리 요청(`http_server_active_requests`)을 위해 켠다. 같이 켜지는 요청 · 응답 본문 크기 히스토그램은 쓰지 않아 Collector 가 버린다(`filter/unused-metrics`).
 - 요청 헤더 두 개를 스팬 속성(`http.request.header.x-amz-cf-id` · `x-amzn-trace-id`)으로 남긴다. CloudFront · ALB 로그의 요청 ID 와 트레이스를 잇는 열쇠다. 클라이언트가 같은 이름의 헤더를 보내면 그 값이 섞여 들어올 수 있어, Collector 가 AWS 형식만 남긴다(아래 "저장 전 마스킹").
@@ -319,7 +321,8 @@ Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 �
 | mimir | 9009 (HTTP: OTLP `/otlp`, PromQL `/prometheus`) · 9098 (gRPC) · 7947 (memberlist, 127.0.0.1) |
 | grafana | 3000 |
 | mysqld_exporter | 9104 |
-| pyroscope | 4040 (HTTP, Service Connect `pyroscope`) · 9094 (gRPC) · 9099 (raft, 127.0.0.1) · 7948 (memberlist, 127.0.0.1) |
+| pyroscope | 4040 (HTTP, 태스크 안에서만) · 9094 (gRPC) · 9099 (raft, 127.0.0.1) · 7948 (memberlist, 127.0.0.1) |
+| pyroscope-ingest | 4041 (수신 전용 프록시, Service Connect `pyroscope` 의 대상) |
 
 Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 띄우므로 기본 7946 대신 127.0.0.1:7947 에 묶는다.
 

@@ -4,7 +4,7 @@
 # 앱 태스크의 OTel 에이전트 ──OTLP──▶ otel.<네임스페이스>:4318 (HTTP) · otel-grpc.<네임스페이스>:4317 (Service Connect)
 #   ▶ 이 태스크 하나: otel-collector → loki(로그) · tempo(트레이스) · mimir(지표) ─▶ S3
 #                     grafana(조회 · 경보 → SNS → Chatbot → Slack), mysqld_exporter(선택)
-#   앱의 프로파일 ──▶ pyroscope.<네임스페이스>:4040 (Service Connect) ▶ pyroscope(데이터 EBS, 7일)
+#   앱의 프로파일 ──▶ pyroscope.<네임스페이스>:4040 (Service Connect) ▶ pyroscope-ingest(4041, 올리기만) ▶ pyroscope(데이터 EBS, 7일)
 #
 #   설정   : config/ 를 obs-config 버킷에 올리고(아래 aws_s3_object), config-init 컨테이너가 태스크 시작 때 받는다.
 #            파일 내용의 해시가 작업 정의에 들어가므로 설정을 고치면 apply 가 곧 재배포다.
@@ -47,7 +47,8 @@ locals {
     mimir_http     = 9009
     grafana        = 3000
     mysqld_metrics = 9104
-    pyroscope      = 4040 # gRPC 9094 · raft 9099 · memberlist 7948 은 config/pyroscope.yaml
+    pyroscope      = 4040 # 태스크 안(Grafana · Collector)에서만. gRPC 9094 · raft 9099 · memberlist 7948 은 config/pyroscope.yaml
+    pyroscope_in   = 4041 # 앱이 닿는 수신 전용 프록시(config/pyroscope-ingest.nginx.conf). obs 보안 그룹이 이 포트만 연다
   }
 
   # 이미지는 태그와 다이제스트로 고정한다 (linux/arm64 · linux/amd64 매니페스트)
@@ -60,6 +61,7 @@ locals {
     grafana        = "grafana/grafana:12.4.12@sha256:83be3e511ede559bee80e2215bb1987cb1246075461cb961beb515b0341e7aea"
     mysqld_exp     = "prom/mysqld-exporter:v0.20.0@sha256:abed8dac117b4ae5b70757f988e44795935b9a72c3b58d720c67ba688f8cb79e"
     pyroscope      = "grafana/pyroscope:2.4.0@sha256:b7e62699a27463aa3533efe3f88c320da594da495731fd6eabca6f44f92cdd7b"
+    nginx          = "nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6"
   }
 
   obs_log_group = "/ecs/${local.obs_name}"
@@ -71,7 +73,7 @@ locals {
     restartPolicy   = { enabled = true, restartAttemptPeriod = 60 }
   }
 
-  obs_log = { for c in ["config-init", "otel-collector", "loki", "tempo", "mimir", "grafana", "mysqld-exporter", "pyroscope"] : c => {
+  obs_log = { for c in ["config-init", "otel-collector", "loki", "tempo", "mimir", "grafana", "mysqld-exporter", "pyroscope", "pyroscope-ingest"] : c => {
     logDriver = "awslogs"
     options = {
       awslogs-group         = local.obs_log_group
@@ -321,7 +323,6 @@ locals {
         command   = ["-config.file=/config/pyroscope.yaml"]
         # 압축 작업 임시 디렉터리(/tmp)를 데이터 볼륨으로 돌린다. 루트 파일시스템을 읽기 전용으로 두기 위해서다
         environment            = [{ name = "TMPDIR", value = "/data" }]
-        portMappings           = [{ name = "pyroscope", containerPort = local.obs_ports.pyroscope, protocol = "tcp", appProtocol = "http" }]
         mountPoints            = concat(local.obs_config_mount, [{ sourceVolume = "pyroscope-data", containerPath = "/data", readOnly = false }])
         dependsOn              = local.obs_after_config
         stopTimeout            = 60
@@ -329,6 +330,25 @@ locals {
         logConfiguration       = local.obs_log["pyroscope"]
         linuxParameters        = local.obs_common.linuxParameters
         restartPolicy          = local.obs_common.restartPolicy
+      },
+    ] : [],
+    local.obs_pyroscope ? [
+      # 앱이 닿는 쪽. 프로파일 올리기(POST /ingest)만 Pyroscope 로 넘기고 조회 API 는 403 이다.
+      # Pyroscope 4040 은 조회 API 도 내므로 앱에 직접 열지 않는다(열면 Grafana 인증 없이 다른 서비스 프로파일을 읽는다)
+      {
+        name                   = "pyroscope-ingest"
+        image                  = local.obs_images.nginx
+        essential              = false
+        memory                 = 32
+        command                = ["nginx", "-c", "/config/pyroscope-ingest.nginx.conf", "-g", "daemon off;"]
+        portMappings           = [{ name = "pyroscope", containerPort = local.obs_ports.pyroscope_in, protocol = "tcp", appProtocol = "http" }]
+        mountPoints            = local.obs_config_mount
+        dependsOn              = concat(local.obs_after_config, [{ containerName = "pyroscope", condition = "START" }])
+        readonlyRootFilesystem = true
+        logConfiguration       = local.obs_log["pyroscope-ingest"]
+        # nginx 의 pid · 임시 파일은 /tmp 에 쓴다. 루트는 읽기 전용이라 메모리 tmpfs 를 붙인다
+        linuxParameters = merge(local.obs_common.linuxParameters, { tmpfs = [{ containerPath = "/tmp", size = 16 }] })
+        restartPolicy   = local.obs_common.restartPolicy
       },
     ] : [],
   )
@@ -461,7 +481,7 @@ resource "aws_ecs_service" "obs" {
       }
     }
 
-    # 앱의 프로파일 수신(service.yml 에 profiling: true 인 서비스가 보낸다)
+    # 앱의 프로파일 수신(service.yml 에 profiling: true 인 서비스가 보낸다). 별칭 포트 4040 → 수신 전용 프록시 4041
     dynamic "service" {
       for_each = local.obs_pyroscope ? [1] : []
 
