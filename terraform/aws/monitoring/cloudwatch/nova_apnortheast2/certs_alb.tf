@@ -2,9 +2,11 @@
 #
 #   인증서 만료   ACM DaysToExpiry. ALB 인증서는 서울, CloudFront 인증서는 us-east-1 에 지표가 있다.
 #                 ACM 이 만료 60일 전부터 자동 갱신하므로, 14일 남았다는 것은 갱신(DNS 검증 레코드 등)이 막혔다는 뜻이다.
+#                 일 단위 정수라 14일 당일도 울리게 <= 로 비교한다. 만료되면 ACM 이 지표를 멈추므로 결측은 상태를 유지한다(ignore).
 #   ALB 4xx 비율  ALB 가 직접 만든 4xx(대상에 넘기지 않은 요청) / 전체 요청. 원본 확인 헤더나 리스너 규칙이 어긋나면
 #                 모든 요청이 ALB 기본 404 로 끝나는데, 5xx 가 아니라 다른 경보가 울리지 않는다.
-#                 요청이 5분 20건 미만이면 비율을 보지 않는다(몇 건의 스캐너 요청으로 튀지 않게).
+#                 RequestCount 는 대상을 고른 요청만 센다. 그래서 전체 = RequestCount + ALB 자체 4xx 이고, 결측은 0 으로 채운다.
+#                 전체가 5분 20건 미만이면 비율을 보지 않고(몇 건의 스캐너 요청으로 튀지 않게), 15분 연속일 때만 울린다.
 locals {
   acm = data.terraform_remote_state.acm.outputs
   certs_seoul = { for k, arn in {
@@ -28,8 +30,8 @@ resource "aws_cloudwatch_metric_alarm" "cert_expiry" {
   period              = 86400
   evaluation_periods  = 1
   threshold           = var.cert_expiry_days
-  comparison_operator = "LessThanThreshold"
-  treat_missing_data  = "notBreaching"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  treat_missing_data  = "ignore"
 
   dimensions = { CertificateArn = each.value }
 
@@ -49,8 +51,8 @@ resource "aws_cloudwatch_metric_alarm" "cert_expiry_us_east_1" {
   period              = 86400
   evaluation_periods  = 1
   threshold           = var.cert_expiry_days
-  comparison_operator = "LessThanThreshold"
-  treat_missing_data  = "notBreaching"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  treat_missing_data  = "ignore"
 
   dimensions = { CertificateArn = each.value }
 
@@ -69,7 +71,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_elb_4xx_ratio" {
 
   metric_query {
     id          = "ratio"
-    expression  = "IF(requests >= 20, elb4xx / requests, 0)"
+    expression  = "IF(FILL(requests, 0) + FILL(elb4xx, 0) >= 20, FILL(elb4xx, 0) / (FILL(requests, 0) + FILL(elb4xx, 0)), 0)"
     label       = "ALB-generated 4xx ratio"
     return_data = true
   }

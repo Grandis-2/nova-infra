@@ -238,7 +238,7 @@ flowchart LR
 
 - 5xx 비율은 고정 기준(5분 5%) 경보를 두지 않는다. SLO 가용성 소진 속도 경보가 더 일찍(1.44%), 더 적게 울린다. 파일에서 규칙을 빼도 Grafana 는 지우지 않으므로 `rules.yaml` 의 `deleteRules` 로 지운다.
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회 자체가 실패하면 Error 상태 알림이 따로 간다.
-- 트래픽이 없어도 알아야 하는 엣지 문제는 CloudWatch 경보가 본다(monitoring/cloudwatch 스택 `certs_alb.tf`): 인증서 만료 14일 전(ALB · CloudFront 인증서), ALB 가 직접 만든 4xx 비율(원본 확인 헤더 · 리스너 규칙 어긋남).
+- 엣지 문제는 CloudWatch 경보가 본다(monitoring/cloudwatch 스택 `certs_alb.tf`): 인증서 만료 14일 전(ALB · CloudFront 인증서, 트래픽과 무관), ALB 가 직접 만든 4xx 비율(원본 확인 헤더 · 리스너 규칙 어긋남, 요청 5분 20건 이상일 때 15분 연속).
 - RDS 의 CPU · 여유 메모리 · 남은 스토리지도 CloudWatch 경보(`rds_instance_ids`)가 맡는다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식일 때만 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 그 JSON 을 만든다.
 
@@ -298,7 +298,7 @@ LGTM 대시보드에서 어느 마운트(루트 · 데이터 EBS)인지 본다. 
 
 ### MySQL 수집 끊김
 
-1. MySQL 대시보드의 exporter 연결 · 수집 오류를 본다. DB 자체가 내려갔으면 앱 5xx 경보도 같이 온다.
+1. MySQL 대시보드의 exporter 연결 · 수집 오류를 본다. DB 자체가 내려갔으면 SLO 가용성 경보도 같이 온다(요청이 1시간 60건 이상인 서비스만).
 2. DB 는 살아 있는데 수집만 끊겼으면 exporter 계정 · 비밀(`nova-prod/db/exporter`) · 보안 그룹을 본다.
 
 ### MySQL 연결 사용률
