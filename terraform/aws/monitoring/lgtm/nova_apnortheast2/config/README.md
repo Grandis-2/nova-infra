@@ -18,7 +18,7 @@ nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보
 ```mermaid
 flowchart LR
   app["앱 태스크<br/>OTel Java 에이전트"]
-  ncp[("NCP MySQL")]
+  ncp[("MySQL<br/>NCP · RDS")]
   user(["운영자"])
 
   subgraph obs["obs 태스크 · EC2 1대 · localhost 공유"]
@@ -120,7 +120,7 @@ flowchart LR
 |---|---|---|
 | `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. 서비스별 요청 수 · 5xx · P99 · 인스턴스 · 힙 · CPU 와 지금 울리는 경보 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 HTTP · 외부 호출 · JVM · HikariCP · 로그 · 트레이스 |
-| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB 연결 사용률 · 느린 쿼리, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
+| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
 | `30 Platform` | ECS · ALB · CloudFront (`nova-platform`) | 태스크 수 · 재시작, ALB 오류 · 응답 시간 · 비정상 대상, CloudFront 오류율 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 느린 경로 · 5xx 경로, 느린 요청 · 느린 DB 쿼리 · 오류 트레이스, ERROR 로그 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지 |
@@ -154,11 +154,13 @@ Grafana 가 1분마다 Mimir 를 조회해 판단하고 SNS → AWS Chatbot → 
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
 | MySQL 수집 끊김 | `mysql_up` 또는 exporter 수집 대상의 `up` < 1 (exporter 를 띄운 환경만) | 5분 | critical |
 | MySQL 연결 사용률 | 연결 수 / max_connections > 80% | 10분 | warning |
+| MySQL 오래 도는 쿼리 | 상태별 실행 중 쿼리 시간 합 > 60초 (RDS 만) | 2분 | warning |
 | obs 수집 실패 | Collector 의 수신 거부 · 내보내기 실패 > 0 | 10분 | warning |
 | obs 저장소 거부 | Loki · Tempo · Mimir 가 버린 로그 · 스팬 · 샘플 > 0 (job · reason 별) | 10분 | warning |
 | obs 디스크 사용률 | obs 호스트 마운트별 사용률 > 80% | 15분 | warning |
 
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회 자체가 실패하면 Error 상태 알림이 따로 간다.
+- RDS 의 CPU · 여유 메모리 · 남은 스토리지는 CloudWatch 경보(monitoring/cloudwatch 스택, `rds_instance_ids`)가 맡는다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식일 때만 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 그 JSON 을 만든다.
 
 ## 앱 연동
@@ -263,6 +265,21 @@ Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 띄우
 | grafana | `LOKI_URL` · `TEMPO_URL` · `MIMIR_URL` | `http://localhost:3100` · `http://localhost:3200` · `http://localhost:9009/prometheus` |
 | grafana | `SNS_TOPIC_ARN` · `AWS_REGION` | 알림 주제와 리전. 비어 있으면 연락처 검증에 실패해 Grafana 가 뜨지 않는다. 태스크 역할에 `sns:Publish` 가 필요하다 |
 | grafana | `GF_SECURITY_ADMIN_PASSWORD` | Secrets Manager `nova-prod/ops/grafana/admin-password` |
+
+### DB 지표 (mysqld_exporter)
+
+exporter 는 `database` 원격 상태의 출력 네 개(`db_address` · `db_port` · `exporter_username` · `exporter_secret_arn`)로 DB 에 붙는다. 어느 플랫폼의 DB 스택이든 이 출력을 내면 된다.
+비밀은 `nova-prod/db/exporter` 이름 규칙을 따라야 obs 실행 역할이 읽는다(iam 스택 `obs.tf`).
+
+켜는 수집기는 `obs_mysql_platform`(`ncp` · `rds`)으로 고른다.
+
+| 값 | 계정 권한 | 더 켜는 것 |
+|---|---|---|
+| `ncp` | READ (PROCESS · REPLICATION CLIENT 없음) | 없음. 그 권한이 필요한 기본 수집기를 끈다 |
+| `rds` | `PROCESS` · `REPLICATION CLIENT` · `SELECT` | 다이제스트별 SQL 통계(상위 SQL), mysqld 메모리, 계정 · 상태별 연결(processlist), 교착 상태 |
+
+RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상위 SQL 이 나온다. 정적 값이라 바꾸면 재부팅이 필요하므로 인스턴스를 만들 때 켠다.
+다이제스트 지표는 SQL 형태마다 한 벌씩 생긴다. 최근 하루 동안 본 것 중 시간 순 100개만 모으고, 화면이 쓰지 않는 항목은 Collector 가 버린다(`collector.yaml` 의 mysqld `metric_relabel_configs`).
 
 ### 작업 정의 제약 (`../main.tf`)
 

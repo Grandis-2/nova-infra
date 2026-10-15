@@ -81,6 +81,33 @@ locals {
 
   obs_mysqld_exporter = var.obs_mysqld_exporter_enabled
 
+  # mysqld_exporter 수집기는 DB 플랫폼이 주는 권한에 맞춘다(var.obs_mysql_platform)
+  #   ncp: 계정이 READ 뿐이라 PROCESS · REPLICATION CLIENT 가 필요한 기본 수집기를 끈다(켜 두면 긁을 때마다 오류를 남긴다).
+  #        slave_status(REPLICATION CLIENT, 복제도 없다) · info_schema.innodb_cmp/cmpmem(PROCESS) · info_schema.query_response_time(Percona 전용)
+  #   rds: 계정에 PROCESS · REPLICATION CLIENT · performance_schema 읽기를 주고 아래를 더 켠다
+  #        perf_schema.eventsstatements — 다이제스트(SQL 형태)별 실행 수 · 시간 · 검사 행. 상위 SQL 표. 최근 하루 동안 본 것 중 시간 순 100개
+  #        perf_schema.memory_events    — mysqld 내부 메모리 사용(이벤트별)
+  #        info_schema.processlist      — 상태 · 사용자별 연결과 실행 시간(어느 서비스 계정이 연결을 쥐고 있나, 오래 도는 쿼리)
+  #        info_schema.innodb_metrics   — 교착 상태 · 잠금 대기 시간 초과
+  #        performance_schema 는 RDS 파라미터 그룹에서 켜져 있어야 한다(정적 값이라 바꾸면 재부팅)
+  obs_mysqld_collectors = {
+    ncp = [
+      "--no-collect.slave_status",
+      "--no-collect.info_schema.innodb_cmp",
+      "--no-collect.info_schema.innodb_cmpmem",
+      "--no-collect.info_schema.query_response_time",
+    ]
+    rds = [
+      "--no-collect.info_schema.query_response_time",
+      "--collect.perf_schema.eventsstatements",
+      "--collect.perf_schema.eventsstatements.limit=100",
+      "--collect.perf_schema.memory_events",
+      "--collect.info_schema.processlist",
+      "--no-collect.info_schema.processlist.processes_by_host",
+      "--collect.info_schema.innodb_metrics",
+    ]
+  }
+
   # 경보 토픽은 monitoring/cloudwatch 스택이 만든다 (Chatbot → Slack 이 이미 구독)
   alerts_topic_arn = data.aws_sns_topic.alerts.arn
   cluster_name     = data.terraform_remote_state.ecs.outputs.cluster_name
@@ -244,10 +271,9 @@ locals {
         restartPolicy    = local.obs_common.restartPolicy
       },
     ],
-    # NCP DB 지표. 계정 · 비밀은 ncp-database 스택(exporter.tf)이 만든다 — READ 계정이다.
-    # NCP 가 PROCESS · REPLICATION CLIENT 를 줄 수 없어 그 권한이 필요한 기본 수집기를 끈다(켜 두면 긁을 때마다 오류를 남긴다):
-    #   slave_status(REPLICATION CLIENT, 복제도 없다) · info_schema.innodb_cmp/cmpmem(PROCESS) · info_schema.query_response_time(Percona 전용)
-    # 남는 것: mysql_up, SHOW GLOBAL STATUS(연결 · 스레드 · 쿼리 · InnoDB 버퍼 풀 · 행 잠금 등), SHOW GLOBAL VARIABLES(max_connections 등)
+    # DB 지표. 대상 · 계정 · 비밀은 database 원격 상태의 출력(db_address · db_port · exporter_username · exporter_secret_arn)을 쓴다.
+    # 어느 플랫폼이든 이 네 출력을 내면 된다. 켜는 수집기는 위 obs_mysqld_collectors
+    # 언제나 남는 것: mysql_up, SHOW GLOBAL STATUS(연결 · 스레드 · 쿼리 · InnoDB 버퍼 풀 · 행 잠금 등), SHOW GLOBAL VARIABLES(max_connections 등)
     # TLS: 앱(JDBC sslMode=REQUIRED)과 같이 암호화는 하고 인증서는 검증하지 않는다(--tls.insecure-skip-verify → DSN tls=skip-verify)
     local.obs_mysqld_exporter ? [
       {
@@ -255,16 +281,12 @@ locals {
         image     = local.obs_images.mysqld_exp
         essential = false
         memory    = 128
-        command = [
+        command = concat([
           "--mysqld.address=${data.terraform_remote_state.database.outputs.db_address}:${data.terraform_remote_state.database.outputs.db_port}",
           "--mysqld.username=${data.terraform_remote_state.database.outputs.exporter_username}",
           "--tls.insecure-skip-verify",
           "--web.listen-address=:${local.obs_ports.mysqld_metrics}",
-          "--no-collect.slave_status",
-          "--no-collect.info_schema.innodb_cmp",
-          "--no-collect.info_schema.innodb_cmpmem",
-          "--no-collect.info_schema.query_response_time",
-        ]
+        ], local.obs_mysqld_collectors[var.obs_mysql_platform])
         secrets = [
           # 비밀은 JSON(username · password · host · port)이다. password 키만 넣는다
           { name = "MYSQLD_EXPORTER_PASSWORD", valueFrom = "${data.terraform_remote_state.database.outputs.exporter_secret_arn}:password::" },

@@ -59,3 +59,15 @@ variable "waf_rate_limit_blocked_threshold" {
   type        = number
   default     = 100
 }
+
+variable "rds_instance_ids" {
+  description = "경보를 걸 RDS 인스턴스 식별자(DBInstanceIdentifier). 비어 있으면 RDS 경보를 만들지 않는다"
+  type        = list(string)
+  default     = []
+}
+
+variable "rds_free_storage_threshold_gib" {
+  description = "RDS 남은 스토리지 경보 문턱(GiB)"
+  type        = number
+  default     = 10
+}

@@ -4,7 +4,7 @@
 # 경보는 사람이 바로 조치할 것만 만든다. 할 일 없는 경보는 무시하게 되고 진짜 장애를 놓친다.
 #
 #   사용자가 이미 아프다 : ALB 5xx, 응답 지연, 태스크 0개, CloudFront 5xx (edge.tf)
-#   곧 아파진다          : CPU, 큐 적체, Valkey (DB 는 NCP Cloud Insight 알림)
+#   곧 아파진다          : CPU, 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
 #   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
 #   공격 · 차단          : WAF 차단 급증 (edge.tf)
 #
@@ -25,6 +25,13 @@ locals {
     cpu       = { metric = "EngineCPUUtilization", statistic = "Average", threshold = 80, periods = 3, description = "engine CPU above 80% (single thread)" }
     memory    = { metric = "DatabaseMemoryUsagePercentage", statistic = "Maximum", threshold = 80, periods = 2, description = "memory above 80%. Evictions come next" }
     evictions = { metric = "Evictions", statistic = "Sum", threshold = 0, periods = 1, description = "keys were evicted. Queue or session data may be lost" }
+  }
+
+  # 연결 사용률 · 수집 끊김 · 오래 도는 쿼리는 엔진 지표라 Grafana 경보(lgtm 스택)가 본다
+  rds_alarms = {
+    cpu     = { metric = "CPUUtilization", statistic = "Average", comparison = "GreaterThanThreshold", threshold = 80, periods = 3, description = "CPU above 80% for 15 minutes" }
+    memory  = { metric = "FreeableMemory", statistic = "Minimum", comparison = "LessThanThreshold", threshold = 256 * 1024 * 1024, periods = 3, description = "freeable memory below 256 MiB for 15 minutes. Swap comes next" }
+    storage = { metric = "FreeStorageSpace", statistic = "Minimum", comparison = "LessThanThreshold", threshold = var.rds_free_storage_threshold_gib * 1024 * 1024 * 1024, periods = 1, description = "free storage below ${var.rds_free_storage_threshold_gib} GiB" }
   }
 }
 
@@ -147,7 +154,7 @@ resource "aws_cloudwatch_metric_alarm" "service_cpu" {
   alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
-# DB 는 NCP 에 있어 CloudWatch 지표가 없다. NCP Cloud Insight 알림(CPU, 디스크, 연결 수)으로 본다.
+# NCP DB 는 CloudWatch 지표가 없어 NCP Cloud Insight 알림(CPU, 디스크, 연결 수)으로 본다. RDS 는 아래 rds 경보다.
 
 # Valkey: 대기열 · 세션이 여기 있다. 메모리가 차서 키가 밀려나면(eviction) 대기 순번이 사라진다
 resource "aws_cloudwatch_metric_alarm" "valkey" {
@@ -171,6 +178,32 @@ resource "aws_cloudwatch_metric_alarm" "valkey" {
   treat_missing_data  = "notBreaching"
 
   dimensions = { CacheClusterId = each.value.node }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
+# RDS: 인스턴스마다 CPU · 메모리 · 스토리지
+resource "aws_cloudwatch_metric_alarm" "rds" {
+  for_each = {
+    for p in setproduct(var.rds_instance_ids, keys(local.rds_alarms)) : "${p[0]}-${p[1]}" => {
+      instance = p[0]
+      spec     = local.rds_alarms[p[1]]
+    }
+  }
+
+  alarm_name          = each.key
+  alarm_description   = "${each.value.instance}: ${each.value.spec.description}"
+  namespace           = "AWS/RDS"
+  metric_name         = each.value.spec.metric
+  statistic           = each.value.spec.statistic
+  period              = 300
+  evaluation_periods  = each.value.spec.periods
+  threshold           = each.value.spec.threshold
+  comparison_operator = each.value.spec.comparison
+  treat_missing_data  = "notBreaching"
+
+  dimensions = { DBInstanceIdentifier = each.value.instance }
 
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]

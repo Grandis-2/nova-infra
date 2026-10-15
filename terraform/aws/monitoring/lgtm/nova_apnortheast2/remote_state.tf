@@ -23,7 +23,7 @@ data "terraform_remote_state" "secretsmanager" {
   config  = local.remote_state.secretsmanager
 }
 
-# mysqld_exporter 가 붙을 NCP DB 주소
+# mysqld_exporter 가 붙을 DB 의 주소 · 계정 · 비밀(db_address · db_port · exporter_username · exporter_secret_arn)
 data "terraform_remote_state" "database" {
   backend = "s3"
   config  = local.remote_state.database
