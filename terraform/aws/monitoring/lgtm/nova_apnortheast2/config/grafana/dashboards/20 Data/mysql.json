@@ -762,7 +762,8 @@
           },
           "color": {
             "mode": "thresholds"
-          }
+          },
+          "noValue": "수집 안 됨"
         },
         "overrides": []
       },
@@ -828,7 +829,8 @@
           },
           "color": {
             "mode": "thresholds"
-          }
+          },
+          "noValue": "수집 안 됨"
         },
         "overrides": []
       },
@@ -852,7 +854,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "max(mysql_info_schema_processlist_seconds{job=\"mysqld\", command=\"query\"}) or vector(0)",
+          "expr": "max(mysql_info_schema_processlist_seconds{job=\"mysqld\", command=\"query\"})",
           "legendFormat": ""
         }
       ],
@@ -2655,7 +2657,7 @@
     {
       "type": "timeseries",
       "title": "디스크 대기열 · 처리량",
-      "description": "대기열이 계속 1 을 넘으면 IOPS · 처리량 한도에 닿았다",
+      "description": "대기열(왼쪽 축)이 계속 1 을 넘으면 IOPS · 처리량 한도에 닿았다. 처리량은 오른쪽 축",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -2669,7 +2671,40 @@
           },
           "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -2714,7 +2749,7 @@
           "region": "default",
           "id": "",
           "period": "",
-          "label": "읽기 B/s",
+          "label": "읽기",
           "metricQueryType": 0,
           "metricEditorMode": 0,
           "namespace": "AWS/RDS",
@@ -2736,7 +2771,7 @@
           "region": "default",
           "id": "",
           "period": "",
-          "label": "쓰기 B/s",
+          "label": "쓰기",
           "metricQueryType": 0,
           "metricEditorMode": 0,
           "namespace": "AWS/RDS",
