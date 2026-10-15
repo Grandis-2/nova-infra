@@ -115,10 +115,10 @@ resource "aws_cloudwatch_metric_alarm" "no_running_tasks" {
 
   alarm_name        = "${local.name_prefix}-${each.key}-no-tasks"
   alarm_description = "${each.value} has no running tasks. Check stopped task reasons and logs"
-  # 서비스 CPU 지표(AWS/ECS, 무료)는 태스크마다 1분에 한 번 찍힌다. 표본 수 = 실행 중 태스크 수, 태스크가 없으면 결측
+  # AWS/ECS 의 무료 태스크 수 지표. Container Insights 를 쓰지 않는다
   namespace           = "AWS/ECS"
-  metric_name         = "CPUUtilization"
-  statistic           = "SampleCount"
+  metric_name         = "LiveTaskCount"
+  statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 5 # 배포 · singleton 재시작으로 잠깐 0 이 되는 것은 넘긴다
   threshold           = 1

@@ -15,8 +15,8 @@ locals {
   ecs_cluster_arn = data.terraform_remote_state.ecs.outputs.cluster_arn
   # arn:aws:ecs:<리전>:<계정>:cluster/<이름> → 서비스 ARN 접두사 arn:aws:ecs:<리전>:<계정>:service/<이름>/
   ecs_service_arn_prefix = "${replace(local.ecs_cluster_arn, ":cluster/", ":service/")}/"
-  # batch 는 batch_failure 가 본다. 없으면 거를 것도 없다
-  ecs_event_groups = contains(keys(local.service_names), "batch") ? [{ "anything-but" = "service:${local.service_names["batch"]}" }] : [{ prefix = "service:" }]
+  # 서비스 태스크만 본다. 단독 실행 태스크(group = family:<이름>)와 batch 는 batch_failure 가 본다
+  ecs_event_groups = [for key, name in local.service_names : "service:${name}" if key != "batch"]
 
   ecs_event_rules = {
     deployment-failed = {

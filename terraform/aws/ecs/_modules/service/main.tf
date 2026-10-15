@@ -327,9 +327,9 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
 
         metric_stat {
           metric {
-            # 서비스 CPU 지표(AWS/ECS, 무료)의 1분 표본 수 = 실행 중 태스크 수
+            # 서비스 태스크 수(AWS/ECS, 무료). 연결을 정리하며 내려가는 태스크도 센다
             namespace   = "AWS/ECS"
-            metric_name = "CPUUtilization"
+            metric_name = "LiveTaskCount"
 
             dimensions {
               name  = "ClusterName"
@@ -342,7 +342,7 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
             }
           }
 
-          stat = "SampleCount"
+          stat = "Average"
         }
 
         return_data = false
