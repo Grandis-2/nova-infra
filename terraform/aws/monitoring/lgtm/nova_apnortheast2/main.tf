@@ -502,10 +502,10 @@ resource "aws_ecs_service" "obs" {
 resource "aws_cloudwatch_metric_alarm" "obs_no_task" {
   alarm_name        = "${local.obs_name}-no-tasks"
   alarm_description = "Observability stack has no running task. Dashboards and Grafana alerts are down, the OTel gateway is queueing"
-  # 서비스 CPU 지표(AWS/ECS, 무료)는 태스크마다 1분에 한 번 찍힌다. 표본 수 = 실행 중 태스크 수, 태스크가 없으면 결측
+  # AWS/ECS 의 무료 태스크 수 지표. Container Insights 를 쓰지 않는다
   namespace           = "AWS/ECS"
-  metric_name         = "CPUUtilization"
-  statistic           = "SampleCount"
+  metric_name         = "LiveTaskCount"
+  statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 10 # 배포 때 옛 태스크를 먼저 내리므로 잠깐 0 이 된다
   threshold           = 1

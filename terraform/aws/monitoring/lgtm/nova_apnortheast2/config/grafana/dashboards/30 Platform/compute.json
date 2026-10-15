@@ -100,8 +100,8 @@
   "panels": [
     {
       "type": "stat",
-      "title": "실행 중 태스크",
-      "description": "nova-prod 클러스터 전체(obs · 게이트웨이 포함). AWS/ECS 서비스 CPU 지표의 표본 수로 센다. 서비스가 원하는 수보다 모자라면 CloudWatch '태스크 0개' 경보와 ECS 이벤트 경보(배포 · 배치 실패, 컨테이너 종료)가 알린다. 5분 전 값이다(진행 중인 구간은 표본이 덜 차 작게 나온다)",
+      "title": "활성 태스크",
+      "description": "nova-prod 클러스터 전체(obs · 게이트웨이 포함). AWS/ECS LiveTaskCount 로 센다(뜨는 중 · 내려가는 중 포함). 서비스가 원하는 수보다 모자라면 CloudWatch '태스크 0개' 경보와 ECS 이벤트 경보(배포 · 배치 실패, 컨테이너 종료)가 알린다",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -152,11 +152,10 @@
           "label": "태스크",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SUM(SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"CPUUtilization\" ClusterName=\"nova-prod\"', 'SampleCount', 300) / 5)",
+          "expression": "SUM(SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"LiveTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300))",
           "statistic": "Average"
         }
       ],
-      "timeShift": "5m",
       "id": 1,
       "gridPos": {
         "h": 4,
@@ -798,8 +797,8 @@
     },
     {
       "type": "timeseries",
-      "title": "실행 중 태스크",
-      "description": "오토스케일링 · 배포로 바뀐다. 배포 중에는 옛 · 새 태스크가 겹쳐 잠깐 는다. 5분 늦게 그린다(진행 중인 구간은 표본이 덜 찬다)",
+      "title": "활성 태스크",
+      "description": "오토스케일링 · 배포로 바뀐다. 배포 중에는 옛 · 새 태스크가 겹쳐 잠깐 는다",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -842,11 +841,10 @@
           "label": "${PROP('Dim.ServiceName')}",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"CPUUtilization\" ClusterName=\"nova-prod\"', 'SampleCount', 300) / 5",
+          "expression": "SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"LiveTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 300)",
           "statistic": "Average"
         }
       ],
-      "timeShift": "5m",
       "id": 11,
       "gridPos": {
         "h": 8,

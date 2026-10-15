@@ -131,7 +131,7 @@ resource "aws_ecs_service" "gateway" {
   }
 }
 
-# 게이트웨이가 없으면 모든 수집이 멈춘다. AWS/ECS 의 서비스 CPU 지표는 태스크가 돌 때만 나오므로 결측을 장애로 본다
+# 게이트웨이가 없으면 모든 수집이 멈춘다. AWS/ECS 의 무료 태스크 수 지표로 보고, 지표가 끊긴 것도 장애로 본다
 # (Container Insights 지표를 쓰지 않는다)
 resource "aws_cloudwatch_metric_alarm" "gateway_no_task" {
   count = local.gateway_enabled ? 1 : 0
@@ -139,8 +139,8 @@ resource "aws_cloudwatch_metric_alarm" "gateway_no_task" {
   alarm_name          = "${local.gateway_name}-no-tasks"
   alarm_description   = "OTel gateway has no running task. Logs, traces and metrics from apps are being dropped"
   namespace           = "AWS/ECS"
-  metric_name         = "CPUUtilization"
-  statistic           = "SampleCount"
+  metric_name         = "LiveTaskCount"
+  statistic           = "Maximum"
   period              = 60
   evaluation_periods  = 5
   threshold           = 1
