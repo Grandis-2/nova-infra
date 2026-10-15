@@ -233,7 +233,7 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
 - `JAVA_TOOL_OPTIONS` 는 쓰지 않는다. 이미지의 힙 옵션이 그 변수에 들어 있어 덮어쓰면 사라진다.
 - 엔드포인트와 프로토콜은 짝을 맞춘다. `otel.nova.local:4318` 은 `http/protobuf`, gRPC 는 `otel-grpc.nova.local:4317` 이다. 어긋나면 앱 로그에 실패가 한 줄 남을 뿐 아무것도 오지 않는다.
 - MDC 는 `traceId`(요청 ID)만 넘긴다. `subject`(회원 ID)는 넘기지 않는다.
-- **프로파일(NV-540)**: `application/<서비스>/service.yml` 에 `profiling: true` 인 서비스에만 켠다(기본 false). 같은 값으로 obs 4040 인바운드도 그 서비스에만 열린다. 이미지에 확장 jar(`/otel/pyroscope-otel.jar`)가 있어야 해서 be 이미지에 넣은 뒤 한 서비스씩 켠다.
+- **프로파일(NV-540)**: `application/<서비스>/service.yml` 에 `profiling: true` 인 서비스에만 켠다(기본 false). 같은 값으로 obs 의 프로파일 인바운드(4041, 수신 전용 프록시)도 그 서비스에만 열린다. 이미지에 확장 jar(`/otel/pyroscope-otel.jar`)가 있어야 해서 be 이미지에 넣은 뒤 한 서비스씩 켠다.
   ```
   OTEL_JAVAAGENT_EXTENSIONS=/otel/pyroscope-otel.jar
   OTEL_PYROSCOPE_START_PROFILING=true
