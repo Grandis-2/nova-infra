@@ -10,9 +10,10 @@ deployment: rolling
 spot: false                     # 판정 부하를 받는 대상이라 회수로 대수가 흔들리지 않게 한다
 
 # worker 의 mock-max-instances 는 max 와 같게 둔다(worker 가 그 안에서 동시 요청 수를 스스로 맞춘다)
+# 평소는 1대. 판정 부하 시험 때는 오토스케일링이 늘린다(최대 5)
 scaling:
-  desired: 2
-  min: 2
+  desired: 1
+  min: 1
   max: 5
 
 # ALB 대상 그룹이 이 경로로 상태를 본다. readiness 는 앱 상태만 본다(DB 장애로 태스크를 갈아 끼우지 않게)

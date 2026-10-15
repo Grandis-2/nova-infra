@@ -323,7 +323,7 @@ OTEL_TRACES_EXPORTER=otlp
 OTEL_METRICS_EXPORTER=otlp
 OTEL_TRACES_SAMPLER=parentbased_always_on
 OTEL_INSTRUMENTATION_MICROMETER_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel.nova.local:4318
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-gateway.nova.local:4318
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_INSTRUMENTATION_AWS_SDK_EXPERIMENTAL_USE_PROPAGATOR_FOR_MESSAGING=true
 OTEL_INSTRUMENTATION_LOGBACK_APPENDER_EXPERIMENTAL_MDC_ATTRIBUTES_INCLUDED=traceId
@@ -333,7 +333,7 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
 ```
 
 - `JAVA_TOOL_OPTIONS` 는 쓰지 않는다. 이미지의 힙 옵션이 그 변수에 들어 있어 덮어쓰면 사라진다.
-- 엔드포인트와 프로토콜은 짝을 맞춘다. `otel.nova.local:4318` 은 `http/protobuf`, gRPC 는 `otel-grpc.nova.local:4317` 이다. 어긋나면 앱 로그에 실패가 한 줄 남을 뿐 아무것도 오지 않는다.
+- 엔드포인트와 프로토콜은 짝을 맞춘다. `otel-gateway.nova.local:4318` 은 `http/protobuf`, gRPC 는 `otel-gateway-grpc.nova.local:4317` 이다. 어긋나면 앱 로그에 실패가 한 줄 남을 뿐 아무것도 오지 않는다.
 - MDC 는 `traceId`(요청 ID)만 넘긴다. `subject`(회원 ID)는 넘기지 않는다.
 - **프로파일(NV-540)**: `application/<서비스>/service.yml` 에 `profiling: true` 인 서비스에만 켠다(기본 false). 같은 값으로 obs 의 프로파일 인바운드(4041, 수신 전용 프록시)도 그 서비스에만 열린다. 이미지에 확장 jar(`/otel/pyroscope-otel.jar`)가 있어야 해서 be 이미지에 넣은 뒤 한 서비스씩 켠다.
   ```
@@ -474,7 +474,10 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - 게이트웨이 배포 중에는 두 태스크가 1~2분 함께 떠 한 트레이스의 스팬이 나뉠 수 있다. 그동안은 tail sampling 결정이 어긋날 수 있다.
 - 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otelcol-contrib"`, obs Collector 와 instance 로 나뉜다).
 - 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. 서비스 CPU 지표(`AWS/ECS`)가 끊긴 것을 장애로 본다.
-- 앱이 어디로 보내는지는 ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT` 가 정한다.
+- 앱은 `otel-gateway.<네임스페이스>:4318` 로 보낸다(ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT`).
+- **Service Connect 별칭은 태스크가 뜰 때 정해진다.** 그 뒤에 생긴 이름은 이미 떠 있는 태스크에서 풀리지 않는다(`no such host`).
+  obs 가 `loki` · `tempo-otlp` · `mimir` 를 새로 내놓거나 이름을 바꾸면 게이트웨이를 다시 띄운다(`update-service --force-new-deployment`). 게이트웨이를 새로 만들 때도 같다.
+- 별칭은 IPv4(127.255.0.x) · IPv6(2600:f0f0::x) 두 주소로 풀린다. 태스크에 IPv6 경로가 없어 gRPC(Tempo) 가 IPv6 시도를 `network is unreachable` 경고로 남기고 IPv4 로 붙는다. 내보내기 실패가 아니다.
 
 ### 작업 정의 제약 (`../main.tf`)
 
