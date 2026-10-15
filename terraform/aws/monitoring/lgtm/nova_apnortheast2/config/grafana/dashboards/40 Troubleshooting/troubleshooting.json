@@ -808,7 +808,7 @@
           "queryType": "traceql",
           "limit": 50,
           "tableType": "traces",
-          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~\"$route\" && duration > $slow}"
+          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~`${route:regex}` && duration > $slow}"
         }
       ],
       "id": 11,
@@ -837,7 +837,7 @@
           "queryType": "traceql",
           "limit": 50,
           "tableType": "traces",
-          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~\"$route\" && status=error}"
+          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~`${route:regex}` && status=error}"
         }
       ],
       "id": 12,
@@ -1195,7 +1195,7 @@
           "limit": 50,
           "tableType": "spans",
           "spss": 5,
-          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~\"$route\"} >> {span.db.system=\"mysql\" && duration > $slowdb} | select(span.db.operation, span.db.sql.table, span.db.statement)"
+          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~`${route:regex}`} >> {span.db.system=\"mysql\" && duration > $slowdb} | select(span.db.operation, span.db.sql.table, span.db.statement)"
         }
       ],
       "id": 16,

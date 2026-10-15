@@ -147,6 +147,7 @@ flowchart LR
 | `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 목표 미달 · 재시작 · 배포, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
+| `50 URLs` | URL 목록 (`nova-url`) · URL 그리드 (`nova-url-grid`) · URL 상세 (`nova-url-detail`) | 실제 요청으로 본 API(메서드 + 경로)별 값. 목록은 API × 시간 히트맵, API 표(요청 수 · 지난주 대비 증감 · 성공률 · 4xx · 1초 초과 비율 · P95 · P99 · P99 증감), 새로 생긴 · 사라진 API(최근 7일), 서비스 시간대 잔디, 경로마다 펼쳐 보는 행. 그리드는 API 마다 카드. 상세는 401 · 403 · 404 · 429 수, 응답 코드별 요청량, 지연 분포, 요청량 · P99 · 성공률 지난주 대비, 시간 구성(트레이스 표본), 날짜 × 시각(KST) 잔디, 느린/오류 트레이스 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지 |
 
 - 폴더 앞 번호는 목록 순서다. Grafana 는 폴더를 이름순으로만 정렬한다. 사이에 폴더를 끼울 수 있게 10 단위로 띄운다.
@@ -157,6 +158,8 @@ flowchart LR
   alert(["Slack 경보"]) --> ov["개요<br/>어느 서비스가 이상한가"]
   ov -- "서비스 이름 · 서비스 맵" --> svc["서비스 상세<br/>어느 경로가 시간을 먹나<br/>DB · 외부 · 자체 중 어디서"]
   svc -- "경로" --> ts["트러블슈팅<br/>그 경로의 지연 분포<br/>느린 · 오류 요청"]
+  ov -. "대시보드 목록" .-> url["URL 목록 · 그리드 → 상세<br/>API 별 성공률 · P99"]
+  url -- "trace_id · exemplar" --> trace
   svc -- "exemplar" --> trace["트레이스 (Tempo)"]
   ts -- "trace_id · exemplar" --> trace
   trace -- "Logs for this span" --> log["로그 (Loki)"]
@@ -169,6 +172,10 @@ flowchart LR
 - Apdex 의 T 는 0.25초다. 만족 ≤ 0.25초, 허용 ≤ 1초가 히스토그램 버킷 경계와 맞아 근사 없이 센다.
 - 이미지가 `:latest` 라 버전 라벨이 없다. 대신 새 태스크가 처음 지표를 보낸 때(`target_info` 의 새 instance)를 보라색 구간으로 표시해 배포 · 교체 시점을 본다.
 
+- URL 화면은 `/**` 를 API 로 보지 않는다. 어떤 컨트롤러에도 맞지 않은 요청(없는 경로 · 스캐너, 대개 404)을 Spring 이 이 이름으로 묶는다. 목록 화면에 "등록되지 않은 경로 요청" 수로만 따로 센다.
+- 1초 초과 비율은 히스토그램 버킷 경계(1초)로 세어 근사가 없다. 증감은 지난주 같은 구간 대비 배수이고, 지난주에 요청이 없으면 비운다.
+- 경로 변수에는 정규식 문자가 든 값(`/orders/{id}`)이 있다. PromQL 은 `http_route=~"$route"` 로 쓴다. All 을 둔 변수는 Grafana 가 값을 정규식 이스케이프해 넣는다.
+  TraceQL 은 Grafana 가 값을 그대로 넣고 큰따옴표 문자열은 `\*` 같은 이스케이프를 받지 않는다. 그래서 ``span.http.route=~`${route:regex}` `` 처럼 regex 형식을 백틱 문자열에 넣는다.
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
   개요와 MySQL 은 Mimir 지표가 주라 1분이다. 개요는 자주 열리는 화면이라 CloudWatch 패널을 셋(ALB 연결 · 모자란 태스크 · DLQ)만 둔다.
 - CloudFront 배포는 `Product=nova` 태그, NAT · obs 인스턴스는 이름 태그로 고른다. ID 를 대시보드에 적지 않아 다시 만들어지거나 ASG 가 교체해도 따라간다.

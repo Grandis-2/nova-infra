@@ -1,0 +1,1368 @@
+{
+  "uid": "nova-url",
+  "title": "nova · URL 목록",
+  "description": "서비스 하나의 API 를 표로 보고, 아래 경로 행을 펼쳐 하나씩 본다",
+  "tags": [
+    "nova",
+    "url"
+  ],
+  "editable": false,
+  "schemaVersion": 39,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "timezone": "browser",
+  "links": [
+    {
+      "title": "nova 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "nova"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "URL 화면",
+      "type": "dashboards",
+      "tags": [
+        "url"
+      ],
+      "asDropdown": false,
+      "includeVars": true,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "서비스",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "query": {
+          "query": "label_values(target_info{job=~\"nova/.+\"}, job)",
+          "refId": "service"
+        },
+        "definition": "label_values(target_info{job=~\"nova/.+\"}, job)",
+        "regex": "/^nova\\/(.+)$/",
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "route",
+        "label": "경로",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "hide": 0,
+        "query": {
+          "query": "label_values(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}, http_route)",
+          "refId": "route"
+        },
+        "definition": "label_values(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}, http_route)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "status-history",
+      "title": "API × 시간 (요청 수)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "행은 API, 칸은 시간 구간, 진할수록 요청이 많다. 장애 시각에 어떤 API 가 튀었는지, API 마다 언제 몰리는지 본다",
+      "maxDataPoints": 72,
+      "interval": "5m",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "continuous-blues"
+          },
+          "custom": {
+            "fillOpacity": 90,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "rowHeight": 0.9,
+        "colWidth": 0.95,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__interval]))",
+          "legendFormat": "{{http_request_method}} {{http_route}}",
+          "range": true,
+          "instant": false,
+          "format": "time_series"
+        }
+      ],
+      "id": 1,
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "table",
+      "title": "API 목록 (선택한 기간 전체)",
+      "description": "실제 요청(앱 HTTP 지표, 샘플링 전 전부)으로 센 값. 성공률은 5xx 가 아닌 비율이고 4xx 는 따로 본다. 증감은 지난주 같은 구간 대비 배수(지난주에 요청이 없으면 빈칸). 경로를 누르면 그 URL 상세로 간다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "minWidth": 80
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "요청 수"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "요청/초"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "성공률"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.95
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.99
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx 비율"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.1
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.3
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1초 초과"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P99"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "요청 증감"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "unit",
+                "value": "prefix:×"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "orange",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P99 증감"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "unit",
+                "value": "prefix:×"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "경로"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "이 URL 상세",
+                    "url": "/d/nova-url-detail?var-service=${service}&var-method=${__data.fields.메서드}&var-route=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "메서드"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "경로"
+            },
+            "properties": [
+              {
+                "id": "custom.minWidth",
+                "value": 300
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "요청 수",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "요청 수",
+              "Value #B": "요청/초",
+              "Value #C": "요청 증감",
+              "Value #D": "성공률",
+              "Value #E": "4xx 비율",
+              "Value #F": "1초 초과",
+              "Value #G": "P95",
+              "Value #H": "P99",
+              "Value #I": "P99 증감",
+              "http_request_method": "메서드",
+              "http_route": "경로"
+            },
+            "indexByName": {
+              "메서드": 0,
+              "경로": 1
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])) / (sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range] offset 1w)) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "D",
+          "expr": "1 - (sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_response_status_code=~\"5..\"}[$__range])) / sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])) or 0 * sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "E",
+          "expr": "sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_response_status_code=~\"4..\"}[$__range])) / sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])) or 0 * sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "F",
+          "expr": "1 - sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", le=\"1\"}[$__range])) / sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "G",
+          "expr": "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "H",
+          "expr": "histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "I",
+          "expr": "histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))) / (histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range] offset 1w))) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      }
+    },
+    {
+      "type": "stat",
+      "title": "등록되지 않은 경로 요청",
+      "description": "어떤 API 에도 맞지 않아 Spring 이 /** 로 묶은 요청(선택한 기간). 대개 404 다. 갑자기 늘면 스캐너 · 잘못된 클라이언트를 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route=\"/**\"}[$__range])) or vector(0)",
+          "legendFormat": ""
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 0,
+        "y": 19
+      }
+    },
+    {
+      "type": "table",
+      "title": "새로 생긴 API (최근 7일)",
+      "description": "최근 7일에 요청이 있었는데 그 전 7일에는 없던 API. 배포로 생긴 경로가 맞는지 본다. 하루 몇 건뿐인 경로는 우연히 들어올 수 있다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "요청 수 (7일)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "요청 수 (7일)",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value": "요청 수 (7일)",
+              "http_request_method": "메서드",
+              "http_route": "경로"
+            },
+            "indexByName": {
+              "메서드": 0,
+              "경로": 1
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[7d])) > 0) unless (sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[7d] offset 7d)) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 4,
+        "y": 19
+      }
+    },
+    {
+      "type": "table",
+      "title": "사라진 API (최근 7일)",
+      "description": "그 전 7일에는 요청이 있었는데 최근 7일에는 없는 API. 수는 그 전 7일 동안의 요청이다. 배포로 경로가 빠졌거나 클라이언트가 안 부르게 됐는지 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "요청 수 (7일)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "요청 수 (7일)",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value": "요청 수 (7일)",
+              "http_request_method": "메서드",
+              "http_route": "경로"
+            },
+            "indexByName": {
+              "메서드": 0,
+              "경로": 1
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[7d] offset 7d)) > 0) unless (sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[7d])) > 0)",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 14,
+        "y": 19
+      }
+    },
+    {
+      "type": "table",
+      "title": "서비스 전체 시간대별 요청 (최근 14일, KST)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "description": "열은 날짜, 행은 시각(한국 시간). 칸 하나가 그 날 그 시각 한 시간 동안의 요청 수이고 진할수록 많다. 매일 몰리는 시간대 · 요일을 본다",
+      "timeFrom": "now-13d/d",
+      "interval": "1h",
+      "maxDataPoints": 360,
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "min": 0,
+          "noValue": "",
+          "color": {
+            "mode": "continuous-blues"
+          },
+          "custom": {
+            "align": "center",
+            "minWidth": 44,
+            "cellOptions": {
+              "type": "color-background",
+              "mode": "basic"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "시"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 48
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "formatTime",
+          "options": {
+            "timeField": "Time",
+            "outputFormat": "MM/DD ddd|HH",
+            "timezone": "Asia/Seoul"
+          }
+        },
+        {
+          "id": "extractFields",
+          "options": {
+            "source": "Time",
+            "format": "regexp",
+            "regExp": "/(?<날짜>.+)\\|(?<시각>\\d\\d)$/",
+            "replace": false
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "시각",
+                "desc": false
+              }
+            ]
+          }
+        },
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "alias": "건수",
+            "replaceFields": false,
+            "binary": {
+              "left": {
+                "matcher": {
+                  "id": "byName",
+                  "options": "요청"
+                }
+              },
+              "operator": "*",
+              "right": {
+                "fixed": "1"
+              }
+            }
+          }
+        },
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "날짜",
+            "rowField": "시각",
+            "valueField": "건수"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "시각\\날짜": "시"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[1h] offset -1h))",
+          "legendFormat": "요청"
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "h": 26,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      }
+    },
+    {
+      "type": "row",
+      "title": "$route",
+      "id": 7,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "요청/초",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval]))",
+              "legendFormat": ""
+            }
+          ],
+          "id": 8,
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 54
+          }
+        },
+        {
+          "type": "stat",
+          "title": "성공률",
+          "description": "5xx 가 아닌 비율",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.95
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.99
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              },
+              "decimals": 2
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "1 - (sum(rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\", http_response_status_code=~\"5..\"}[$__rate_interval])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval]))",
+              "legendFormat": ""
+            }
+          ],
+          "id": 9,
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 4,
+            "y": 54
+          }
+        },
+        {
+          "type": "stat",
+          "title": "P99",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 2
+                  }
+                ]
+              },
+              "color": {
+                "mode": "thresholds"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "value",
+            "graphMode": "area",
+            "textMode": "value",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+              "legendFormat": ""
+            }
+          ],
+          "links": [
+            {
+              "title": "이 URL 상세",
+              "url": "/d/nova-url-detail?var-service=${service}&var-route=${route}&${__url_time_range}"
+            }
+          ],
+          "id": 10,
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 8,
+            "y": 54
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "요청량 (메서드 · 응답 코드별)",
+          "description": "",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never",
+                "stacking": {
+                  "mode": "normal"
+                }
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "sum by (http_request_method, http_response_status_code) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval]))",
+              "legendFormat": "{{http_request_method}} {{http_response_status_code}}"
+            }
+          ],
+          "id": 11,
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 12,
+            "y": 54
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "응답 시간",
+          "description": "점(exemplar)을 누르면 트레이스로 간다",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+              "legendFormat": "P50"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "B",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+              "legendFormat": "P99",
+              "exemplar": true
+            }
+          ],
+          "id": 12,
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 18,
+            "y": 54
+          }
+        }
+      ],
+      "repeat": "route"
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}
