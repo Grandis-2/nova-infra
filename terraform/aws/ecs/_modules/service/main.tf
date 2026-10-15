@@ -323,7 +323,7 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
 
       metrics {
         id    = "tasks"
-        label = "Running tasks"
+        label = "Live tasks"
 
         metric_stat {
           metric {

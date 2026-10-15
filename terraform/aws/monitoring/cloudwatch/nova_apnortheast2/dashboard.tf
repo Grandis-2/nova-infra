@@ -52,7 +52,7 @@ resource "aws_cloudwatch_dashboard" "this" {
         height = 6
         properties = {
           # AWS/ECS 의 무료 태스크 수 지표(Container Insights 를 쓰지 않는다)
-          title  = "서비스별 실행 태스크 수"
+          title  = "서비스별 활성 태스크 수"
           region = var.aws_region
           view   = "timeSeries"
           stat   = "Maximum"
