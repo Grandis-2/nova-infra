@@ -72,8 +72,8 @@ Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(1152 MiB
 
 ```mermaid
 flowchart LR
-  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 빈 SQS 롱폴링?"}
-  noise -- "예" --> drop["버림 (오류여도)"]
+  start["트레이스 수신<br/>끝나기를 10초 기다림"] --> noise{"헬스체크 서버 스팬<br/>또는 오류 없는 SQS 롱폴링?"}
+  noise -- "예" --> drop["버림<br/>(헬스체크는 오류여도)"]
   noise -- "아니오" --> err{"ERROR 스팬?"}
   err -- "예" --> keep["남김"]
   err -- "아니오" --> slow{"1초 초과?"}
@@ -81,7 +81,7 @@ flowchart LR
   slow -- "아니오" --> pct["10% 남김"]
 ```
 
-헬스체크는 `url.path` 가 `/actuator/*` 인 서버 스팬, 빈 롱폴링은 오류 없이 메시지 0건으로 끝난 `ReceiveMessage` 다. 결정을 기다리는 트레이스는 메모리에 최대 5만 건 둔다. 넘치면 오래된 것부터 결정 없이 버린다.
+헬스체크는 `url.path` 가 `/actuator/*` 인 서버 스팬, 롱폴링은 오류 없이 끝난 `ReceiveMessage` 클라이언트 스팬이다. 에이전트가 이 스팬에 받은 메시지 수를 붙이지 않아 빈 폴링과 가르지 않는다. 길이는 메시지를 기다린 시간일 뿐이고, 메시지 처리는 컨슈머 스팬으로 따로 남는다. 결정을 기다리는 트레이스는 메모리에 최대 5만 건 둔다. 넘치면 오래된 것부터 결정 없이 버린다.
 
 **5. APM 지표는 샘플링 전에 만든다.**
 Tempo 에 남는 트레이스는 일부라서, 거기서 센 요청 수 · 지연은 오류와 느린 요청 쪽으로 기운다. 그래서 Collector 가 트레이스를 두 갈래로 복제해 한쪽에서는 모든 스팬으로 지표를 만들고, 다른 쪽에서만 샘플링한다.
@@ -91,7 +91,7 @@ flowchart LR
   recv["트레이스 수신<br/>memory_limiter · 리소스 허용 목록"] --> apm & smp
   subgraph apm["APM 갈래 (모든 스팬)"]
     direction LR
-    f["INTERNAL 스팬 · 헬스체크 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
+    f["INTERNAL 스팬 · 헬스체크 ·<br/>오류 없는 SQS 롱폴링 제외"] --> sm["spanmetrics<br/>경로별 호출 수 · 지연"]
     f --> sg["servicegraph<br/>서비스 · DB · 외부 호출 간선"]
   end
   subgraph smp["저장 갈래"]
@@ -143,25 +143,31 @@ flowchart LR
 | 폴더 | 대시보드 (uid) | 언제 보나 |
 |---|---|---|
 | `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 모자란 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보, 서비스 맵, 서비스별 P99 · 동시 처리 요청 |
-| `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 HTTP · 외부 호출 · JVM · HikariCP · 로그 · 트레이스 |
+| `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 APM 화면. Apdex · 엔드포인트 표(시간 비중 순) · 처리 시간 구성(DB · 외부 · 메시징 · 자체) · 서비스 맵과 호출 상대 · 지난주 대비 · 오류 그룹. JVM · 외부 호출 · HikariCP 는 접힌 행 |
 | `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 목표 미달 · 재시작 · 배포, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
-| `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 느린 경로 · 5xx 경로, 느린 요청 · 느린 DB 쿼리 · 오류 트레이스, ERROR 로그 |
+| `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지 |
 
 - 폴더 앞 번호는 목록 순서다. Grafana 는 폴더를 이름순으로만 정렬한다. 사이에 폴더를 끼울 수 있게 10 단위로 띄운다.
-- 장애를 볼 때는 아래 순서로 내려간다. 표의 서비스 이름, 패널 링크, exemplar 가 다음 화면으로 이어 준다.
+- 장애를 볼 때는 아래 순서로 내려간다. 표의 서비스 이름 · 경로, 서비스 맵의 노드, exemplar 가 다음 화면으로 이어 준다.
 
 ```mermaid
 flowchart LR
   alert(["Slack 경보"]) --> ov["개요<br/>어느 서비스가 이상한가"]
-  ov -- "서비스 이름" --> svc["서비스 상세<br/>HTTP · JVM · HikariCP · 외부 호출"]
-  svc --> ts["트러블슈팅<br/>느린 경로 · 5xx · 느린 DB 쿼리"]
+  ov -- "서비스 이름 · 서비스 맵" --> svc["서비스 상세<br/>어느 경로가 시간을 먹나<br/>DB · 외부 · 자체 중 어디서"]
+  svc -- "경로" --> ts["트러블슈팅<br/>그 경로의 지연 분포<br/>느린 · 오류 요청"]
   svc -- "exemplar" --> trace["트레이스 (Tempo)"]
-  ts -- "trace_id" --> trace
+  ts -- "trace_id · exemplar" --> trace
   trace -- "Logs for this span" --> log["로그 (Loki)"]
-  svc -. "DB · 캐시 · 큐가 의심되면" .-> data["20 Data · 30 Platform"]
+  ts -. "DB 시간이 크면" .-> data["MySQL 상위 SQL<br/>20 Data · 30 Platform"]
 ```
+
+- 서비스 상세의 숫자는 무엇으로 셌는지에 따라 믿는 정도가 다르다.
+  - 요청 수 · 지연 · Apdex · 엔드포인트 표는 앱의 HTTP 지표, 시간 구성 · 나가는 호출 · 서비스 맵은 Collector 가 샘플링 전 스팬으로 센 지표라 모든 요청이 들어 있다.
+  - 오류 · 느린 트레이스 표는 Tempo 에 남은 것이다. 오류와 1초 초과는 전부, 나머지는 10% 다.
+- Apdex 의 T 는 0.25초다. 만족 ≤ 0.25초, 허용 ≤ 1초가 히스토그램 버킷 경계와 맞아 근사 없이 센다.
+- 이미지가 `:latest` 라 버전 라벨이 없다. 대신 새 태스크가 처음 지표를 보낸 때(`target_info` 의 새 instance)를 보라색 구간으로 표시해 배포 · 교체 시점을 본다.
 
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
   개요와 MySQL 은 Mimir 지표가 주라 1분이다. 개요는 자주 열리는 화면이라 CloudWatch 패널을 셋(ALB 연결 · 모자란 태스크 · DLQ)만 둔다.
