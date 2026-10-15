@@ -13,6 +13,7 @@ nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보
 | 로그 | 앱 → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
 | 트레이스 | 앱 → OTLP | tail sampling(오류 · 1초 초과는 전부, 나머지 10%), 마스킹 | Tempo → S3 | 14일 |
 | 지표 | 앱 → OTLP, Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트), Collector 가 트레이스로 만든 것(span metrics · 서비스 그래프) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
+| 프로파일 | 앱 → Pyroscope (켠 서비스만) | — | Pyroscope → 데이터 EBS | 7일 |
 | AWS 관리형 지표 | Grafana 가 CloudWatch 를 직접 조회 | — | CloudWatch | CloudWatch 기본 |
 
 ```mermaid
@@ -29,6 +30,7 @@ flowchart LR
       loki["Loki<br/>로그"]
       tempo["Tempo<br/>트레이스"]
       mimir["Mimir<br/>지표"]
+      pyro["Pyroscope<br/>프로파일"]
     end
     graf["Grafana"]
   end
@@ -38,10 +40,11 @@ flowchart LR
   slack(["Slack"])
 
   app -- "OTLP" --> col
+  app -. "프로파일 (켠 서비스)<br/>수신 전용 프록시" .-> pyro
   exp -- "긁기" --> col
   ncp --> exp
   col --> loki & tempo & mimir
-  store --> s3
+  loki & tempo & mimir --> s3
   graf -- "조회" --> store
   graf -- "조회" --> cw
   graf -- "경보 SNS → Chatbot" --> slack
@@ -128,6 +131,8 @@ flowchart LR
 |---|---|
 | `collector.yaml` | 수신(OTLP), 긁기(mysqld · LGTM 자체 · hostmetrics), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir) |
 | `loki.yaml` | S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
+| `pyroscope-ingest.nginx.conf` | 앱이 닿는 수신 전용 프록시. `POST /ingest` 만 Pyroscope 로 넘기고 나머지(조회 API 등)는 403 |
+| `pyroscope.yaml` | 단일 바이너리, 파일시스템 저장(데이터 EBS, 7일), 같은 태스크와 겹치지 않는 포트(gRPC 9094 · memberlist 7948) |
 | `tempo.yaml` | S3 저장, 보존 기간(compactor), WAL, 종료할 때 블록 업로드, TraceQL 지표(`local-blocks`) |
 | `mimir.yaml` | `-target=all`. S3 한 버킷에 블록 · ruler · alertmanager 를 접두사로 나눔, OTLP 이름 접미사, 쿼리 대기열 · 샤딩 |
 | `grafana/provisioning/datasources/` | Loki · Tempo · Mimir(서로 링크로 이어짐, Tempo 서비스 맵은 Mimir 를 읽음), CloudWatch(태스크 역할) |
@@ -163,6 +168,7 @@ flowchart LR
   svc -- "exemplar" --> trace["트레이스 (Tempo)"]
   ts -- "trace_id · exemplar" --> trace
   trace -- "Logs for this span" --> log["로그 (Loki)"]
+  trace -. "Profiles for this span (켠 서비스)" .-> prof["플레임 그래프 (Pyroscope)"]
   ts -. "DB 시간이 크면" .-> data["MySQL 상위 SQL<br/>20 Data · 30 Platform"]
 ```
 
@@ -227,6 +233,15 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
 - `JAVA_TOOL_OPTIONS` 는 쓰지 않는다. 이미지의 힙 옵션이 그 변수에 들어 있어 덮어쓰면 사라진다.
 - 엔드포인트와 프로토콜은 짝을 맞춘다. `otel.nova.local:4318` 은 `http/protobuf`, gRPC 는 `otel-grpc.nova.local:4317` 이다. 어긋나면 앱 로그에 실패가 한 줄 남을 뿐 아무것도 오지 않는다.
 - MDC 는 `traceId`(요청 ID)만 넘긴다. `subject`(회원 ID)는 넘기지 않는다.
+- **프로파일(NV-540)**: `application/<서비스>/service.yml` 에 `profiling: true` 인 서비스에만 켠다(기본 false). 같은 값으로 obs 의 프로파일 인바운드(4041, 수신 전용 프록시)도 그 서비스에만 열린다. 이미지에 확장 jar(`/otel/pyroscope-otel.jar`)가 있어야 해서 be 이미지에 넣은 뒤 한 서비스씩 켠다.
+  ```
+  OTEL_JAVAAGENT_EXTENSIONS=/otel/pyroscope-otel.jar
+  OTEL_PYROSCOPE_START_PROFILING=true
+  PYROSCOPE_SERVER_ADDRESS=http://pyroscope.<네임스페이스>:4040
+  PYROSCOPE_PROFILER_EVENT=itimer   # Fargate 는 perf_events 를 막는다
+  ```
+  - 앱은 `pyroscope.<네임스페이스>:4040`(Service Connect 별칭)으로 보내고, 실제로는 수신 전용 프록시(4041)에 닿는다. Pyroscope 4040 은 조회 API 도 내서 앱에 열면 Grafana 인증 없이 다른 서비스의 프로파일을 읽을 수 있기 때문이다. obs 보안 그룹도 4041 만 연다.
+  - 확장이 프로파일 샘플에 스팬 ID 를, 스팬에 `pyroscope.profile.id` 를 붙인다. Tempo 의 trace-to-profiles 가 이 둘로 스팬 → 그 시간의 플레임 그래프를 연다.
 - 실험 텔레메트리는 동시 처리 요청(`http_server_active_requests`)을 위해 켠다. 같이 켜지는 요청 · 응답 본문 크기 히스토그램은 쓰지 않아 Collector 가 버린다(`filter/unused-metrics`).
 - 요청 헤더 두 개를 스팬 속성(`http.request.header.x-amz-cf-id` · `x-amzn-trace-id`)으로 남긴다. CloudFront · ALB 로그의 요청 ID 와 트레이스를 잇는 열쇠다. 클라이언트가 같은 이름의 헤더를 보내면 그 값이 섞여 들어올 수 있어, Collector 가 AWS 형식만 남긴다(아래 "저장 전 마스킹").
 
@@ -306,6 +321,8 @@ Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 �
 | mimir | 9009 (HTTP: OTLP `/otlp`, PromQL `/prometheus`) · 9098 (gRPC) · 7947 (memberlist, 127.0.0.1) |
 | grafana | 3000 |
 | mysqld_exporter | 9104 |
+| pyroscope | 4040 (HTTP, 태스크 안에서만) · 9094 (gRPC) · 9099 (raft, 127.0.0.1) · 7948 (memberlist, 127.0.0.1) |
+| pyroscope-ingest | 4041 (수신 전용 프록시, Service Connect `pyroscope` 의 대상) |
 
 Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 띄우므로 기본 7946 대신 127.0.0.1:7947 에 묶는다.
 
@@ -318,11 +335,12 @@ Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 띄우
 | otel-collector | `LOKI_OTLP_ENDPOINT` · `MIMIR_OTLP_ENDPOINT` | `http://localhost:3100/otlp` · `http://localhost:9009/otlp` |
 | otel-collector | `TEMPO_OTLP_ENDPOINT` | `127.0.0.1:14317` (gRPC, TLS 없음). `localhost` 로 쓰면 ::1 부터 시도해 실패 로그가 남는다 |
 | otel-collector | `MYSQLD_EXPORTER_TARGET` | `localhost:9104`. exporter 를 띄우지 않으면 빈 문자열이고, 그때는 긁지 않는다 |
+| otel-collector | `PYROSCOPE_TARGET` | `localhost:4040`. Pyroscope 를 띄우지 않으면 빈 문자열이고, 그때는 긁지 않는다 |
 | otel-collector | `OBS_DATA_MOUNT_PATH` | 데이터 EBS 마운트 경로(ecs 스택 출력 `obs_data_mount_path`). hostmetrics 가 이 디스크와 루트의 사용률을 본다. 호스트 `/` 는 `/hostfs` 에 읽기 전용으로 붙는다 |
 | loki · tempo · mimir | `<LOKI·TEMPO·MIMIR>_S3_BUCKET` · `_S3_REGION` | s3 스택 출력의 버킷, `ap-northeast-2` |
 | loki · tempo · mimir | `LOKI_RETENTION_PERIOD` · `TEMPO_RETENTION` · `MIMIR_RETENTION` | `2160h` · `336h` · `2160h` (`../variables.tf` 의 `obs_retention`). Loki · Tempo 버킷에는 이보다 긴 수명주기 만료(100일 · 30일)가 안전망으로 걸려 있다 |
 | loki · tempo · mimir | `*_S3_ENDPOINT` · `*_FORCE_PATH_STYLE` · `*_INSECURE` 등 | 운영에서는 넘기지 않는다. MinIO 같은 S3 호환 저장소로 띄울 때 쓴다 |
-| grafana | `LOKI_URL` · `TEMPO_URL` · `MIMIR_URL` | `http://localhost:3100` · `http://localhost:3200` · `http://localhost:9009/prometheus` |
+| grafana | `LOKI_URL` · `TEMPO_URL` · `MIMIR_URL` · `PYROSCOPE_URL` | `http://localhost:3100` · `http://localhost:3200` · `http://localhost:9009/prometheus` · `http://localhost:4040` |
 | grafana | `SNS_TOPIC_ARN` · `AWS_REGION` | 알림 주제와 리전. 비어 있으면 연락처 검증에 실패해 Grafana 가 뜨지 않는다. 태스크 역할에 `sns:Publish` 가 필요하다 |
 | grafana | `GF_SECURITY_ADMIN_PASSWORD` | Secrets Manager `nova-prod/ops/grafana/admin-password` |
 
@@ -343,7 +361,8 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 
 ### 작업 정의 제약 (`../main.tf`)
 
-- 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`(셋 다 UID 10001), grafana `/var/lib/grafana`(UID 472).
+- 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`, pyroscope `/data`(넷 다 UID 10001), grafana `/var/lib/grafana`(UID 472). 디렉터리는 ecs 스택의 `obs_data_dirs` 가 정하고 obs 인스턴스가 부팅할 때 만든다. 디렉터리를 더하면 인스턴스가 한 번 교체된다.
+- Pyroscope 는 ecs 스택에 `pyroscope` 디렉터리가 있을 때만 띄운다. 압축 작업 임시 디렉터리를 `TMPDIR=/data` 로 돌려 루트 파일시스템을 읽기 전용으로 둔다. 메모리 512 MiB 는 Loki 한도(2048 → 1536)에서 덜어 냈다. 실제 obs 사용은 그보다 훨씬 적다.
 - Collector 메모리는 1.5 GiB 를 준다. tail sampling 이 결정 전 트레이스(최대 5만 건)를, servicegraph 가 짝을 기다리는 간선을 메모리에 들고 있다. `memory_limiter` 는 이 값의 75%(1152 MiB)다.
 - Grafana 는 기동할 때 Drilldown 앱(Traces · Logs · Metrics · Profiles)을 grafana.com 에서 받는다. `GF_PLUGINS_PREINSTALL` 로 버전을 고정해 재배포마다 화면이 바뀌지 않게 한다. 올릴 때는 이 값을 바꾼다.
 

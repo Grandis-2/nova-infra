@@ -1,0 +1,47 @@
+# Pyroscope — 앱의 연속 프로파일(CPU · 메모리 할당 · 락)을 받는다(NV-540).
+# 앱의 OTel 에이전트 확장(pyroscope-otel)이 15초마다 보내고, 샘플마다 그때 처리하던 스팬 ID 가 붙는다.
+# Grafana 에서 서비스 플레임 그래프를 보고, Tempo 의 느린 스팬에서 그 시간의 프로파일로 간다.
+#
+# 단일 바이너리(target: all), 파일시스템 저장. 데이터 EBS 의 /data(pyroscope 디렉터리)에 7일 둔다.
+#   진단용 단기 보존이라 S3 를 쓰지 않는다. v2 메타스토어(raft)는 어차피 디스크에 남아야 한다.
+#
+# 포트(같은 태스크의 다른 컨테이너와 겹치지 않게)
+#   4040 HTTP(수신 · 조회, Service Connect pyroscope.<네임스페이스>)
+#   9094 gRPC. 내부 클라이언트(metastore · query-backend)의 기본 주소가 9095 라 둘 다 9094 로 맞춘다
+#   9099 raft(127.0.0.1, 기본값) · 7948 memberlist(127.0.0.1). Mimir 가 7947 을 쓴다
+target: all
+
+self_profiling:
+  disable_push: true
+
+analytics:
+  reporting_enabled: false
+
+server:
+  http_listen_port: 4040
+  grpc_listen_port: 9094
+
+memberlist:
+  bind_addr: [127.0.0.1]
+  bind_port: 7948
+  advertise_addr: 127.0.0.1
+  advertise_port: 7948
+  join_members: [127.0.0.1:7948]
+
+storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/blocks
+
+metastore:
+  address: localhost:9094
+  data_dir: /data/v2/metastore/data
+  raft:
+    dir: /data/v2/metastore/raft
+    snapshots_dir: /data/v2/metastore/snapshots
+
+query_backend:
+  address: localhost:9094
+
+limits:
+  retention_period: 7d

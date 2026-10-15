@@ -1,7 +1,7 @@
 {
   "uid": "nova-lgtm",
   "title": "nova · LGTM 스택 · obs 호스트",
-  "description": "obs 태스크(Collector · Loki · Tempo · Mimir · Grafana)와 그 EC2 호스트의 상태. Collector 세부는 OpenTelemetry Collector 대시보드",
+  "description": "obs 태스크(Collector · Loki · Tempo · Mimir · Grafana · Pyroscope)와 그 EC2 호스트의 상태. Collector 세부는 OpenTelemetry Collector 대시보드",
   "tags": [
     "nova",
     "obs"
@@ -945,7 +945,7 @@
       "id": 16,
       "gridPos": {
         "h": 7,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 17
       }
@@ -993,8 +993,8 @@
       "id": 17,
       "gridPos": {
         "h": 7,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 6,
         "y": 17
       }
     },
@@ -1041,8 +1041,56 @@
       "id": 18,
       "gridPos": {
         "h": 7,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 12,
+        "y": 17
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pyroscope 받은 프로파일",
+      "description": "앱의 프로파일 확장이 15초마다 보낸다(service.yml 에 profiling: true 인 서비스만). 켠 서비스가 없으면 비어 있다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(pyroscope_distributor_profiles_received_total[$__rate_interval]))",
+          "legendFormat": "profiles/s"
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
         "y": 17
       }
     },
@@ -1104,7 +1152,7 @@
           "legendFormat": "Tempo 진행 중 트레이스"
         }
       ],
-      "id": 19,
+      "id": 20,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1152,7 +1200,7 @@
           "legendFormat": "대기열"
         }
       ],
-      "id": 20,
+      "id": 21,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1163,7 +1211,7 @@
     {
       "type": "row",
       "title": "거부 · 실패",
-      "id": 21,
+      "id": 22,
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1231,7 +1279,7 @@
           "legendFormat": "Mimir {{reason}}"
         }
       ],
-      "id": 22,
+      "id": 23,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1288,7 +1336,7 @@
           "legendFormat": "전송 실패 {{exporter}} {{signal}}"
         }
       ],
-      "id": 23,
+      "id": 24,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1336,7 +1384,7 @@
           "legendFormat": "{{component}} {{operation}}"
         }
       ],
-      "id": 24,
+      "id": 25,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1429,7 +1477,7 @@
           "legendFormat": "Mimir 컴팩션"
         }
       ],
-      "id": 25,
+      "id": 26,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1440,7 +1488,7 @@
     {
       "type": "row",
       "title": "쿼리",
-      "id": 26,
+      "id": 27,
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1499,7 +1547,7 @@
           "legendFormat": "최대 대기(초)"
         }
       ],
-      "id": 27,
+      "id": 28,
       "gridPos": {
         "h": 7,
         "w": 8,
@@ -1565,7 +1613,7 @@
           "legendFormat": "Mimir 쿼리"
         }
       ],
-      "id": 28,
+      "id": 29,
       "gridPos": {
         "h": 7,
         "w": 8,
@@ -1613,7 +1661,7 @@
           "legendFormat": "{{datasource}} {{code}}"
         }
       ],
-      "id": 29,
+      "id": 30,
       "gridPos": {
         "h": 7,
         "w": 8,
@@ -1624,7 +1672,7 @@
     {
       "type": "row",
       "title": "자원",
-      "id": 30,
+      "id": 31,
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1670,7 +1718,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (job) (process_resident_memory_bytes{job=~\"loki|tempo|mimir|grafana\"})",
+          "expr": "sum by (job) (process_resident_memory_bytes{job=~\"loki|tempo|mimir|grafana|pyroscope\"})",
           "legendFormat": "{{job}}"
         },
         {
@@ -1683,7 +1731,7 @@
           "legendFormat": "collector"
         }
       ],
-      "id": 31,
+      "id": 32,
       "gridPos": {
         "h": 7,
         "w": 12,
@@ -1727,7 +1775,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"loki|tempo|mimir|grafana\"}[$__rate_interval]))",
+          "expr": "sum by (job) (rate(process_cpu_seconds_total{job=~\"loki|tempo|mimir|grafana|pyroscope\"}[$__rate_interval]))",
           "legendFormat": "{{job}}"
         },
         {
@@ -1740,7 +1788,7 @@
           "legendFormat": "collector"
         }
       ],
-      "id": 32,
+      "id": 33,
       "gridPos": {
         "h": 7,
         "w": 12,

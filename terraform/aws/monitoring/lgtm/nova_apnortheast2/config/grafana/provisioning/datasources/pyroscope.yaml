@@ -1,0 +1,11 @@
+# Grafana 데이터소스 — Pyroscope(프로파일, NV-540). PYROSCOPE_URL 은 Grafana 컨테이너 환경 변수다. obs 태스크 안에서는 http://localhost:4040
+# 서비스 이름(service_name)은 앱의 PYROSCOPE_APPLICATION_NAME 이다(ecs 스택 otel.tf). Profiles Drilldown 앱도 이 데이터소스를 쓴다.
+apiVersion: 1
+
+datasources:
+  - name: Pyroscope
+    type: grafana-pyroscope-datasource
+    uid: pyroscope
+    access: proxy
+    url: ${PYROSCOPE_URL}
+    editable: false
