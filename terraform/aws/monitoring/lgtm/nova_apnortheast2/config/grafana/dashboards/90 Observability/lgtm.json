@@ -34,7 +34,7 @@
     {
       "type": "stat",
       "title": "Collector 거부 · 전송 실패",
-      "description": "초당 건수(최근 5분). 0 이 아니면 앱이 보낸 로그 · 트레이스 · 지표가 빠진다. 경보: obs 수집 실패",
+      "description": "초당 건수(최근 5분). 받기 거부 · 15분 재시도 뒤 전송 실패 · 큐가 가득 차 버림. 0 이 아니면 앱이 보낸 로그 · 트레이스 · 지표가 빠진다. 경보: obs 수집 실패",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -82,7 +82,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum(label_replace(rate(otelcol_receiver_refused_log_records_total[5m]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_spans_total[5m]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_metric_points_total[5m]), \"signal\", \"metric_points\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_log_records_total[5m]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_spans_total[5m]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_metric_points_total[5m]), \"signal\", \"metric_points\", \"\", \"\")) or vector(0)",
+          "expr": "sum(label_replace(rate(otelcol_receiver_refused_log_records_total[5m]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_spans_total[5m]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_metric_points_total[5m]), \"signal\", \"metric_points\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_log_records_total[5m]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_spans_total[5m]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_metric_points_total[5m]), \"signal\", \"metric_points\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_log_records_total[5m]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_spans_total[5m]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_metric_points_total[5m]), \"signal\", \"metric_points\", \"\", \"\")) or vector(0)",
           "legendFormat": ""
         }
       ],
@@ -1290,7 +1290,7 @@
     {
       "type": "timeseries",
       "title": "Collector 거부 · 전송 실패",
-      "description": "거부는 memory_limiter 가 받기를 막은 것, 전송 실패는 Loki · Tempo · Mimir 가 받지 못한 것. 자세한 건 OpenTelemetry Collector 대시보드",
+      "description": "거부는 memory_limiter 가 받기를 막은 것, 전송 실패는 15분 다시 보내도 Loki · Tempo · Mimir 가 받지 못한 것, 큐 가득은 게이트웨이 전송 큐가 차서 버린 것. 자세한 건 OpenTelemetry Collector 대시보드",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1334,6 +1334,15 @@
           "refId": "B",
           "expr": "sum by (exporter, signal) (label_replace(rate(otelcol_exporter_send_failed_log_records_total[$__rate_interval]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_spans_total[$__rate_interval]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_metric_points_total[$__rate_interval]), \"signal\", \"metric_points\", \"\", \"\"))",
           "legendFormat": "전송 실패 {{exporter}} {{signal}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "sum by (exporter, signal) (label_replace(rate(otelcol_exporter_enqueue_failed_log_records_total[$__rate_interval]), \"signal\", \"log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_spans_total[$__rate_interval]), \"signal\", \"spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_metric_points_total[$__rate_interval]), \"signal\", \"metric_points\", \"\", \"\"))",
+          "legendFormat": "큐 가득 {{exporter}} {{signal}}"
         }
       ],
       "id": 24,
@@ -1487,7 +1496,7 @@
     },
     {
       "type": "row",
-      "title": "쿼리",
+      "title": "카디널리티 · 한도",
       "id": 27,
       "collapsed": false,
       "gridPos": {
@@ -1495,6 +1504,558 @@
         "w": 24,
         "x": 0,
         "y": 46
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Mimir 시계열 한도 사용률",
+      "description": "활성 시계열 / max_global_series_per_user(15만). 넘으면 새 시계열을 버린다. 경보: 70% 15분",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(cortex_ingester_memory_series) / 150000",
+          "legendFormat": ""
+        }
+      ],
+      "id": 28,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 47
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Loki 스트림 한도 사용률",
+      "description": "스트림 / max_global_streams_per_user(5000). 스트림은 인덱스 라벨(서비스 · 네임스페이스 · 환경) 조합이다. 경보: 70% 15분",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(loki_ingester_memory_streams) / 5000",
+          "legendFormat": ""
+        }
+      ],
+      "id": 29,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 47
+      }
+    },
+    {
+      "type": "stat",
+      "title": "APM 지표 넘친 시계열",
+      "description": "span metrics 라벨 조합이 상한(2000)을 넘어 하나로 합쳐진 시계열. 0 이 아니면 서비스 상세의 엔드포인트 · 시간 구성이 틀어진다. 경보: APM 지표 라벨 조합 넘침",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "count(traces_spanmetrics_calls_total{otel_metric_overflow=\"true\"}) or vector(0)",
+          "legendFormat": ""
+        }
+      ],
+      "id": 30,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 47
+      }
+    },
+    {
+      "type": "stat",
+      "title": "게이트웨이 전송 큐",
+      "description": "내보내기별 큐 중 가장 찬 것. 저장소가 받지 못하면 찬다(obs 재배포 몇 분은 정상). 가득 차면 버린다. 경보: 50% 10분",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "max(otelcol_exporter_queue_size{job=\"otel-gateway\"} / otelcol_exporter_queue_capacity{job=\"otel-gateway\"}) or vector(0)",
+          "legendFormat": ""
+        }
+      ],
+      "id": 31,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 47
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "게이트웨이 전송 큐",
+      "description": "내보내기별 큐 사용률. obs 재배포 동안 올랐다가 다시 0 으로 내려와야 한다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "max by (exporter) (otelcol_exporter_queue_size{job=\"otel-gateway\"} / otelcol_exporter_queue_capacity{job=\"otel-gateway\"})",
+          "legendFormat": "{{exporter}}"
+        }
+      ],
+      "id": 32,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 51
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "서비스 그래프 만료 간선",
+      "description": "짝(client · server 스팬)을 10초 안에 못 찾고 버린 간선. 늘면 서비스 맵의 호출 수가 실제보다 적게 나온다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(rate(otelcol_connector_servicegraph_expired_edges_total[$__rate_interval]))",
+          "legendFormat": "만료/s"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum(rate(otelcol_connector_servicegraph_edges_total[$__rate_interval]))",
+          "legendFormat": "간선/s"
+        }
+      ],
+      "id": 33,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 51
+      }
+    },
+    {
+      "type": "row",
+      "title": "시계열 많은 지표 · job (펼칠 때만 조회)",
+      "id": 34,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "panels": [
+        {
+          "type": "bargauge",
+          "title": "시계열 많은 지표 Top 10",
+          "description": "지표 이름별 활성 시계열 수(지금). 한 지표가 갑자기 늘면 그 지표에 붙은 라벨 값(URL · ID 등)이 늘어난 것이다",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "topk(10, count by (__name__) ({__name__=~\".+\"}))",
+              "legendFormat": "{{__name__}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 35,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 59
+          }
+        },
+        {
+          "type": "bargauge",
+          "title": "job 별 시계열 수 Top 10",
+          "description": "앱 서비스(nova/*) · 수집 대상별(지금). 배포 뒤 크게 늘면 새 라벨이 생긴 것이다",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "topk(10, count by (job) ({job=~\".+\"}))",
+              "legendFormat": "{{job}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 36,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 59
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "쿼리",
+      "id": 37,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 59
       },
       "panels": []
     },
@@ -1547,12 +2108,12 @@
           "legendFormat": "최대 대기(초)"
         }
       ],
-      "id": 28,
+      "id": 38,
       "gridPos": {
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 47
+        "y": 60
       }
     },
     {
@@ -1613,12 +2174,12 @@
           "legendFormat": "Mimir 쿼리"
         }
       ],
-      "id": 29,
+      "id": 39,
       "gridPos": {
         "h": 7,
         "w": 8,
         "x": 8,
-        "y": 47
+        "y": 60
       }
     },
     {
@@ -1661,24 +2222,24 @@
           "legendFormat": "{{datasource}} {{code}}"
         }
       ],
-      "id": 30,
+      "id": 40,
       "gridPos": {
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 47
+        "y": 60
       }
     },
     {
       "type": "row",
       "title": "자원",
-      "id": 31,
+      "id": 41,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 67
       },
       "panels": []
     },
@@ -1731,12 +2292,12 @@
           "legendFormat": "collector"
         }
       ],
-      "id": 32,
+      "id": 42,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 55
+        "y": 68
       }
     },
     {
@@ -1788,12 +2349,12 @@
           "legendFormat": "collector"
         }
       ],
-      "id": 33,
+      "id": 43,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 55
+        "y": 68
       }
     }
   ],

@@ -135,7 +135,7 @@ groups:
               # 지표 이름을 정규식으로 묶어 rate 하면 이름 라벨이 빠져 라벨이 같은 시계열이 겹치고
               # Mimir 가 "vector cannot contain metrics with the same labelset" 로 실패한다(운영에서 DatasourceError).
               # 그래서 카운터마다 rate 를 따로 하고 counter 라벨을 붙여 or 로 합친다
-              expr: "sum by (job) (label_replace(rate(otelcol_exporter_send_failed_log_records_total[5m]), \"counter\", \"exporter_send_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_spans_total[5m]), \"counter\", \"exporter_send_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_metric_points_total[5m]), \"counter\", \"exporter_send_failed_metric_points\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_log_records_total[5m]), \"counter\", \"receiver_refused_log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_spans_total[5m]), \"counter\", \"receiver_refused_spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_metric_points_total[5m]), \"counter\", \"receiver_refused_metric_points\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_log_records_total[5m]), \"counter\", \"receiver_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_spans_total[5m]), \"counter\", \"receiver_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_metric_points_total[5m]), \"counter\", \"receiver_failed_metric_points\", \"\", \"\"))"
+              expr: "sum by (job) (label_replace(rate(otelcol_exporter_send_failed_log_records_total[5m]), \"counter\", \"exporter_send_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_spans_total[5m]), \"counter\", \"exporter_send_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_send_failed_metric_points_total[5m]), \"counter\", \"exporter_send_failed_metric_points\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_log_records_total[5m]), \"counter\", \"receiver_refused_log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_spans_total[5m]), \"counter\", \"receiver_refused_spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_refused_metric_points_total[5m]), \"counter\", \"receiver_refused_metric_points\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_log_records_total[5m]), \"counter\", \"receiver_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_spans_total[5m]), \"counter\", \"receiver_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_receiver_failed_metric_points_total[5m]), \"counter\", \"receiver_failed_metric_points\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_log_records_total[5m]), \"counter\", \"exporter_enqueue_failed_log_records\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_spans_total[5m]), \"counter\", \"exporter_enqueue_failed_spans\", \"\", \"\") or label_replace(rate(otelcol_exporter_enqueue_failed_metric_points_total[5m]), \"counter\", \"exporter_enqueue_failed_metric_points\", \"\", \"\"))"
           - refId: B
             datasourceUid: __expr__
             model:
@@ -324,6 +324,147 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [60]}
+      - uid: obs-cardinality-limit
+        title: obs 저장 한도 근접
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ .Labels.store }} 가 한도의 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }} 를 쓰고 있다. 한도에 닿으면 새 시계열 · 스트림을 버린다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#obs-저장-한도-근접"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 나누는 수는 mimir.yaml 의 max_global_series_per_user · loki.yaml 의 max_global_streams_per_user 다(둘을 같이 바꾼다).
+              # 저장소는 테넌트 한도를 지표로 내지 않아 숫자로 적는다
+              expr: "label_replace(sum(cortex_ingester_memory_series) / 150000, \"store\", \"Mimir 활성 시계열\", \"\", \"\") or label_replace(sum(loki_ingester_memory_streams) / 5000, \"store\", \"Loki 스트림\", \"\", \"\")"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.7]}
+      - uid: obs-loki-volume-spike
+        title: Loki 수집량 급증
+        condition: C
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "최근 1시간 로그 수집량이 지난주 같은 시각의 {{ with .Values.B }}{{ humanize .Value }}{{ end }} 배다. 저장 비용 · 수집 한도(4 MB/s)를 먹는다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#loki-수집량-급증"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 지난주 값이 없으면(처음 1주) 결과가 비어 울리지 않는다. 초당 10 KiB 아래는 보지 않는다(작은 값끼리의 배수는 뜻이 없다)
+              expr: "sum(rate(loki_distributor_bytes_received_total[1h])) / sum(rate(loki_distributor_bytes_received_total[1h] offset 1w)) and sum(rate(loki_distributor_bytes_received_total[1h])) > 10240"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [3]}
+      - uid: spanmetrics-overflow
+        title: APM 지표 라벨 조합 넘침
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "span metrics 의 라벨 조합이 상한(2000)을 넘어 넘친 것은 otel_metric_overflow 시계열 하나로 합쳐지고 있다. 서비스 상세의 시간 구성 · 엔드포인트 표가 틀어진다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#apm-지표-라벨-조합-넘침"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 상한은 게이트웨이 설정(gateway/collector.yaml) spanmetrics 의 aggregation_cardinality_limit 이다
+              expr: "count(traces_spanmetrics_calls_total{otel_metric_overflow=\"true\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: otel-gateway-queue
+        title: 게이트웨이 전송 큐 적체
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "게이트웨이 {{ .Labels.exporter }} 의 전송 큐가 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }} 찼다. 저장소가 받지 못하는 중이다. 가득 차면 새 데이터를 버린다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#게이트웨이-전송-큐-적체"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # obs 재배포(몇 분)는 for 10m 안에 끝나 울리지 않는다
+              expr: "max by (exporter) (otelcol_exporter_queue_size{job=\"otel-gateway\"} / otelcol_exporter_queue_capacity{job=\"otel-gateway\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.5]}
 
 # 파일에서 규칙을 빼도 Grafana 는 지우지 않는다. 지울 규칙은 여기 적는다.
 #   nova-http-5xx(5분 5xx 5%) — SLO 가용성 소진 속도 경보(slo.yaml)로 대신한다(NV-541)
