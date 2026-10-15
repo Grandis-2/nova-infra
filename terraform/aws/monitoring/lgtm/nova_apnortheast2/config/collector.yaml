@@ -255,6 +255,18 @@ processors:
     trace_statements:
       - context: span
         statements:
+          # 엣지 요청 ID 헤더(에이전트가 문자열 배열로 남긴다)는 AWS 가 만든 형식만 문자열 하나로 남긴다.
+          # 클라이언트가 같은 이름의 헤더를 보내면 CloudFront · ALB 를 지나 그대로 들어올 수 있다(ALB 는 Self 만 고친다).
+          #   x-amz-cf-id      CloudFront 요청 ID 형식이 아니면 버린다
+          #   x-amzn-trace-id  Root=1-<8자리 16진>-<24자리 16진> 만 남긴다. 나머지 필드(Self · 클라이언트가 붙인 값)는 버린다
+          - set(span.attributes["nova.tmp.cf_id"], span.attributes["http.request.header.x-amz-cf-id"][0]) where span.attributes["http.request.header.x-amz-cf-id"] != nil
+          - delete_key(span.attributes, "http.request.header.x-amz-cf-id")
+          - set(span.attributes["http.request.header.x-amz-cf-id"], span.attributes["nova.tmp.cf_id"]) where IsMatch(span.attributes["nova.tmp.cf_id"], "^[A-Za-z0-9_=-]{20,100}$$")
+          - delete_key(span.attributes, "nova.tmp.cf_id")
+          - set(span.attributes["nova.tmp.amzn_trace"], span.attributes["http.request.header.x-amzn-trace-id"][0]) where span.attributes["http.request.header.x-amzn-trace-id"] != nil
+          - delete_key(span.attributes, "http.request.header.x-amzn-trace-id")
+          - set(span.attributes["http.request.header.x-amzn-trace-id"], ExtractPatterns(span.attributes["nova.tmp.amzn_trace"], "(?P<root>Root=1-[0-9a-f]{8}-[0-9a-f]{24})")["root"]) where span.attributes["nova.tmp.amzn_trace"] != nil
+          - delete_key(span.attributes, "nova.tmp.amzn_trace")
           - replace_pattern(span.attributes["url.query"], "([^=&]+)=[^&]*", "$${1}=<masked>")
           - replace_pattern(span.attributes["url.full"], "([?&][^=&#]+)=[^&#]*", "$${1}=<masked>")
           - replace_pattern(span.attributes["http.url"], "([?&][^=&#]+)=[^&#]*", "$${1}=<masked>")
