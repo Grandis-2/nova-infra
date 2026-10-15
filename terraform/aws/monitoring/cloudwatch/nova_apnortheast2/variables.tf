@@ -83,3 +83,15 @@ variable "cloudfront_additional_metrics" {
     error_message = "cloudfront_additional_metrics 는 api · images 중에서 고른다(edge.tf 의 local.distributions 키)."
   }
 }
+
+variable "cert_expiry_days" {
+  description = "인증서 만료 경보 기준(남은 일수). ACM 은 만료 60일 전부터 자동 갱신하므로 이 경보는 갱신이 막힌 것이다"
+  type        = number
+  default     = 14
+}
+
+variable "alb_elb_4xx_ratio_threshold" {
+  description = "ALB 가 직접 만든 4xx 의 비율 경보 기준(0~1). 평소에도 스캐너의 없는 경로(기본 404) · 목업 관리 경로 차단(403)이 섞여 1주 재고 조정한다"
+  type        = number
+  default     = 0.5
+}

@@ -7,6 +7,7 @@
 #   곧 아파진다          : CPU, 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
 #   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
 #   공격 · 차단          : WAF 차단 급증 (edge.tf)
+#   트래픽이 없어도      : 인증서 만료, ALB 가 직접 만든 4xx 비율 (certs_alb.tf)
 #
 # 경보는 SNS 토픽으로 모으고 Slack 채널로 보낸다 (slack.tf).
 # CloudFront · 글로벌 WAF 지표는 us-east-1 에만 있어 그 경보와 토픽은 us-east-1 에 둔다.

@@ -22,3 +22,9 @@ data "terraform_remote_state" "cdn" {
   backend = "s3"
   config  = local.remote_state.cdn
 }
+
+# 인증서 만료 경보(NV-541) — ALB · CloudFront 인증서 ARN
+data "terraform_remote_state" "acm" {
+  backend = "s3"
+  config  = local.remote_state.acm
+}

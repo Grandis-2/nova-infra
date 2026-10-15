@@ -12,7 +12,7 @@ templates:
     template: |
       {{ define "chatbot.clean" }}{{ reReplaceAll "[\\r\\n\\t]+" " " (reReplaceAll "[\"\\\\]" "'" .) }}{{ end }}
       {{ define "chatbot.title" }}{{ if eq .Status "firing" }}[경보]{{ else }}[해소]{{ end }} {{ template "chatbot.clean" .CommonLabels.alertname }}{{ with .CommonLabels.job }} · {{ template "chatbot.clean" . }}{{ end }} ({{ len .Alerts }}건){{ end }}
-      {{ define "chatbot.message" }}{"version":"1.0","source":"custom","content":{"textType":"client-markdown","title":"{{ template "chatbot.title" . }}","description":"{{ range .Alerts }}• *{{ template "chatbot.clean" .Labels.alertname }}*{{ with .Labels.job }} `{{ template "chatbot.clean" . }}`{{ end }}{{ with .Annotations.summary }} — {{ template "chatbot.clean" . }}{{ end }}\n{{ end }}"}}{{ end }}
+      {{ define "chatbot.message" }}{"version":"1.0","source":"custom","content":{"textType":"client-markdown","title":"{{ template "chatbot.title" . }}","description":"{{ range .Alerts }}• *{{ template "chatbot.clean" .Labels.alertname }}*{{ with .Labels.job }} `{{ template "chatbot.clean" . }}`{{ end }}{{ with .Annotations.summary }} — {{ template "chatbot.clean" . }}{{ end }}{{ with .Annotations.runbook_url }} <{{ . }}|대응 순서>{{ end }}\n{{ end }}"}}{{ end }}
 
 contactPoints:
   - orgId: 1
