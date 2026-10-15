@@ -15,10 +15,16 @@ scaling:
   min: 2
   max: 5
 
-# ALB 경로가 없어 컨테이너 헬스체크가 된다. readiness 는 앱 상태만 본다(DB 장애로 태스크를 갈아 끼우지 않게)
+# ALB 대상 그룹이 이 경로로 상태를 본다. readiness 는 앱 상태만 본다(DB 장애로 태스크를 갈아 끼우지 않게)
 health:
   port: 9081
   path: /actuator/health/readiness
+
+# 바깥(CloudFront → ALB)에서 목업을 직접 부를 때 쓴다. worker 는 지금처럼 Service Connect 로 부른다.
+# 설정 · 결함 · 초기화(/external/config · faults · reset)는 프런트에서 온 요청(Origin)만 받고 나머지는 ALB 가 403 으로 막는다(ecs 스택 alb.tf)
+routes:
+  - priority: 60
+    paths: ["/external*"]
 
 db: external_mock               # 표는 mock 저장소 db/migrations 가 release 때 Flyway 로 만든다
 redis: main                     # 설정 · 결함 공유. 키는 mock: 으로 시작해 be 의 키와 섞이지 않는다
