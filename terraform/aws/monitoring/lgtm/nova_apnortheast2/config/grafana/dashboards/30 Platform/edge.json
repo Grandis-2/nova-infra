@@ -1,0 +1,1678 @@
+{
+  "uid": "nova-edge",
+  "title": "nova · 엣지 · 보안",
+  "description": "사용자 요청이 들어오는 길: CloudFront → WAF → ALB, 그리고 인증서. CloudWatch(CloudFront · WAF 는 us-east-1)",
+  "tags": [
+    "nova",
+    "platform"
+  ],
+  "editable": false,
+  "schemaVersion": 39,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "timezone": "browser",
+  "links": [
+    {
+      "title": "nova 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "nova"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "dist",
+        "label": "CloudFront",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "cloudwatch"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "regex": "/distribution\\/(.+)$/",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "query": {
+          "refId": "dist",
+          "queryType": "resourceARNs",
+          "region": "us-east-1",
+          "resourceType": "cloudfront:distribution",
+          "tags": {
+            "Product": [
+              "nova"
+            ]
+          }
+        }
+      },
+      {
+        "name": "lb",
+        "label": "ALB",
+        "type": "query",
+        "datasource": {
+          "type": "cloudwatch",
+          "uid": "cloudwatch"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "regex": "/^app\\/nova-prod-alb\\/.*/",
+        "query": {
+          "refId": "lb",
+          "queryType": "dimensionValues",
+          "region": "default",
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RequestCount",
+          "dimensionKey": "LoadBalancer",
+          "dimensionFilters": {}
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "CloudFront",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "요청 수",
+      "description": "5분 합",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "Requests",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "오류율",
+      "description": "경보: 5xx 비율(monitoring 스택)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 5xx",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "5xxErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 4xx",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "4xxErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "캐시 적중률",
+      "description": "캐시로 답한 비율(추가 지표). api 는 캐시하지 않는 경로가 많아 낮은 것이 정상이다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "CacheHitRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "오리진 지연",
+      "description": "CloudFront 가 오리진(ALB · S3)에 요청해 첫 바이트를 받기까지(추가 지표, 캐시 미스만)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} p90",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "OriginLatency",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "p90",
+          "expression": ""
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 9
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "오류 코드별 비율",
+      "description": "추가 지표. 403 은 WAF 차단 · 서명 URL, 502 · 504 는 오리진 연결 실패 · 시간 초과",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 401",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "401ErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 403",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "403ErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "C",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 404",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "404ErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "D",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 502",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "502ErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "E",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 503",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "503ErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "F",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 504",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "504ErrorRate",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Average",
+          "expression": ""
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 9
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "전송량",
+      "description": "5분 합",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 내려받음",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "BytesDownloaded",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "",
+          "label": "${PROP('Dim.DistributionId')} 올림",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/CloudFront",
+          "metricName": "BytesUploaded",
+          "dimensions": {
+            "DistributionId": "$dist",
+            "Region": "Global"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 9
+      }
+    },
+    {
+      "type": "row",
+      "title": "WAF",
+      "id": 8,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CloudFront WAF 허용 · 차단",
+      "description": "Web ACL nova-prod-cloudfront. 5분 합. 경보: 차단 급증(monitoring 스택)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "허용",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"AllowedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
+          "statistic": "Average"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "차단",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
+          "statistic": "Average"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "C",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "카운트(차단 안 함)",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"CountedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "ALB WAF 허용 · 차단",
+      "description": "Web ACL nova-prod-alb. 5분 합. 경보: 차단 급증(monitoring 스택)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "허용",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"AllowedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
+          "statistic": "Average"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "차단",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
+          "statistic": "Average"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "C",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "카운트(차단 안 함)",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"CountedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "차단 규칙 (CloudFront, 기간 합)",
+      "description": "어느 규칙이 차단했는지. 정상 요청이 걸리면(오탐) 그 규칙을 카운트 모드로 돌려 본다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.Rule')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\" NOT Rule=\"ALL\"', 'Sum', 3600)",
+          "statistic": "Average"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 12,
+        "maxVizHeight": 22,
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 26
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "차단 국가 (CloudFront, 기간 합)",
+      "description": "",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.Country')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Country,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\"', 'Sum', 3600)",
+          "statistic": "Average"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 12,
+        "maxVizHeight": 22,
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 8,
+        "y": 26
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "차단 공격 유형 (CloudFront, 기간 합)",
+      "description": "관리형 규칙이 분류한 공격 유형(봇 · LFI · RFI 등)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.Attack')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/WAFV2,Attack,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\"', 'Sum', 3600)",
+          "statistic": "Average"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 12,
+        "maxVizHeight": 22,
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      }
+    },
+    {
+      "type": "row",
+      "title": "ALB",
+      "id": 14,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "요청 수 (대상 그룹별)",
+      "description": "대상 그룹 = 서비스(Blue/Green 은 두 그룹). 5분 합",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.TargetGroup')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ApplicationELB,LoadBalancer,TargetGroup} MetricName=\"RequestCount\" LoadBalancer=\"$lb\"', 'Sum', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 15,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 36
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "응답 시간 p99 (대상 그룹별)",
+      "description": "ALB 가 대상에 보내고 응답을 받기까지. 경보: 응답 지연(monitoring 스택)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.TargetGroup')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ApplicationELB,LoadBalancer,TargetGroup} MetricName=\"TargetResponseTime\" LoadBalancer=\"$lb\"', 'p99', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "대상 5xx (대상 그룹별)",
+      "description": "앱이 돌려준 5xx",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.TargetGroup')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ApplicationELB,LoadBalancer,TargetGroup} MetricName=\"HTTPCode_Target_5XX_Count\" LoadBalancer=\"$lb\"', 'Sum', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 36
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "ALB 자체 오류",
+      "description": "ALB 5xx 는 대상이 없거나(502 · 503) 시간 초과(504). 대상 연결 실패는 보안 그룹 · 포트 · 컨테이너 기동 문제",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "ALB 5xx",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_ELB_5XX_Count",
+          "dimensions": {
+            "LoadBalancer": "$lb"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "ALB 4xx",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "HTTPCode_ELB_4XX_Count",
+          "dimensions": {
+            "LoadBalancer": "$lb"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "C",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "대상 연결 실패",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "TargetConnectionErrorCount",
+          "dimensions": {
+            "LoadBalancer": "$lb"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "D",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "연결 거절",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "RejectedConnectionCount",
+          "dimensions": {
+            "LoadBalancer": "$lb"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        }
+      ],
+      "id": 18,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 44
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "비정상 대상 (대상 그룹별)",
+      "description": "헬스체크에 실패한 태스크 수. 경보: monitoring 스택",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.TargetGroup')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ApplicationELB,LoadBalancer,TargetGroup} MetricName=\"UnHealthyHostCount\" LoadBalancer=\"$lb\"', 'Maximum', 300)",
+          "statistic": "Average"
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 44
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "연결",
+      "description": "",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "활성",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "ActiveConnectionCount",
+          "dimensions": {
+            "LoadBalancer": "$lb"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "새 연결",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ApplicationELB",
+          "metricName": "NewConnectionCount",
+          "dimensions": {
+            "LoadBalancer": "$lb"
+          },
+          "matchExact": true,
+          "statistic": "Sum",
+          "expression": ""
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 44
+      }
+    },
+    {
+      "type": "row",
+      "title": "인증서",
+      "id": 21,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "title": "인증서 만료까지 남은 날",
+      "description": "ACM 인증서(서울 · us-east-1). DNS 검증이면 자동 갱신된다. 30일 아래로 내려가면 갱신이 막힌 것이다(검증 레코드 삭제 등)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.CertificateArn')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/CertificateManager,CertificateArn} MetricName=\"DaysToExpiry\"', 'Minimum', 86400)",
+          "statistic": "Average"
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "us-east-1",
+          "id": "",
+          "period": "300",
+          "label": "${PROP('Dim.CertificateArn')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/CertificateManager,CertificateArn} MetricName=\"DaysToExpiry\"', 'Minimum', 86400)",
+          "statistic": "Average"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          },
+          "max": 400
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 12,
+        "maxVizHeight": 22,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": false
+              }
+            ]
+          }
+        }
+      ],
+      "id": 22,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

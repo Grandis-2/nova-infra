@@ -118,10 +118,10 @@ flowchart LR
 
 | 폴더 | 대시보드 (uid) | 언제 보나 |
 |---|---|---|
-| `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. 서비스별 요청 수 · 5xx · P99 · 인스턴스 · 힙 · CPU 와 지금 울리는 경보 |
+| `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 모자란 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 HTTP · 외부 호출 · JVM · HikariCP · 로그 · 트레이스 |
 | `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
-| `30 Platform` | ECS · ALB · CloudFront (`nova-platform`) | 태스크 수 · 재시작, ALB 오류 · 응답 시간 · 비정상 대상, CloudFront 오류율 |
+| `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 목표 미달 · 재시작 · 배포, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 느린 경로 · 5xx 경로, 느린 요청 · 느린 DB 쿼리 · 오류 트레이스, ERROR 로그 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지 |
 
@@ -140,6 +140,8 @@ flowchart LR
 ```
 
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
+  개요와 MySQL 은 Mimir 지표가 주라 1분이다. 개요는 자주 열리는 화면이라 CloudWatch 패널을 셋(ALB 연결 · 모자란 태스크 · DLQ)만 둔다.
+- CloudFront 배포는 `Product=nova` 태그, NAT · obs 인스턴스는 이름 태그로 고른다. ID 를 대시보드에 적지 않아 다시 만들어지거나 ASG 가 교체해도 따라간다.
 - `otelcol.json` 은 grafana.com 15983 rev 31 을 가져온 것이다. 원본과 다른 곳은 uid · `nova` 태그 · 데이터소스(Mimir) · job(`otelcol-contrib`) 기본값뿐이다. 새 리비전으로 바꿀 때도 이 네 곳만 다시 맞춘다.
 
 ## 경보
