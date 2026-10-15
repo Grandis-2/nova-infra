@@ -45,3 +45,8 @@ output "obs_instance_security_group_id" {
   description = "obs 태스크를 올리는 ECS 컨테이너 인스턴스 SG. 인바운드 없음, 443 만 나간다"
   value       = aws_security_group.obs_instance.id
 }
+
+output "otel_gateway_security_group_id" {
+  description = "OTel 게이트웨이(NV-543) 태스크 SG. 서비스 SG 에서 4317 · 4318 을 받고 obs 의 Loki · Tempo · Mimir 로 보낸다"
+  value       = aws_security_group.otel_gateway.id
+}
