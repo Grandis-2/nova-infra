@@ -6,6 +6,7 @@
 # Pyroscope 자체(4040)는 조회 API 도 내므로 열지 않는다. 앱은 Service Connect 별칭 pyroscope.<네임스페이스>:4040 으로 보내고
 # Service Connect 가 프록시 컨테이너 포트(4041)로 넘긴다.
 # Grafana(3000) 는 ALB 에서만 연다(NV-517). ALB 리스너 규칙이 Cognito 로그인을 거친 요청만 넘긴다.
+# Loki 3100 · Tempo OTLP 14317 · Mimir 9009 는 OTel 게이트웨이(otel_gateway.tf, NV-543)에서만 연다.
 # (SG 설명 문자열은 바꾸면 SG 가 다시 만들어지므로 처음 값 그대로 둔다)
 resource "aws_security_group" "obs" {
   name        = "${local.name_prefix}-obs-sg"
