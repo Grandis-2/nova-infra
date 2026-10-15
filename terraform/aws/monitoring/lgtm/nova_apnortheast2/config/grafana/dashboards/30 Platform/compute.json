@@ -101,7 +101,7 @@
     {
       "type": "stat",
       "title": "실행 중 태스크",
-      "description": "nova-prod 클러스터 전체(obs · 게이트웨이 포함). AWS/ECS 서비스 CPU 지표의 표본 수로 센다. 서비스가 원하는 수보다 모자라면 CloudWatch '태스크 0개' 경보와 ECS 이벤트 경보(배포 · 배치 실패, 컨테이너 종료)가 알린다",
+      "description": "nova-prod 클러스터 전체(obs · 게이트웨이 포함). AWS/ECS 서비스 CPU 지표의 표본 수로 센다. 서비스가 원하는 수보다 모자라면 CloudWatch '태스크 0개' 경보와 ECS 이벤트 경보(배포 · 배치 실패, 컨테이너 종료)가 알린다. 5분 전 값이다(진행 중인 구간은 표본이 덜 차 작게 나온다)",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -156,6 +156,7 @@
           "statistic": "Average"
         }
       ],
+      "timeShift": "5m",
       "id": 1,
       "gridPos": {
         "h": 4,
@@ -221,7 +222,8 @@
           "refId": "A",
           "expr": "sum(count_over_time((count by (job, instance) (target_info{job=~\"nova/.+\"}) unless count by (job, instance) (target_info{job=~\"nova/.+\"} offset 5m))[$__range:5m])) or vector(0)",
           "legendFormat": "",
-          "instant": true
+          "instant": true,
+          "range": false
         }
       ],
       "id": 2,
@@ -797,7 +799,7 @@
     {
       "type": "timeseries",
       "title": "실행 중 태스크",
-      "description": "오토스케일링 · 배포로 바뀐다. 배포 중에는 옛 · 새 태스크가 겹쳐 잠깐 는다",
+      "description": "오토스케일링 · 배포로 바뀐다. 배포 중에는 옛 · 새 태스크가 겹쳐 잠깐 는다. 5분 늦게 그린다(진행 중인 구간은 표본이 덜 찬다)",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -844,6 +846,7 @@
           "statistic": "Average"
         }
       ],
+      "timeShift": "5m",
       "id": 11,
       "gridPos": {
         "h": 8,
@@ -855,7 +858,7 @@
     {
       "type": "timeseries",
       "title": "새로 뜬 태스크",
-      "description": "5분마다 처음 보인 앱 태스크 수. 배포 표시 없이 계속 생기면 태스크가 죽고 다시 뜨는 중이다(OOM · 헬스체크 실패)",
+      "description": "구간마다 처음 보인 앱 태스크 수. 배포 표시 없이 계속 생기면 태스크가 죽고 다시 뜨는 중이다(OOM · 헬스체크 실패)",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -888,10 +891,11 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (service) (label_replace(count by (job, instance) (target_info{job=~\"nova/.+\"}) unless count by (job, instance) (target_info{job=~\"nova/.+\"} offset 5m), \"service\", \"$1\", \"job\", \"nova/(.+)\"))",
+          "expr": "sum by (service) (count_over_time((label_replace(count by (job, instance) (target_info{job=~\"nova/.+\"}) unless count by (job, instance) (target_info{job=~\"nova/.+\"} offset 5m), \"service\", \"$1\", \"job\", \"nova/(.+)\"))[$__interval:5m]))",
           "legendFormat": "{{service}}"
         }
       ],
+      "interval": "5m",
       "id": 12,
       "gridPos": {
         "h": 8,

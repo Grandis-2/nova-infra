@@ -1772,162 +1772,6 @@
       }
     },
     {
-      "type": "bargauge",
-      "title": "시계열 많은 지표 Top 10",
-      "description": "지표 이름별 활성 시계열 수(지금). 한 지표가 갑자기 늘면 그 지표에 붙은 라벨 값(URL · ID 등)이 늘어난 것이다",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "A",
-          "expr": "topk(10, count by (__name__) ({__name__=~\".+\"}))",
-          "legendFormat": "{{__name__}}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 22,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "Value",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "id": 32,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 51
-      }
-    },
-    {
-      "type": "bargauge",
-      "title": "job 별 시계열 수 Top 10",
-      "description": "앱 서비스(nova/*) · 수집 대상별(지금). 배포 뒤 크게 늘면 새 라벨이 생긴 것이다",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "mimir"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "mimir"
-          },
-          "refId": "A",
-          "expr": "topk(10, count by (job) ({job=~\".+\"}))",
-          "legendFormat": "{{job}}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 22,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "Value",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "id": 33,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 51
-      }
-    },
-    {
       "type": "timeseries",
       "title": "게이트웨이 전송 큐",
       "description": "내보내기별 큐 사용률. obs 재배포 동안 올랐다가 다시 0 으로 내려와야 한다",
@@ -1967,12 +1811,12 @@
           "legendFormat": "{{exporter}}"
         }
       ],
-      "id": 34,
+      "id": 32,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 51
       }
     },
     {
@@ -2024,24 +1868,194 @@
           "legendFormat": "간선/s"
         }
       ],
-      "id": 35,
+      "id": 33,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 51
       }
     },
     {
       "type": "row",
+      "title": "시계열 많은 지표 · job (펼칠 때만 조회)",
+      "id": 34,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "panels": [
+        {
+          "type": "bargauge",
+          "title": "시계열 많은 지표 Top 10",
+          "description": "지표 이름별 활성 시계열 수(지금). 한 지표가 갑자기 늘면 그 지표에 붙은 라벨 값(URL · ID 등)이 늘어난 것이다",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "topk(10, count by (__name__) ({__name__=~\".+\"}))",
+              "legendFormat": "{{__name__}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 35,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 59
+          }
+        },
+        {
+          "type": "bargauge",
+          "title": "job 별 시계열 수 Top 10",
+          "description": "앱 서비스(nova/*) · 수집 대상별(지금). 배포 뒤 크게 늘면 새 라벨이 생긴 것이다",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "mimir"
+              },
+              "refId": "A",
+              "expr": "topk(10, count by (job) ({job=~\".+\"}))",
+              "legendFormat": "{{job}}",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 36,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 59
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
       "title": "쿼리",
-      "id": 36,
+      "id": 37,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 59
       },
       "panels": []
     },
@@ -2094,12 +2108,12 @@
           "legendFormat": "최대 대기(초)"
         }
       ],
-      "id": 37,
+      "id": 38,
       "gridPos": {
         "h": 7,
         "w": 8,
         "x": 0,
-        "y": 67
+        "y": 60
       }
     },
     {
@@ -2160,12 +2174,12 @@
           "legendFormat": "Mimir 쿼리"
         }
       ],
-      "id": 38,
+      "id": 39,
       "gridPos": {
         "h": 7,
         "w": 8,
         "x": 8,
-        "y": 67
+        "y": 60
       }
     },
     {
@@ -2208,24 +2222,24 @@
           "legendFormat": "{{datasource}} {{code}}"
         }
       ],
-      "id": 39,
+      "id": 40,
       "gridPos": {
         "h": 7,
         "w": 8,
         "x": 16,
-        "y": 67
+        "y": 60
       }
     },
     {
       "type": "row",
       "title": "자원",
-      "id": 40,
+      "id": 41,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 67
       },
       "panels": []
     },
@@ -2278,12 +2292,12 @@
           "legendFormat": "collector"
         }
       ],
-      "id": 41,
+      "id": 42,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 68
       }
     },
     {
@@ -2335,12 +2349,12 @@
           "legendFormat": "collector"
         }
       ],
-      "id": 42,
+      "id": 43,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 75
+        "y": 68
       }
     }
   ],
