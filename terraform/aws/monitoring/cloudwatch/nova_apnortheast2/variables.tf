@@ -73,7 +73,13 @@ variable "rds_free_storage_threshold_gib" {
 }
 
 variable "cloudfront_additional_metrics" {
-  description = "추가 지표를 켤 CloudFront 배포(local.distributions 의 키). 배포마다 월 과금이 붙는다"
+  description = "추가 지표를 켤 CloudFront 배포(edge.tf 의 local.distributions 키). 배포마다 월 과금이 붙는다"
   type        = list(string)
   default     = ["api", "images"]
+
+  # 오타면 그 배포의 구독이 for_each 에서 빠져 plan 이 지우려 든다. 검증은 locals 를 못 읽으므로 키를 여기 적는다
+  validation {
+    condition     = alltrue([for k in var.cloudfront_additional_metrics : contains(["api", "images"], k)])
+    error_message = "cloudfront_additional_metrics 는 api · images 중에서 고른다(edge.tf 의 local.distributions 키)."
+  }
 }

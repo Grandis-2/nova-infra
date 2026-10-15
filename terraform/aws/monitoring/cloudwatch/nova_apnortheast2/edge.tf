@@ -105,11 +105,3 @@ resource "aws_cloudfront_monitoring_subscription" "this" {
     }
   }
 }
-
-# 키 오타는 구독이 조용히 빠지고 추가 지표 패널만 비므로 알린다
-check "cloudfront_additional_metrics_keys" {
-  assert {
-    condition     = length(setsubtract(var.cloudfront_additional_metrics, keys(local.distributions))) == 0
-    error_message = "cloudfront_additional_metrics 에 없는 배포가 있다: ${join(", ", setsubtract(var.cloudfront_additional_metrics, keys(local.distributions)))}. 쓸 수 있는 키: ${join(", ", keys(local.distributions))}"
-  }
-}
