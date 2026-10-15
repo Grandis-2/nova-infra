@@ -9,7 +9,8 @@
 # obs 태스크의 컨테이너는 localhost 를 같이 쓴다(awsvpc). 포트가 Collector(4317 · 4318) · Loki(3100 · 9096) 와 겹치지 않게 둔다.
 #   3200   HTTP (조회 · Grafana)
 #   9097   gRPC (내부)
-#   14317  OTLP gRPC 수신 — Collector 만 보낸다(보안 그룹이 열지 않는다). 앱은 Collector 로 보낸다. 기본값 4317 · 4318 은 Collector 와 겹쳐 쓰지 않는다
+#   14317  OTLP gRPC 수신 — OTel 게이트웨이(Service Connect tempo-otlp, NV-543)와 obs Collector 만 보낸다. obs 보안 그룹은 게이트웨이 SG 에만 연다.
+#          앱은 직접 보내지 않는다(Collector 를 거친다). 기본값 4317 · 4318 은 Collector 와 겹쳐 쓰지 않는다
 # memberlist(7946)는 쓰지 않는다(링은 메모리).
 # 샘플링은 Collector(tail_sampling)가 끝낸 뒤라 Tempo 는 받은 것을 모두 저장한다.
 

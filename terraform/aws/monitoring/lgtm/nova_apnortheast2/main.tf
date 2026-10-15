@@ -182,6 +182,8 @@ locals {
           { name = "LOKI_S3_REGION", value = var.aws_region },
           { name = "LOKI_RETENTION_PERIOD", value = var.obs_retention.logs },
         ]
+        # 게이트웨이(gateway.tf)가 Service Connect loki 로 보낸다
+        portMappings     = [{ name = "loki-http", containerPort = local.obs_ports.loki_http, protocol = "tcp", appProtocol = "http" }]
         mountPoints      = concat(local.obs_config_mount, [{ sourceVolume = "loki-data", containerPath = "/loki", readOnly = false }])
         dependsOn        = local.obs_after_config
         stopTimeout      = 120
@@ -201,6 +203,8 @@ locals {
           { name = "TEMPO_S3_REGION", value = var.aws_region },
           { name = "TEMPO_RETENTION", value = var.obs_retention.traces },
         ]
+        # 게이트웨이가 Service Connect tempo-otlp 로 보낸다(OTLP gRPC)
+        portMappings     = [{ name = "tempo-otlp", containerPort = local.obs_ports.tempo_otlp, protocol = "tcp", appProtocol = "grpc" }]
         mountPoints      = concat(local.obs_config_mount, [{ sourceVolume = "tempo-data", containerPath = "/var/tempo", readOnly = false }])
         dependsOn        = local.obs_after_config
         stopTimeout      = 120
@@ -221,6 +225,8 @@ locals {
           { name = "MIMIR_S3_REGION", value = var.aws_region },
           { name = "MIMIR_RETENTION", value = var.obs_retention.metrics },
         ]
+        # 게이트웨이가 Service Connect mimir 로 보낸다(OTLP HTTP)
+        portMappings     = [{ name = "mimir-http", containerPort = local.obs_ports.mimir_http, protocol = "tcp", appProtocol = "http" }]
         mountPoints      = concat(local.obs_config_mount, [{ sourceVolume = "mimir-data", containerPath = "/data", readOnly = false }])
         dependsOn        = local.obs_after_config
         stopTimeout      = 120
@@ -478,6 +484,25 @@ resource "aws_ecs_service" "obs" {
       client_alias {
         port     = local.obs_ports.otlp_grpc
         dns_name = "otel-grpc.${data.terraform_remote_state.ecs.outputs.service_discovery_namespace_name}"
+      }
+    }
+
+    # 게이트웨이(gateway.tf)가 보내는 곳. obs SG 는 이 포트들을 게이트웨이 SG 에만 연다(앱은 별칭이 풀려도 닿지 못한다)
+    dynamic "service" {
+      for_each = local.gateway_enabled ? {
+        loki         = { port_name = "loki-http", port = local.obs_ports.loki_http }
+        "tempo-otlp" = { port_name = "tempo-otlp", port = local.obs_ports.tempo_otlp }
+        mimir        = { port_name = "mimir-http", port = local.obs_ports.mimir_http }
+      } : {}
+
+      content {
+        port_name      = service.value.port_name
+        discovery_name = service.key
+
+        client_alias {
+          port     = service.value.port
+          dns_name = "${service.key}.${data.terraform_remote_state.ecs.outputs.service_discovery_namespace_name}"
+        }
       }
     }
 

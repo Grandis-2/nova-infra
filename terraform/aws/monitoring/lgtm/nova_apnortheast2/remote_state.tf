@@ -41,3 +41,9 @@ data "terraform_remote_state" "cognito" {
   backend = "s3"
   config  = merge(local.remote_state_defaults, { key = "${var.env}/cognito/terraform.tfstate" })
 }
+
+# OTel 게이트웨이(NV-543)를 앱 서브넷에 띄운다
+data "terraform_remote_state" "vpc" {
+  backend = "s3"
+  config  = local.remote_state.vpc
+}
