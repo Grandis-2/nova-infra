@@ -1,9 +1,10 @@
 # ─────────────────────────────────────────────────────────────
 # lgtm — 관측 스택 (LGTM on ECS, NV-425). CloudWatch 경보 · 대시보드는 monitoring/cloudwatch 스택이다.
 #
-# 앱 태스크의 OTel 에이전트 ──OTLP──▶ otel.<네임스페이스>:4318 (HTTP) · otel-grpc.<네임스페이스>:4317 (Service Connect)
-#   ▶ 이 태스크 하나: otel-collector → loki(로그) · tempo(트레이스) · mimir(지표) ─▶ S3
-#                     grafana(조회 · 경보 → SNS → Chatbot → Slack), mysqld_exporter(선택)
+# 앱 태스크의 OTel 에이전트 ──OTLP──▶ OTel 게이트웨이(gateway.tf, 별도 서비스)
+#   ──▶ 이 태스크 하나: loki(로그) · tempo(트레이스) · mimir(지표) ─▶ S3 (Service Connect loki · tempo-otlp · mimir)
+#                       grafana(조회 · 경보 → SNS → Chatbot → Slack), mysqld_exporter(선택)
+#                       otel-collector(긁기 전용: LGTM 자체 · mysqld · obs 호스트 → mimir)
 #   앱의 프로파일 ──▶ pyroscope.<네임스페이스>:4040 (Service Connect) ▶ pyroscope-ingest(4041, 올리기만) ▶ pyroscope(데이터 EBS, 7일)
 #
 #   설정   : config/ 를 obs-config 버킷에 올리고(아래 aws_s3_object), config-init 컨테이너가 태스크 시작 때 받는다.
@@ -39,11 +40,11 @@ locals {
 
   # 태스크 안 localhost 포트. config/ 의 설정 파일과 같아야 한다
   obs_ports = {
-    otlp_grpc      = 4317 # collector (앱이 보낸다)
-    otlp_http      = 4318 # collector
+    otlp_grpc      = 4317 # 게이트웨이 수신(gateway.tf, 앱이 보낸다)
+    otlp_http      = 4318 # 게이트웨이 수신
     loki_http      = 3100
     tempo_http     = 3200
-    tempo_otlp     = 14317 # collector → tempo (OTLP gRPC). 4317 은 collector 가 쓴다
+    tempo_otlp     = 14317 # 게이트웨이 → tempo (OTLP gRPC). 기본값 4317 은 게이트웨이와 헷갈려 쓰지 않는다
     mimir_http     = 9009
     grafana        = 3000
     mysqld_metrics = 9104
@@ -143,22 +144,14 @@ locals {
         name      = "otel-collector"
         image     = local.obs_images.otel_collector
         essential = true
-        # tail_sampling(결정 전 트레이스)과 servicegraph(짝을 기다리는 스팬)가 메모리를 쓴다. memory_limiter 는 이 안에서 1152 MiB
-        memory  = 1536
+        # 긁기 · hostmetrics 만 한다. memory_limiter 는 이 안에서 160 MiB
+        memory  = 256
         command = ["--config=/config/collector.yaml"]
         environment = [
-          { name = "LOKI_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.loki_http}/otlp" },
-          # gRPC 는 localhost 를 ::1 부터 붙어 한 번씩 실패 로그를 남긴다. IPv4 로 고정한다
-          { name = "TEMPO_OTLP_ENDPOINT", value = "127.0.0.1:${local.obs_ports.tempo_otlp}" },
           { name = "MIMIR_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.mimir_http}/otlp" },
           { name = "MYSQLD_EXPORTER_TARGET", value = local.obs_mysqld_exporter ? "localhost:${local.obs_ports.mysqld_metrics}" : "" },
           { name = "PYROSCOPE_TARGET", value = local.obs_pyroscope ? "localhost:${local.obs_ports.pyroscope}" : "" },
           { name = "OBS_DATA_MOUNT_PATH", value = local.obs_mount_path },
-        ]
-        # Service Connect 가 이 이름으로 앱 요청을 받는다
-        portMappings = [
-          { name = "otlp-grpc", containerPort = local.obs_ports.otlp_grpc, protocol = "tcp", appProtocol = "grpc" },
-          { name = "otlp-http", containerPort = local.obs_ports.otlp_http, protocol = "tcp", appProtocol = "http" },
         ]
         # hostmetrics 가 호스트의 /proc · 마운트 정보를 읽는다(읽기 전용). 컨테이너는 UID 10001 · 권한 없음이라 누구나 읽을 수 있는 파일만 본다
         mountPoints            = concat(local.obs_config_mount, [{ sourceVolume = "hostfs", containerPath = "/hostfs", readOnly = true }])
@@ -460,32 +453,10 @@ resource "aws_ecs_service" "obs" {
     assign_public_ip = false
   }
 
-  # 앱은 otel.<네임스페이스>:4317(gRPC) · :4318(HTTP) 로 보낸다. 앱 태스크의 Service Connect 프록시가 이 태스크로 보낸다
+  # Service Connect 로 내놓는 것: 게이트웨이가 보내는 loki · tempo-otlp · mimir, 앱이 프로파일을 보내는 pyroscope
   service_connect_configuration {
     enabled   = true
     namespace = data.terraform_remote_state.ecs.outputs.service_discovery_namespace_arn
-
-    # 앱 기본값(ecs 스택 otel.tf)은 HTTP 다
-    service {
-      port_name      = "otlp-http"
-      discovery_name = "otel"
-
-      client_alias {
-        port     = local.obs_ports.otlp_http
-        dns_name = "otel.${data.terraform_remote_state.ecs.outputs.service_discovery_namespace_name}"
-      }
-    }
-
-    # gRPC 를 쓰는 쪽을 위해 따로 이름을 둔다. 한 이름에 포트 둘을 묶을 수 있는지 확인하지 않았다
-    service {
-      port_name      = "otlp-grpc"
-      discovery_name = "otel-grpc"
-
-      client_alias {
-        port     = local.obs_ports.otlp_grpc
-        dns_name = "otel-grpc.${data.terraform_remote_state.ecs.outputs.service_discovery_namespace_name}"
-      }
-    }
 
     # 게이트웨이(gateway.tf)가 보내는 곳. obs SG 는 이 포트들을 게이트웨이 SG 에만 연다(앱은 별칭이 풀려도 닿지 못한다)
     dynamic "service" {

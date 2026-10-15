@@ -11,9 +11,9 @@
 #   MIMIR_OTLP_ENDPOINT  http://mimir.<네임스페이스>:9009/otlp
 #
 # 포트: 4317 · 4318 (OTLP 수신, Service Connect otel-gateway · otel-gateway-grpc), 13133 (헬스체크)
-# 자체 지표는 긁을 곳이 없어(obs 밖) 30초마다 Mimir 로 직접 보낸다(service.telemetry). Mimir 에서는 job="otelcol-contrib" 다.
+# 자체 지표는 긁을 곳이 없어(obs 밖) 30초마다 Mimir 로 직접 보낸다(service.telemetry). Mimir 에서는 job="otel-gateway" 다.
 #
-# 처리(마스킹 · 리소스 허용 목록 · 샘플링 · APM 지표)는 obs Collector 의 것과 같다. 바꿀 때 ../config/README.md 의 설명도 같이 본다.
+# 처리(마스킹 · 리소스 허용 목록 · 샘플링 · APM 지표)의 결정과 이유는 ../config/README.md 에 있다. 바꿀 때 그 설명도 같이 고친다.
 # 이 경로는 손실을 허용한다 — 메모리가 차면 memory_limiter 가 받기를 거부하고, 15분 넘게 못 보낸 데이터는 버린다.
 extensions:
   health_check:
@@ -312,3 +312,5 @@ service:
               otlp:
                 protocol: http/protobuf
                 endpoint: ${env:MIMIR_OTLP_ENDPOINT}/v1/metrics
+    resource:
+      service.name: otel-gateway # Mimir 의 job 라벨. obs Collector(otelcol-contrib)와 나눈다
