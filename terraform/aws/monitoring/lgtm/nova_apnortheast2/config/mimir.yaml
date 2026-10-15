@@ -9,7 +9,7 @@
 # 자격 증명은 여기 없다. 비어 있으면 SDK 기본 체인을 쓴다 — ECS 에서는 태스크 역할이다.
 #
 # obs 태스크의 컨테이너는 localhost 를 같이 쓴다(awsvpc). 포트:
-#   9009  HTTP (OTLP 수신 /otlp/v1/metrics — Collector 만 보낸다, PromQL 조회 /prometheus — Grafana)
+#   9009  HTTP (OTLP 수신 /otlp/v1/metrics — 게이트웨이(Service Connect mimir) · obs Collector 가 보낸다, PromQL 조회 /prometheus — Grafana)
 #   9098  gRPC (내부)
 # 링은 모두 메모리에 둔다(한 대뿐이다). 그래도 Mimir 3 는 memberlist 를 띄우므로 7946 을 피해 127.0.0.1:7947 에만 묶는다.
 # 사람 · 앱이 지표를 직접 넣는 경로는 없다. 앱은 Collector 로 보낸다.

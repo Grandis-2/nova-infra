@@ -1,18 +1,19 @@
 # nova 관측 스택 (LGTM)
 
 nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보를 보내는 자체 호스팅 관측 스택이다.
-앱의 OpenTelemetry Java 에이전트가 OTLP 로 보내면 Collector 가 받아 가공하고, Loki(로그) · Tempo(트레이스) · Mimir(지표)가 S3 에 저장한다. 조회와 경보는 Grafana 가 맡는다.
+앱의 OpenTelemetry Java 에이전트가 OTLP 로 보내면 OTel 게이트웨이(별도 ECS 서비스의 Collector)가 받아 가공하고, obs 태스크의 Loki(로그) · Tempo(트레이스) · Mimir(지표)가 S3 에 저장한다. 조회와 경보는 Grafana 가 맡는다.
+아래에서 그냥 "Collector" 라고 하면 게이트웨이다. obs 태스크 안의 Collector 는 "obs Collector" 라고 부르고, 긁기만 한다.
 
 이 디렉터리는 그 설정 파일이다. Terraform(`../main.tf`)이 파일을 obs-config 버킷에 올리고, 태스크가 시작할 때 `config-init` 컨테이너가 내려받는다.
 파일 해시가 작업 정의에 들어가므로 **설정을 고쳐 apply 하면 곧 재배포다.**
 
 ## 한눈에 보기
 
-| 신호 | 들어오는 길 | Collector 처리 | 저장 | 보존 |
+| 신호 | 들어오는 길 | 게이트웨이 처리 | 저장 | 보존 |
 |---|---|---|---|---|
 | 로그 | 앱 → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
 | 트레이스 | 앱 → OTLP | tail sampling(오류 · 1초 초과는 전부, 나머지 10%), 마스킹 | Tempo → S3 | 14일 |
-| 지표 | 앱 → OTLP, Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트), Collector 가 트레이스로 만든 것(span metrics · 서비스 그래프) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
+| 지표 | 앱 → OTLP, 게이트웨이가 트레이스로 만든 것(span metrics · 서비스 그래프), obs Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
 | 프로파일 | 앱 → Pyroscope (켠 서비스만) | — | Pyroscope → 데이터 EBS | 7일 |
 | AWS 관리형 지표 | Grafana 가 CloudWatch 를 직접 조회 | — | CloudWatch | CloudWatch 기본 |
 
@@ -22,10 +23,12 @@ flowchart LR
   ncp[("MySQL<br/>NCP · RDS")]
   user(["운영자"])
 
+  gw["OTel 게이트웨이<br/>Fargate · 롤링 배포<br/>메모리 큐 15분"]
+
   subgraph obs["obs 태스크 · EC2 1대 · localhost 공유"]
     direction LR
     exp["mysqld_exporter"]
-    col["otel-collector"]
+    col["obs Collector<br/>긁기 전용"]
     subgraph store["저장"]
       loki["Loki<br/>로그"]
       tempo["Tempo<br/>트레이스"]
@@ -39,11 +42,12 @@ flowchart LR
   cw[("CloudWatch")]
   slack(["Slack"])
 
-  app -- "OTLP" --> col
+  app -- "OTLP" --> gw
+  gw -- "Service Connect" --> loki & tempo & mimir
   app -. "프로파일 (켠 서비스)<br/>수신 전용 프록시" .-> pyro
   exp -- "긁기" --> col
   ncp --> exp
-  col --> loki & tempo & mimir
+  col --> mimir
   loki & tempo & mimir --> s3
   graf -- "조회" --> store
   graf -- "조회" --> cw
@@ -51,22 +55,29 @@ flowchart LR
   user -- "ALB + Cognito" --> graf
 ```
 
-Collector 는 LGTM 구성 요소와 Grafana 의 `/metrics`, obs 호스트의 CPU · 메모리 · 디스크(`/hostfs`)도 긁어 Mimir 로 보낸다.
+obs Collector 는 mysqld_exporter, LGTM 구성 요소와 Grafana 의 `/metrics`, obs 호스트의 CPU · 메모리 · 디스크(`/hostfs`)를 긁어 Mimir 로 보낸다.
 
 ## 설계 결정
 
 **1. 단일 바이너리 · 단일 태스크.**
 지금 트래픽에서는 마이크로서비스 모드의 수평 확장이 필요 없다. 그래서 다섯 구성 요소를 EC2(t4g.large) 한 대의 ECS 태스크 하나에 모놀리식 모드로 띄운다.
 컨테이너들은 localhost 를 같이 쓰므로 포트가 겹치지 않게 맞춘다(아래 "포트").
-대가는 가용성이다. obs 가 내려가 있는 동안의 데이터는 잃고, Grafana 경보도 멈춘다. 그래서 obs 태스크와 인스턴스는 CloudWatch 경보(monitoring/cloudwatch 스택)가 따로 감시한다.
+대가는 가용성이다. obs 가 내려가 있는 동안에는 조회와 Grafana 경보가 멈춘다. 그래서 obs 태스크와 인스턴스는 CloudWatch 경보(monitoring/cloudwatch 스택)가 따로 감시한다.
+앱 데이터는 받는 쪽을 obs 밖으로 떼어 지킨다(2-1).
 
 **2. 장기 저장은 S3, 로컬 디스크는 WAL 과 최근 블록만.**
 데이터 EBS(100 GiB)에는 재시작할 때 되살릴 WAL 과 아직 올리지 않은 블록만 둔다. 보존 기간만큼의 데이터는 S3 에 있으므로 디스크 크기가 보존 기간에 묶이지 않는다.
 정상 종료 때 메모리의 청크와 블록을 S3 로 올린다(`stopTimeout` 120초).
-한 호스트의 디렉터리를 쓰기 때문에 배포는 이전 태스크를 내린 뒤 새 태스크를 띄운다. 그동안 몇 분은 수집이 끊긴다.
+한 호스트의 디렉터리를 쓰기 때문에 배포는 이전 태스크를 내린 뒤 새 태스크를 띄운다. 그동안 몇 분은 저장소가 없다.
+
+**2-1. 받는 쪽은 obs 밖에 둔다(OTel 게이트웨이, NV-543).**
+obs 는 재배포마다 몇 분 비는데, 받는 Collector 가 그 안에 있으면 그동안 앱이 보낸 것이 모두 버려진다. 그래서 앱 OTLP 를 받는 Collector 를 디스크가 필요 없는 별도 Fargate 서비스로 떼었다.
+게이트웨이는 롤링 배포라 자신이 바뀔 때도 수신이 끊기지 않고, obs 가 비는 동안에는 내보내기마다 메모리 큐(128 MiB)에 쌓았다가 15분까지 다시 보낸다.
+Mimir 는 늦게 온 샘플을 30분까지 받는다(`out_of_order_time_window`). 쌓아 둔 요청을 여러 개가 동시에 다시 보내면 순서가 섞이는데, 이 창이 없으면 그 샘플을 버린다(하네스에서 Mimir 를 2분 내렸다 올려 확인).
+대가는 서비스 하나(월 약 20달러)와 경로 한 단계다. obs Collector 의 긁는 지표(LGTM 자체 · MySQL · 호스트)는 대상도 같이 내려가므로 그동안 빈다.
 
 **3. 손실을 허용하는 경로.**
-Collector 에는 디스크 큐가 없다. 메모리가 `memory_limiter`(1152 MiB)를 넘으면 받기를 거부한다. 감사 기록이나 정본(outbox 등)의 근거로 쓰지 않는다.
+게이트웨이에는 디스크 큐가 없다(Fargate 디스크는 태스크와 함께 사라진다). 메모리가 `memory_limiter`(1536 MiB)를 넘으면 받기를 거부하고, 15분 넘게 보내지 못한 것은 버린다. 감사 기록이나 정본(outbox 등)의 근거로 쓰지 않는다.
 빠지는 데이터는 숨기지 않고 지표(`otelcol_receiver_refused_*`, `*_discarded_*`)와 경보로 드러낸다.
 
 **4. 샘플링은 Collector 에서, 트레이스가 끝난 뒤에.**
@@ -107,7 +118,7 @@ flowchart LR
 
 - span metrics(`traces_spanmetrics_*`)는 서버 · 클라이언트 · 메시지 스팬을 `span_name` · `span_kind` · `status_code` 와 HTTP 상태 · DB · 메시징 종류로 나눠 센다. 사용자 ID 같은 값은 차원에 넣지 않고, 조합이 2000개를 넘으면 나머지는 overflow 한 줄로 묶는다.
 - 서비스 그래프(`traces_service_graph_*`)는 클라이언트 스팬과 서버 스팬을 짝지어 간선을 만든다. 상대가 계측되지 않은 DB · SQS · 외부 API 는 `db.name` · `server.address` 같은 속성으로 가상 노드를 세운다. Grafana 서비스 맵(Tempo 데이터소스의 `serviceMap`)이 이 지표를 읽는다.
-- 대가는 Collector 메모리다. 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 들고 있어 Collector 에 1.5 GiB 를 준다.
+- 대가는 Collector 메모리다. 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 들고 있어 게이트웨이에 2 GiB 를 준다.
 - 샘플링된 트레이스로도 TraceQL 지표(`{...} | rate() by (span.http.route)`, `quantile_over_time`)를 볼 수 있다. Tempo 의 `local-blocks` 프로세서가 최근 블록에서 바로 계산하며 따로 저장하지 않는다. Traces Drilldown 이 이것을 쓴다. 샘플링된 표본이라 비율 · 분포를 볼 때 쓰고, 정확한 수는 span metrics 로 본다.
 
 **6. 개인정보는 저장하기 전에 지운다.**
@@ -129,8 +140,8 @@ flowchart LR
 
 | 경로 | 내용 |
 |---|---|
-| `../gateway/collector.yaml` | OTel 게이트웨이(별도 ECS 서비스) 설정. 앱 OTLP 수신 · 처리는 obs Collector 와 같고, 내보내기마다 메모리 전송 큐 · 15분 재시도, 자체 지표는 Mimir 로 직접 보낸다. `config/` 밖에 두어 obs 태스크를 다시 띄우지 않는다 |
-| `collector.yaml` | 수신(OTLP), 긁기(mysqld · LGTM 자체 · hostmetrics), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir) |
+| `../gateway/collector.yaml` | OTel 게이트웨이(별도 ECS 서비스). 수신(OTLP), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir, 메모리 큐 · 15분 재시도). 자체 지표는 Mimir 로 직접 보낸다. `config/` 밖에 두어 obs 태스크를 다시 띄우지 않는다 |
+| `collector.yaml` | obs Collector. 긁기(자신 · mysqld · LGTM 자체 · Pyroscope · hostmetrics) → Mimir. 받는 포트가 없다 |
 | `loki.yaml` | S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
 | `pyroscope-ingest.nginx.conf` | 앱이 닿는 수신 전용 프록시. `POST /ingest` 만 Pyroscope 로 넘기고 나머지(조회 API 등)는 403 |
 | `pyroscope.yaml` | 단일 바이너리, 파일시스템 저장(데이터 EBS, 7일), 같은 태스크와 겹치지 않는 포트(gRPC 9094 · memberlist 7948) |
@@ -186,7 +197,7 @@ flowchart LR
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
   개요와 MySQL 은 Mimir 지표가 주라 1분이다. 개요는 자주 열리는 화면이라 CloudWatch 패널을 셋(ALB 연결 · 모자란 태스크 · DLQ)만 둔다.
 - CloudFront 배포는 `Product=nova` 태그, NAT · obs 인스턴스는 이름 태그로 고른다. ID 를 대시보드에 적지 않아 다시 만들어지거나 ASG 가 교체해도 따라간다.
-- `otelcol.json` 은 grafana.com 15983 rev 31 을 가져온 것이다. 원본과 다른 곳은 uid · `nova` 태그 · 데이터소스(Mimir) · job(`otelcol-contrib`) 기본값뿐이다. 새 리비전으로 바꿀 때도 이 네 곳만 다시 맞춘다.
+- `otelcol.json` 은 grafana.com 15983 rev 31 을 가져온 것이다. 원본과 다른 곳은 uid · `nova` 태그 · 데이터소스(Mimir) · job(`otel-gateway`) 기본값뿐이다. obs Collector 는 job 목록에서 `otelcol-contrib` 을 고른다. 새 리비전으로 바꿀 때도 이 네 곳만 다시 맞춘다.
 
 ## 경보
 
@@ -283,11 +294,11 @@ flowchart LR
 ### 서비스 지표 끊김
 
 1. ECS · 컴퓨팅 대시보드에서 그 서비스의 실행 태스크 수 · 재시작을 본다. 태스크가 0 이면 CloudWatch 의 태스크 0개 경보도 울린다.
-2. 태스크는 도는데 지표만 없으면 Collector(obs) 쪽이다. obs 수집 실패 · LGTM 대시보드를 본다.
+2. 태스크는 도는데 지표만 없으면 게이트웨이나 obs 쪽이다. 게이트웨이 태스크(CloudWatch `nova-prod-otel-gateway-no-tasks`), obs 수집 실패 · LGTM 대시보드를 본다.
 
 ### obs 수집 실패
 
-OpenTelemetry Collector 대시보드에서 거부 · 내보내기 실패가 어느 신호(로그 · 트레이스 · 지표)인지 본다. 메모리 한도(`memory_limiter`)로 거부하면 수신량이 갑자기 늘었는지, 내보내기 실패면 Loki · Tempo · Mimir 가 살아 있는지 본다.
+OpenTelemetry Collector 대시보드(job `otel-gateway`)에서 거부 · 내보내기 실패가 어느 신호(로그 · 트레이스 · 지표)인지 본다. 큐가 차 있으면(`otelcol_exporter_queue_size`) obs 쪽이 받지 못하는 중이다. 메모리 한도(`memory_limiter`)로 거부하면 수신량이 갑자기 늘었는지, 내보내기 실패면 Loki · Tempo · Mimir 가 살아 있는지 본다.
 
 ### obs 저장소 거부
 
@@ -359,7 +370,7 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
 **지표.** Mimir 에서 PromQL 로 본다. 이름은 Prometheus 관례(단위 · 종류 접미사)를 따른다. 예: `http.server.request.duration` → `http_server_request_duration_seconds_bucket`.
 - `job` 은 `<service.namespace>/<service.name>`(예 `nova/preorder`)이다. `deployment_environment` · `service_namespace` 도 라벨로 붙는다. 그 밖의 리소스 속성은 `target_info` 에만 있다.
 - `target_info` 에는 `service_namespace` 라벨이 없다. 앱만 고를 때는 `target_info{job=~"nova/.+"}` 를 쓴다.
-- 앱 외 job: Collector `otelcol-contrib`, MySQL `mysqld`, LGTM 자체 `loki` · `tempo` · `mimir` · `grafana`, obs 호스트 `obs-host`.
+- 앱 외 job: 게이트웨이 `otel-gateway`, obs Collector `otelcol-contrib`, MySQL `mysqld`, LGTM 자체 `loki` · `tempo` · `mimir` · `grafana`, obs 호스트 `obs-host`.
 - HikariCP 대기 · 사용 시간은 에이전트가 보내는 `db_client_connections_*_milliseconds` 를 초로 바꿔 그린다. semconv 안정 이름(`db_client_connection_*_seconds`)도 함께 조회해 에이전트를 올려도 패널이 비지 않는다.
 
 **트레이스.** 로그 줄을 펼쳐 trace_id 의 Tempo 링크로 가거나, 지표 그래프의 exemplar 점에서 바로 간다. 스팬에서는 "Logs for this span" 으로 같은 trace_id 의 로그를 연다.
@@ -383,7 +394,7 @@ sum by (server) (rate(traces_service_graph_request_failed_total{client="preorder
 
 ## 저장 전 마스킹
 
-Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 표시로 바꾼다(`collector.yaml` 의 `transform/mask`, `transform/mask-spans`). **되돌릴 수 없다.**
+게이트웨이가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 표시로 바꾼다(`../gateway/collector.yaml` 의 `transform/mask`, `transform/mask-spans`). **되돌릴 수 없다.**
 
 | 대상 (이 순서로 적용) | 바뀐 모습 |
 |---|---|
@@ -417,11 +428,11 @@ Collector 가 Loki · Tempo 에 넘기기 전에 개인정보 원문을 고정 �
 
 | 컨테이너 | 포트 |
 |---|---|
-| otel-collector | 4317 (OTLP gRPC) · 4318 (OTLP HTTP) · 8888 (자체 지표, localhost) · 13133 (헬스체크) |
+| otel-collector (obs, 긁기 전용) | 8888 (자체 지표, localhost) · 13133 (헬스체크) |
 | (게이트웨이, 별도 서비스) otel-collector | 4317 · 4318 (Service Connect `otel-gateway-grpc` · `otel-gateway`) · 13133 |
 | loki · tempo · mimir 의 게이트웨이 수신 | 3100 · 14317 · 9009 (Service Connect `loki` · `tempo-otlp` · `mimir`). obs 보안 그룹이 게이트웨이 SG 에만 연다 |
 | loki | 3100 (HTTP) · 9096 (gRPC) |
-| tempo | 3200 (HTTP) · 9097 (gRPC) · 14317 (OTLP gRPC, Collector 전용) |
+| tempo | 3200 (HTTP) · 9097 (gRPC) · 14317 (OTLP gRPC, 게이트웨이 전용) |
 | mimir | 9009 (HTTP: OTLP `/otlp`, PromQL `/prometheus`) · 9098 (gRPC) · 7947 (memberlist, 127.0.0.1) |
 | grafana | 3000 |
 | mysqld_exporter | 9104 |
@@ -436,8 +447,7 @@ Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 띄우
 
 | 컨테이너 | 변수 | 값 |
 |---|---|---|
-| otel-collector | `LOKI_OTLP_ENDPOINT` · `MIMIR_OTLP_ENDPOINT` | `http://localhost:3100/otlp` · `http://localhost:9009/otlp` |
-| otel-collector | `TEMPO_OTLP_ENDPOINT` | `127.0.0.1:14317` (gRPC, TLS 없음). `localhost` 로 쓰면 ::1 부터 시도해 실패 로그가 남는다 |
+| otel-collector | `MIMIR_OTLP_ENDPOINT` | `http://localhost:9009/otlp` |
 | otel-collector | `MYSQLD_EXPORTER_TARGET` | `localhost:9104`. exporter 를 띄우지 않으면 빈 문자열이고, 그때는 긁지 않는다 |
 | otel-collector | `PYROSCOPE_TARGET` | `localhost:4040`. Pyroscope 를 띄우지 않으면 빈 문자열이고, 그때는 긁지 않는다 |
 | otel-collector | `OBS_DATA_MOUNT_PATH` | 데이터 EBS 마운트 경로(ecs 스택 출력 `obs_data_mount_path`). hostmetrics 가 이 디스크와 루트의 사용률을 본다. 호스트 `/` 는 `/hostfs` 에 읽기 전용으로 붙는다 |
@@ -472,7 +482,7 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기마다 메모리 전송 큐(바이트로 세어 128 MiB, 셋 합 384 MiB)에 쌓였다가 15분까지 다시 보낸다. 큐가 차면 새로 들어오는 것을 버린다(`otelcol_exporter_enqueue_failed_*`).
   디스크 큐는 쓰지 않는다. Fargate 디스크는 태스크와 함께 사라져 게이트웨이 자신이 교체될 때는 디스크 큐도 잃는다. 지키려는 것은 obs 재배포 동안이라 메모리 큐로 충분하다.
 - 게이트웨이 배포 중에는 두 태스크가 1~2분 함께 떠 한 트레이스의 스팬이 나뉠 수 있다. 그동안은 tail sampling 결정이 어긋날 수 있다.
-- 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otelcol-contrib"`, obs Collector 와 instance 로 나뉜다).
+- 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otel-gateway"`).
 - 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. 서비스 CPU 지표(`AWS/ECS`)가 끊긴 것을 장애로 본다.
 - 앱은 `otel-gateway.<네임스페이스>:4318` 로 보낸다(ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT`).
 - **Service Connect 별칭은 태스크가 뜰 때 정해진다.** 그 뒤에 생긴 이름은 이미 떠 있는 태스크에서 풀리지 않는다(`no such host`).
@@ -483,7 +493,7 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 
 - 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`, pyroscope `/data`(넷 다 UID 10001), grafana `/var/lib/grafana`(UID 472). 디렉터리는 ecs 스택의 `obs_data_dirs` 가 정하고 obs 인스턴스가 부팅할 때 만든다. 디렉터리를 더하면 인스턴스가 한 번 교체된다.
 - Pyroscope 는 ecs 스택에 `pyroscope` 디렉터리가 있을 때만 띄운다. 압축 작업 임시 디렉터리를 `TMPDIR=/data` 로 돌려 루트 파일시스템을 읽기 전용으로 둔다. 메모리 512 MiB 는 Loki 한도(2048 → 1536)에서 덜어 냈다. 실제 obs 사용은 그보다 훨씬 적다.
-- Collector 메모리는 1.5 GiB 를 준다. tail sampling 이 결정 전 트레이스(최대 5만 건)를, servicegraph 가 짝을 기다리는 간선을 메모리에 들고 있다. `memory_limiter` 는 이 값의 75%(1152 MiB)다.
+- obs Collector 는 긁기만 해 256 MiB 를 준다(`memory_limiter` 160 MiB). tail sampling · servicegraph 의 메모리는 게이트웨이(2 GiB, `memory_limiter` 1536 MiB)가 진다.
 - Grafana 는 기동할 때 Drilldown 앱(Traces · Logs · Metrics · Profiles)을 grafana.com 에서 받는다. `GF_PLUGINS_PREINSTALL` 로 버전을 고정해 재배포마다 화면이 바뀌지 않게 한다. 올릴 때는 이 값을 바꾼다.
 
 ### admin 비밀번호 교체

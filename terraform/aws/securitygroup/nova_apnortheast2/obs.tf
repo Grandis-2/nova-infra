@@ -1,34 +1,19 @@
 # 관측 스택(obs) — monitoring 스택의 ECS 태스크(Collector · Loki · Tempo · Mimir · Grafana · mysqld_exporter, NV-425).
 # 태스크는 monitoring 스택이 만들고, 이 SG 만 여기 둔다 (서비스 SG 를 참조해야 해서).
 #
-# 인바운드는 OTLP 두 포트(4317 gRPC · 4318 HTTP)를 서비스 SG 참조로만 연다. 앱은 Service Connect(otel.<네임스페이스>)로 붙는다.
+# 앱의 OTLP 는 받지 않는다. 앱은 OTel 게이트웨이(otel_gateway.tf)로 보내고, 게이트웨이가 아래 세 포트로 넘긴다(NV-543).
 # 프로파일(4041, Pyroscope 수신 전용 프록시 · NV-540)은 service.yml 에 profiling: true 인 서비스에서만 받는다.
 # Pyroscope 자체(4040)는 조회 API 도 내므로 열지 않는다. 앱은 Service Connect 별칭 pyroscope.<네임스페이스>:4040 으로 보내고
 # Service Connect 가 프록시 컨테이너 포트(4041)로 넘긴다.
 # Grafana(3000) 는 ALB 에서만 연다(NV-517). ALB 리스너 규칙이 Cognito 로그인을 거친 요청만 넘긴다.
 # Loki 3100 · Tempo OTLP 14317 · Mimir 9009 는 OTel 게이트웨이(otel_gateway.tf, NV-543)에서만 연다.
-# (SG 설명 문자열은 바꾸면 SG 가 다시 만들어지므로 처음 값 그대로 둔다)
+# (SG 설명 문자열은 바꾸면 SG 가 다시 만들어지므로 처음 값 그대로 둔다. "OTLP from service tasks" 는 옛 구성의 설명이다)
 resource "aws_security_group" "obs" {
   name        = "${local.name_prefix}-obs-sg"
   description = "Observability host: OTLP from service tasks only"
   vpc_id      = local.vpc_id
 
   tags = { Name = "${local.name_prefix}-obs-sg" }
-}
-
-# 키: <서비스 키>-<포트>
-resource "aws_vpc_security_group_ingress_rule" "obs_otlp" {
-  for_each = {
-    for pair in setproduct(keys(local.services), [4317, 4318]) :
-    "${pair[0]}-${pair[1]}" => { service = pair[0], port = pair[1] }
-  }
-
-  security_group_id            = aws_security_group.obs.id
-  description                  = "OTLP ${each.value.port == 4317 ? "gRPC" : "HTTP"} from ${local.services[each.value.service].name}"
-  referenced_security_group_id = module.service[each.value.service].security_group_id
-  ip_protocol                  = "tcp"
-  from_port                    = each.value.port
-  to_port                      = each.value.port
 }
 
 # 프로파일 — profiling: true 인 서비스만. 수신 전용 프록시 포트(lgtm 스택 pyroscope-ingest)

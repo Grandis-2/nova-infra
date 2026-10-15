@@ -6295,8 +6295,8 @@
       {
         "allowCustomValue": true,
         "current": {
-          "text": "otelcol-contrib",
-          "value": "otelcol-contrib"
+          "text": "otel-gateway",
+          "value": "otel-gateway"
         },
         "datasource": {
           "type": "prometheus",
