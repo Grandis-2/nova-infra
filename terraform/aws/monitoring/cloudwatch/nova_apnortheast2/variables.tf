@@ -71,3 +71,9 @@ variable "rds_free_storage_threshold_gib" {
   type        = number
   default     = 10
 }
+
+variable "cloudfront_additional_metrics" {
+  description = "추가 지표를 켤 CloudFront 배포(local.distributions 의 키). 배포마다 월 과금이 붙는다"
+  type        = list(string)
+  default     = ["api", "images"]
+}

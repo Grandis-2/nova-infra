@@ -57,7 +57,9 @@ data "aws_iam_policy_document" "obs" {
   }
 
   # Grafana CloudWatch 데이터소스(지표만. Logs Insights 는 쓰지 않는다 — 조회한 데이터 양만큼 과금된다).
-  # 지표 조회 API 는 리소스로 좁힐 수 없다(전부 읽기). DescribeRegions · tag:GetResources 는 변수 목록(리전 · 태그로 거르기)에 쓴다
+  # 지표 조회 API 는 리소스로 좁힐 수 없다(전부 읽기). 변수 목록에 쓰는 것:
+  #   DescribeRegions(리전) · tag:GetResources(태그로 CloudFront 배포 거르기) · DescribeInstances(이름 태그로 NAT · obs 인스턴스 고르기 — ASG 가 바꿔 ID 가 변한다)
+  # GetServiceQuota 는 지표 식의 SERVICE_QUOTA()(Fargate vCPU 한도 사용률)가 쓴다
   statement {
     sid = "CloudWatchMetricsRead"
     actions = [
@@ -65,7 +67,9 @@ data "aws_iam_policy_document" "obs" {
       "cloudwatch:GetMetricData",
       "cloudwatch:DescribeAlarmsForMetric",
       "ec2:DescribeRegions",
+      "ec2:DescribeInstances",
       "tag:GetResources",
+      "servicequotas:GetServiceQuota",
     ]
     resources = ["*"]
   }

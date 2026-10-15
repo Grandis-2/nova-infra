@@ -1,4 +1,4 @@
-# CloudFront · 글로벌 WAF 경보. 지표가 us-east-1 에만 있어 경보와 토픽도 us-east-1 에 둔다.
+# CloudFront · 글로벌 WAF 경보와 CloudFront 추가 지표 구독. 지표가 us-east-1 에만 있어 경보와 토픽도 us-east-1 에 둔다.
 locals {
   distributions = {
     api    = data.terraform_remote_state.edge.outputs.cloudfront_distribution_id
@@ -89,4 +89,19 @@ resource "aws_cloudwatch_metric_alarm" "waf_blocked" {
   }
 
   alarm_actions = [aws_sns_topic.alerts_us_east_1.arn]
+}
+
+# CloudFront 추가 지표: 캐시 적중률 · 오리진 지연 · 오류 코드별(401 · 403 · 404 · 502 · 503 · 504) 비율.
+# 기본 지표(요청 · 바이트 · 4xx/5xx 비율)에 없는 것들이다. 배포마다 CloudWatch 사용자 지정 지표 8개 값이 과금된다
+resource "aws_cloudfront_monitoring_subscription" "this" {
+  provider = aws.us_east_1
+  for_each = { for k, v in local.distributions : k => v if contains(var.cloudfront_additional_metrics, k) }
+
+  distribution_id = each.value
+
+  monitoring_subscription {
+    realtime_metrics_subscription_config {
+      realtime_metrics_subscription_status = "Enabled"
+    }
+  }
 }
