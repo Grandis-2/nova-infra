@@ -15,3 +15,7 @@ secrets.yaml
 terraform/application/*/secret.yml
 # validate-all 이 모듈 폴더에 만드는 잠금 파일 (모듈은 잠금 파일을 쓰지 않는다)
 terraform/**/_modules/**/.terraform.lock.hcl
+# Lambda 모듈이 plan 때 만드는 코드 묶음
+terraform/**/_modules/**/.build/
+# functions/ 단위 시험이 만드는 캐시
+__pycache__/

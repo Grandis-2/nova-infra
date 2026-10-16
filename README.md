@@ -84,7 +84,9 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | `redis` | 캐시를 쓰는 서비스, 6379 | — |
 | `vpce` | 서비스, bastion, obs, migration, 443 | — |
 | `bastion` | 없음 (SSM Session Manager로만 접속) | 전체 |
-| `obs` (관측 스택) | 서비스, 4317 · 4318 (OTLP). ALB, 3000 (Grafana — `https://grafana.grandis-nova.link`, Cognito 로그인. 사용자는 `cognito/.../users.sops.yml`) | 443, 3306 (NCP DB, mysqld_exporter) |
+| `otel-gateway` (OTel 게이트웨이) | 서비스, 4317 · 4318 (OTLP). 엣지 로그 Lambda, 4318 | obs 3100 · 14317 · 9009, 443 |
+| `edge-logs` (엣지 로그 Lambda) | 없음 | OTel 게이트웨이 4318, 443 (S3 · 로그) |
+| `obs` (관측 스택) | OTel 게이트웨이, 3100 · 14317 · 9009 (Loki · Tempo · Mimir). 프로파일을 켠 서비스(`profiling: true`), 4041. ALB, 3000 (Grafana — `https://grafana.grandis-nova.link`, Cognito 로그인. 사용자는 `cognito/.../users.sops.yml`) | 443, 3306 (NCP DB, mysqld_exporter) |
 | `obs-instance` (관측 스택 EC2) | 없음 | 443 |
 | `migration` (배포 전 마이그레이션 태스크) | 없음 | 3306 (NAT 경유 DB) · 443 |
 | NAT (fck-nat) | VPC 대역 | 전체 (고정 IP 2개로 나감) |
@@ -146,12 +148,13 @@ Atlantis 서버는 별도 저장소 **[Grandis-2/atlantis-deploy](https://github
 ```
 ├── atlantis.yaml              스택별 Atlantis 프로젝트
 ├── docs/architecture/         아키텍처 그림
+├── functions/<함수>/          Lambda 코드(Python)와 단위 시험. 배포는 terraform/aws/lambda 가 한다
 ├── scripts/                   tf.sh(로컬 plan), validate-all.sh(전체 검사), link-global.sh(새 스택), app-secrets.sh(외부 비밀)
 └── terraform/
     ├── application/<서비스>/  service.yml(인프라), application.yml(Spring 설정)
     ├── variables/             공용 변수, 서비스 목록
     ├── aws/<스택>/            init · kms · vpc · securitygroup · s3 · sqs · ecr · acm · cognito · secretsmanager
-    │                          elasticache · iam · ecs · edge · cdn · scheduler · monitoring · bastion
+    │                          elasticache · iam · ecs · edge · cdn · scheduler · monitoring · lambda · bastion
     └── ncp/database/          Cloud DB for MySQL
 ```
 
