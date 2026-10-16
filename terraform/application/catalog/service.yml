@@ -22,13 +22,15 @@ routes:
   # /internal/* 은 ALB 에 열지 않는다 (preorder · order 가 Service Connect 로 부른다)
   - priority: 50
     paths: ["/api/v1/products*", "/api/v1/admin/products*", "/api/v1/reviews*", "/api/v1/categories*"]
+  - priority: 51                # 사전예약 홍보 · 관리자 이미지 업로드
+    paths: ["/api/v1/promotions*", "/api/v1/admin/promotions*", "/api/v1/admin/images*"]
 
 jwt: verify
 calls:                          # 리뷰 작성 때만 부른다
   spring.http.serviceclient.order.base-url: order     # 내 주문상품 확인
   spring.http.serviceclient.member.base-url: member   # 작성자 표시명
 db: shop
-redis: main                     # 상품 · 가격 캐시
+redis: main                     # 상품 · 가격 · 홍보 캐시
 
 queues:
   send: [order-events, preorder-events]   # 아웃박스. 상품 등록 → preorder 회차 · 차수, order 초기 재고
