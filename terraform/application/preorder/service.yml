@@ -1,7 +1,7 @@
 # 접수 · 순번 · 회차 · 배송 차수 (Core)
 image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
-cpu: 2048
-memory: 4096
+cpu: 1024
+memory: 2048
 port: 8083
 management_port: 9083
 deployment: blue_green
