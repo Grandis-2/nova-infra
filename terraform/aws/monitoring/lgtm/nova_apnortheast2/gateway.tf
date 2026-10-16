@@ -96,8 +96,8 @@ resource "aws_service_discovery_service" "gateway_ingest" {
     }
   }
 
-  # 등록 · 해제는 ECS 가 태스크 상태에 맞춰 한다
-  health_check_custom_config {}
+  # 등록 · 해제는 ECS 가 태스크 상태에 맞춰 한다. 헬스 체크 설정은 두지 않는다
+  # (빈 health_check_custom_config 블록은 상태에 남지 않아 plan 마다 교체가 잡힌다)
 }
 
 resource "aws_ecs_service" "gateway" {

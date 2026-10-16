@@ -90,7 +90,7 @@ variable "max_retry_attempts" {
 }
 
 variable "alarm_topic_arn" {
-  description = "오류 경보를 보낼 SNS 토픽. 비우면 경보를 만들지 않는다"
+  description = "실패 큐 경보를 보낼 SNS 토픽. 비우면 경보를 만들지 않는다"
   type        = string
   default     = ""
 }

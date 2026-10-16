@@ -10,6 +10,8 @@ S3 에 ALB(alb/) · CloudFront(cloudfront/) 접근 로그 파일이 생기면 �
   ALB 의 클라이언트 주소는 CloudFront 엣지라 남기지 않는다.
 
 실패하면 예외를 던져 Lambda 비동기 재시도(2회)에 맡긴다. 파일 중간에서 실패하면 앞 묶음이 한 번 더 들어갈 수 있다.
+재시도까지 실패한 이벤트는 실패 큐(SQS)에 남는다. 다시 보내는 방법은 terraform/aws/lambda/README.md.
+받는 쪽이 일부만 거절하면(OTLP partialSuccess) 다시 보내지 않고 거절 수를 로그에 남긴다. 다시 보내면 받아들인 레코드가 중복된다.
 """
 
 import gzip
@@ -35,7 +37,7 @@ s3 = boto3.client("s3")
 
 
 def handler(event, _context):
-    sent = 0
+    sent = rejected = 0
     for record in event.get("Records", []):
         bucket = record["s3"]["bucket"]["name"]
         key = unquote_plus(record["s3"]["object"]["key"])
@@ -47,11 +49,11 @@ def handler(event, _context):
         text = gzip.decompress(body).decode("utf-8", errors="replace") if key.endswith(".gz") else body.decode("utf-8", errors="replace")
         parse = parse_alb if source == "alb" else parse_cloudfront
         records = list(parse(text.splitlines()))
-        for i in range(0, len(records), BATCH):
-            post(source, records[i : i + BATCH])
-        sent += len(records)
-        print(json.dumps({"key": key, "source": source, "records": len(records)}))
-    return {"records": sent}
+        dropped = sum(post(source, records[i : i + BATCH]) for i in range(0, len(records), BATCH))
+        sent += len(records) - dropped
+        rejected += dropped
+        print(json.dumps({"key": key, "source": source, "records": len(records), "rejected": dropped}))
+    return {"records": sent, "rejected": rejected}
 
 
 def source_of(key):
@@ -203,6 +205,7 @@ def attribute(key, value):
 
 
 def post(source, records):
+    """records 를 보내고 받는 쪽이 거절한 레코드 수를 돌려준다."""
     payload = {
         "resourceLogs": [{
             "resource": {"attributes": [
@@ -218,8 +221,7 @@ def post(source, records):
         request = urllib.request.Request(ENDPOINT, data=data, headers={"Content-Type": "application/json"}, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-                response.read()
-                return
+                return rejected_count(response.read())
         except urllib.error.HTTPError as e:
             # 4xx(429 제외)는 다시 보내도 같다
             if e.code < 500 and e.code != 429:
@@ -229,6 +231,18 @@ def post(source, records):
             error = e
         time.sleep(2 ** attempt)
     raise RuntimeError(f"OTLP export failed after {RETRIES} attempts: {error}")
+
+
+def rejected_count(body):
+    # 200 이어도 일부를 거절할 수 있다(OTLP partialSuccess). 본문이 비어 있으면 모두 받은 것이다
+    try:
+        partial = (json.loads(body or b"{}") or {}).get("partialSuccess") or {}
+        count = int(partial.get("rejectedLogRecords") or 0)
+    except (ValueError, TypeError, AttributeError):
+        return 0
+    if count:
+        print(json.dumps({"rejected": count, "message": partial.get("errorMessage", "")}))
+    return count
 
 
 # ── 값 변환 ────────────────────────────────────────────────

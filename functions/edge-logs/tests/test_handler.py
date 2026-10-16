@@ -111,6 +111,13 @@ class OtlpTest(unittest.TestCase):
         self.assertEqual(handler.source_of("cloudfront/E1.2026-10-16-00.x.gz"), "cloudfront")
         self.assertIsNone(handler.source_of("cloudfront-grafana/E2.x.gz"))
 
+    def test_partial_success(self):
+        self.assertEqual(handler.rejected_count(b""), 0)
+        self.assertEqual(handler.rejected_count(b"{}"), 0)
+        self.assertEqual(handler.rejected_count(b'{"partialSuccess":{}}'), 0)
+        self.assertEqual(handler.rejected_count(b'{"partialSuccess":{"rejectedLogRecords":"3","errorMessage":"x"}}'), 3)
+        self.assertEqual(handler.rejected_count(b"not json"), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
