@@ -201,7 +201,7 @@ groups:
             model:
               refId: A
               queryType: instant
-              expr: "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" | unwrap value_lcp | __error__=\"\" [30m]) by () > 4000 and on() sum(count_over_time({service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" [30m])) > 30"
+              expr: "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" | unwrap value_lcp | __error__=\"\" [30m]) by () > 4000 and on() sum(count_over_time({service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" [30m])) >= 30"
           - refId: B
             datasourceUid: __expr__
             model:
