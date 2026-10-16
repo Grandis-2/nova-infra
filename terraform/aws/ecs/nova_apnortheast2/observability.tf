@@ -28,4 +28,7 @@ resource "aws_ecs_cluster" "observability" {
 resource "aws_ecs_cluster_capacity_providers" "observability" {
   cluster_name       = aws_ecs_cluster.observability.name
   capacity_providers = [aws_ecs_capacity_provider.obs.name]
+
+  # 용량 공급자는 한 클러스터에만 붙는다. 앱 클러스터(main.tf)에서 뗀 뒤에 붙인다
+  depends_on = [aws_ecs_cluster_capacity_providers.this]
 }
