@@ -654,7 +654,7 @@
     },
     {
       "type": "row",
-      "title": "WAF",
+      "title": "요청 구간 (접근 로그)",
       "id": 8,
       "collapsed": false,
       "gridPos": {
@@ -662,6 +662,336 @@
         "w": 24,
         "x": 0,
         "y": 17
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CloudFront 응답 시간",
+      "description": "사용자가 요청을 보내고 응답을 다 받기까지(CloudFront time-taken). 접근 로그라 몇 분 늦게 그려진다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.5, {service_name=\"cloudfront\"} | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "p95"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "C",
+          "expr": "quantile_over_time(0.99, {service_name=\"cloudfront\"} | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "p99"
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "timeseries",
+      "title": "구간별 시간 (p95)",
+      "description": "전체와 첫 바이트의 차이는 응답을 내려보내는 시간, 첫 바이트와 앱 처리의 차이는 CloudFront · ALB 를 오가는 시간이다. 캐시 적중은 앱까지 가지 않아 앱 처리에 들지 않는다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "CloudFront 전체"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "B",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | unwrap aws_cloudfront_time_to_first_byte | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "CloudFront 첫 바이트"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "C",
+          "expr": "quantile_over_time(0.95, {service_name=\"alb\"} | unwrap aws_alb_target_processing_time | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "앱 처리 (ALB 대상)"
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "timeseries",
+      "title": "캐시 결과별 요청",
+      "description": "Hit · RefreshHit 는 캐시로 답한 것, Miss 는 오리진까지 간 것, Error 는 CloudFront 가 오류로 끝낸 것(WAF 차단 포함)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (aws_cloudfront_result_type) (count_over_time({service_name=\"cloudfront\"} [$__auto]))",
+          "legendFormat": "{{aws_cloudfront_result_type}}"
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "timeseries",
+      "title": "엣지 위치별 응답 시간 (p95)",
+      "description": "사용자가 붙은 CloudFront 엣지(공항 코드)별. 한 곳만 느리면 그 지역 네트워크 문제다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by (aws_cloudfront_edge_location)",
+          "legendFormat": "{{aws_cloudfront_edge_location}}"
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 0,
+        "y": 26
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "logs",
+      "title": "느린 요청 (1초 초과)",
+      "description": "줄을 펼쳐 요청 ID 의 Tempo 링크로 앱 트레이스를 연다. 1초 넘은 트레이스는 샘플링 없이 남는다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "{service_namespace=\"edge\"} | aws_cloudfront_time_taken > 1 or aws_alb_target_processing_time > 1",
+          "legendFormat": ""
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 8,
+        "y": 26
+      }
+    },
+    {
+      "type": "logs",
+      "title": "엣지 5xx",
+      "description": "CloudFront · ALB 가 돌려준 5xx. ALB 줄의 aws_alb_error_reason 이 대상 연결 실패 · 시간 초과 같은 원인이다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "{service_namespace=\"edge\"} | http_response_status_code >= 500",
+          "legendFormat": ""
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      }
+    },
+    {
+      "type": "row",
+      "title": "WAF",
+      "id": 15,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
       },
       "panels": []
     },
@@ -744,12 +1074,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 9,
+      "id": 16,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 37
       }
     },
     {
@@ -831,12 +1161,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 10,
+      "id": 17,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 37
       }
     },
     {
@@ -914,12 +1244,12 @@
           }
         }
       ],
-      "id": 11,
+      "id": 18,
       "gridPos": {
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 26
+        "y": 45
       }
     },
     {
@@ -997,12 +1327,12 @@
           }
         }
       ],
-      "id": 12,
+      "id": 19,
       "gridPos": {
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 26
+        "y": 45
       }
     },
     {
@@ -1080,24 +1410,24 @@
           }
         }
       ],
-      "id": 13,
+      "id": 20,
       "gridPos": {
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 26
+        "y": 45
       }
     },
     {
       "type": "row",
       "title": "ALB",
-      "id": 14,
+      "id": 21,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 54
       },
       "panels": []
     },
@@ -1151,12 +1481,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 15,
+      "id": 22,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 36
+        "y": 55
       }
     },
     {
@@ -1206,12 +1536,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 16,
+      "id": 23,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 36
+        "y": 55
       }
     },
     {
@@ -1261,12 +1591,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 17,
+      "id": 24,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 36
+        "y": 55
       }
     },
     {
@@ -1388,12 +1718,12 @@
           "expression": ""
         }
       ],
-      "id": 18,
+      "id": 25,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 44
+        "y": 63
       }
     },
     {
@@ -1459,12 +1789,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 19,
+      "id": 26,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 44
+        "y": 63
       }
     },
     {
@@ -1542,24 +1872,24 @@
           "expression": ""
         }
       ],
-      "id": 20,
+      "id": 27,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 44
+        "y": 63
       }
     },
     {
       "type": "row",
       "title": "인증서",
-      "id": 21,
+      "id": 28,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 71
       },
       "panels": []
     },
@@ -1663,12 +1993,12 @@
           }
         }
       ],
-      "id": 22,
+      "id": 29,
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 72
       }
     }
   ],
