@@ -133,7 +133,7 @@ groups:
               refId: A
               instant: true
               # 처리 스팬 이름이 "<큐> process" 다. 10분에 6건(초당 0.01) 넘게 처리한 큐만 본다
-              expr: "(sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_kind=\"SPAN_KIND_CONSUMER\", status_code=\"STATUS_CODE_ERROR\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\")) / sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_kind=\"SPAN_KIND_CONSUMER\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\"))) and sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_kind=\"SPAN_KIND_CONSUMER\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\")) > 0.01"
+              expr: "(sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\".+ process\", span_kind=\"SPAN_KIND_CONSUMER\", status_code=\"STATUS_CODE_ERROR\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\")) / sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\".+ process\", span_kind=\"SPAN_KIND_CONSUMER\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\"))) and sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\".+ process\", span_kind=\"SPAN_KIND_CONSUMER\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\")) > 0.01"
           - refId: B
             datasourceUid: __expr__
             model:
