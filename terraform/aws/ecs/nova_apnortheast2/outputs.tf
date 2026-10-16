@@ -103,3 +103,12 @@ output "migration_run_task_parameter" {
   description = "be release 가 읽는 SSM 파라미터 이름 (클러스터 · 태스크 정의 · 서브넷 · SG · 로그)"
   value       = aws_ssm_parameter.migration.name
 }
+
+output "observability_cluster_name" {
+  description = "관측 스택(obs · OTel 게이트웨이 · 브라우저 수집기)을 올리는 클러스터"
+  value       = aws_ecs_cluster.observability.name
+}
+
+output "observability_cluster_arn" {
+  value = aws_ecs_cluster.observability.arn
+}
