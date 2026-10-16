@@ -66,7 +66,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[5m])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[5m]))'
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[5m])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5", http_route!="/api/v1/notifications/stream"}[5m]))'
       - uid: slo-rec-requests-30m
         title: nova:http_requests:rate30m
         record:
@@ -108,7 +108,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[30m]))'
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5", http_route!="/api/v1/notifications/stream"}[30m]))'
       - uid: slo-rec-requests-1h
         title: nova:http_requests:rate1h
         record:
@@ -150,7 +150,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[1h])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[1h]))'
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[1h])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5", http_route!="/api/v1/notifications/stream"}[1h]))'
       - uid: slo-rec-requests-6h
         title: nova:http_requests:rate6h
         record:
@@ -192,7 +192,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[6h])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5"}[6h]))'
+              expr: 'sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[6h])) - sum by (job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", le="0.5", http_route!="/api/v1/notifications/stream"}[6h]))'
   - orgId: 1
     name: nova-slo
     folder: nova
@@ -386,7 +386,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: '(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m]))) / ((histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w)))) / 3 or histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)))) > 2) and (histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*"}[30m]))) > 0.5)'
+              expr: '(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m]))) / ((histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 1w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 2w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 3w)))) / 3 or histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 1w)))) > 2) and (histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m]))) > 0.5)'
           - refId: B
             datasourceUid: __expr__
             model:

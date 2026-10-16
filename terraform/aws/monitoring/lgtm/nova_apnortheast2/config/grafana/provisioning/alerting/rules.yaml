@@ -30,7 +30,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: "histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\"}[5m])))"
+              expr: "histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!=\"/api/v1/notifications/stream\"}[5m])))"
           - refId: B
             datasourceUid: __expr__
             model:
