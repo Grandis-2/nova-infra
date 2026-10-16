@@ -1,7 +1,7 @@
 {
   "uid": "nova-sqs",
-  "title": "nova · SQS",
-  "description": "SQS 큐(CloudWatch). DLQ 는 맨 아래에 따로 모은다",
+  "title": "nova · SQS · 비동기 흐름",
+  "description": "보내고 처리하는 흐름(트레이스)과 큐 상태(CloudWatch). DLQ 는 맨 아래에 따로 모은다",
   "tags": [
     "nova",
     "data"
@@ -65,6 +65,334 @@
   },
   "panels": [
     {
+      "type": "row",
+      "title": "메시지 흐름 (트레이스)",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "큐 · 서비스 (선택한 기간)",
+      "description": "어느 서비스가 보내고 어느 서비스가 처리하는지. 보내는 쪽만 있고 처리하는 쪽이 없으면 그 기간에 처리가 없었거나 처리 쪽 계측이 빠진 것이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "초당"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "역할"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "SPAN_KIND_PRODUCER": {
+                        "text": "보냄"
+                      },
+                      "SPAN_KIND_CONSUMER": {
+                        "text": "처리"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "초당",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "queue": "큐",
+              "service_name": "서비스",
+              "span_kind": "역할",
+              "Value": "초당"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (queue, service_name, span_kind) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\"}[$__range]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\"))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "보냄 · 처리 (초당)",
+      "description": "보냄이 처리보다 계속 많으면 큐가 쌓인다(아래 적체 · 가장 오래된 메시지 나이)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\", span_kind=\"SPAN_KIND_PRODUCER\"}[$__rate_interval]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\"))",
+          "legendFormat": "{{queue}} 보냄"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\", span_kind=\"SPAN_KIND_CONSUMER\"}[$__rate_interval]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\"))",
+          "legendFormat": "{{queue}} 처리"
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 8,
+        "y": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "처리 오류율",
+      "description": "처리 스팬이 오류로 끝난 비율. 실패한 메시지는 가시성 시간 뒤 다시 처리되고, 횟수를 다 쓰면 DLQ 로 간다. 경보: 메시지 처리 오류율",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "(sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\", span_kind=\"SPAN_KIND_CONSUMER\", status_code=\"STATUS_CODE_ERROR\"}[$__rate_interval]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\")) or 0 * sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\", span_kind=\"SPAN_KIND_CONSUMER\"}[$__rate_interval]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\"))) / sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\", span_kind=\"SPAN_KIND_CONSUMER\"}[$__rate_interval]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\"))",
+          "legendFormat": "{{queue}}"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "처리 시간 p99",
+      "description": "메시지 하나를 처리하는 데 걸린 시간(처리 스팬). 큐에서 기다린 시간은 아래 가장 오래된 메시지 나이",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, queue) (label_replace(rate(traces_spanmetrics_duration_seconds_bucket{messaging_system!=\"\", span_name=~\"(${queue:regex}) (publish|process)\", span_kind=\"SPAN_KIND_CONSUMER\"}[$__rate_interval]), \"queue\", \"$1\", \"span_name\", \"(.+) (publish|process)\")))",
+          "legendFormat": "{{queue}}"
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 10
+      }
+    },
+    {
+      "type": "table",
+      "title": "처리 실패 트레이스",
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "description": "오류가 난 트레이스는 샘플링 없이 남는다. 보낸 쪽 요청부터 처리까지 한 트레이스로 이어진다",
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "limit": 20,
+          "tableType": "traces",
+          "query": "{kind=consumer && status=error && span.messaging.system=\"aws_sqs\"}"
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      }
+    },
+    {
+      "type": "row",
+      "title": "큐 (CloudWatch)",
+      "id": 7,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "panels": []
+    },
+    {
       "type": "timeseries",
       "title": "적체 (받을 수 있는 메시지)",
       "description": "worker 가 큐 적체로 늘어난다(service.yml scaling.backlog). 계속 쌓이면 소비가 못 따라간다",
@@ -117,12 +445,12 @@
           "expression": ""
         }
       ],
-      "id": 1,
+      "id": 8,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 19
       }
     },
     {
@@ -178,12 +506,12 @@
           "expression": ""
         }
       ],
-      "id": 2,
+      "id": 9,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 0
+        "y": 19
       }
     },
     {
@@ -239,12 +567,12 @@
           "expression": ""
         }
       ],
-      "id": 3,
+      "id": 10,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 8
+        "y": 27
       }
     },
     {
@@ -303,12 +631,12 @@
           "expression": ""
         }
       ],
-      "id": 4,
+      "id": 11,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 8
+        "y": 27
       }
     },
     {
@@ -367,24 +695,24 @@
           "expression": ""
         }
       ],
-      "id": 5,
+      "id": 12,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 8
+        "y": 27
       }
     },
     {
       "type": "row",
       "title": "DLQ",
-      "id": 6,
+      "id": 13,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 35
       },
       "panels": []
     },
@@ -451,12 +779,12 @@
           "statistic": "Average"
         }
       ],
-      "id": 7,
+      "id": 14,
       "gridPos": {
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 36
       }
     }
   ],

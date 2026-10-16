@@ -163,7 +163,7 @@ flowchart LR
 |---|---|---|
 | `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 새로 뜬 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보, 서비스 맵, 서비스별 P99 · 동시 처리 요청. SLO (`nova-slo`): 서비스별 30일 가용성 · 응답 시간, 남은 오류 예산, 소진 속도 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 APM 화면. Apdex · 엔드포인트 표(시간 비중 순) · 처리 시간 구성(DB · 외부 · 메시징 · 자체) · 서비스 맵과 호출 상대 · 지난주 대비 · 오류 그룹. JVM · 외부 호출 · HikariCP 는 접힌 행 |
-| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐 적체 · DLQ |
+| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS · 비동기 흐름 (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐별 보내는 · 처리하는 서비스와 처리 오류율 · 처리 시간(트레이스) · 적체 · DLQ |
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), 접근 로그로 본 요청 구간(CloudFront 응답 시간 · 구간별 시간 · 캐시 결과 · 엣지 위치별, 느린 요청과 5xx 로그에서 앱 트레이스로), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
 | `50 URLs` | URL 목록 (`nova-url`) · URL 그리드 (`nova-url-grid`) · URL 상세 (`nova-url-detail`) | 실제 요청으로 본 API(메서드 + 경로)별 값. 목록은 API × 시간 히트맵, API 표(요청 수 · 지난주 대비 증감 · 성공률 · 4xx · 1초 초과 비율 · P95 · P99 · P99 증감), 새로 생긴 · 사라진 API(최근 7일), 서비스 시간대 잔디, 경로마다 펼쳐 보는 행. 그리드는 API 마다 카드. 상세는 401 · 403 · 404 · 429 수, 응답 코드별 요청량, 지연 분포, 요청량 · P99 · 성공률 지난주 대비, 시간 구성(트레이스 표본), 날짜 × 시각(KST) 잔디, 느린/오류 트레이스 |
@@ -244,6 +244,7 @@ flowchart LR
 | 응답 시간 급증 (평소 대비) | 최근 30분 P99 > 평소의 2배 그리고 0.5초 이상 | 15분 | warning |
 | HTTP P99 응답 시간 | 서비스별 P99 > 2초 | 10분 | warning |
 | JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
+| 메시지 처리 오류율 | 큐별 처리 스팬 중 오류 비율 > 5% (10분에 6건 넘게 처리한 큐만) | 10분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
 | MySQL 수집 끊김 | `mysql_up` 또는 exporter 수집 대상의 `up` < 1 (exporter 를 띄운 환경만) | 5분 | critical |
 | MySQL 연결 사용률 | 연결 수 / max_connections > 80% | 10분 | warning |
@@ -296,6 +297,12 @@ flowchart LR
 ### HTTP P99 응답 시간
 
 응답 시간 급증과 같은 순서로 본다. 이 경보는 평소와 상관없이 2초를 넘은 것이다.
+
+### 메시지 처리 오류율
+
+1. SQS · 비동기 흐름 대시보드에서 어느 큐인지, 보내는 양이 갑자기 늘었는지 본다.
+2. "처리 실패 트레이스"에서 트레이스를 열어 처리 스팬의 예외를 본다. 보낸 서비스의 요청부터 처리까지 한 트레이스로 이어진다.
+3. DLQ 에 쌓였으면 원인을 고친 뒤 원래 큐로 옮긴다(redrive).
 
 ### JVM 힙 사용률
 

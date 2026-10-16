@@ -114,6 +114,41 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0]}
+      - uid: nova-message-errors
+        title: 메시지 처리 오류율
+        condition: C
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ .Labels.queue }} 큐 메시지 처리의 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}가 실패했다. 실패한 메시지는 다시 처리되다가 횟수를 다 쓰면 DLQ 로 간다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#메시지-처리-오류율"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 처리 스팬 이름이 "<큐> process" 다. 10분에 6건(초당 0.01) 넘게 처리한 큐만 본다
+              expr: "(sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_kind=\"SPAN_KIND_CONSUMER\", status_code=\"STATUS_CODE_ERROR\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\")) / sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_kind=\"SPAN_KIND_CONSUMER\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\"))) and sum by (queue) (label_replace(rate(traces_spanmetrics_calls_total{messaging_system!=\"\", span_kind=\"SPAN_KIND_CONSUMER\"}[10m]), \"queue\", \"$1\", \"span_name\", \"(.+) process\")) > 0.01"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.05]}
       - uid: obs-ingest-errors
         title: obs 수집 실패
         condition: C
