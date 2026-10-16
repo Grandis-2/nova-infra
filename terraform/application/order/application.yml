@@ -54,7 +54,7 @@ nova:
       concurrency: 1
       wait-seconds: 20
       visibility: 5m         # 처리 한 건보다 길게
-      backoff-base: 5s
+      backoff-base: 30s      # 실패는 대개 DB 장애 — 재수신 5회(DLQ 전)가 장애 조치보다 길게(약 7분), payment 와 같다
       backoff-max: 5m
       # 결과를 정할 수 없는 예약 취소는 같은 큐에 지연을 두고 다시 보낸다(order-events 쓰기 권한 필요)
       defer-first-delay: 60s
