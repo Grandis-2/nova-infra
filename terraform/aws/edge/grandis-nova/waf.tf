@@ -43,14 +43,15 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     allow {}
   }
 
-  # 앱의 ApiResponse 실패 봉투와 같은 모양(WAF 응답이라 timestamp · traceId 는 null)
+  # 앱의 ApiResponse 실패 봉투와 같은 모양(WAF 응답이라 timestamp · traceId 는 null).
+  # AWS 로 보내는 값이라 메시지는 ASCII 다. 프런트는 상태 코드 413 으로 문구를 정한다
   custom_response_body {
     key          = "upload_too_large"
     content_type = "APPLICATION_JSON"
     content = jsonencode({
       success   = false
       data      = null
-      error     = { code = "VALIDATION_FAILED", message = "파일이 너무 큽니다.", details = null }
+      error     = { code = "VALIDATION_FAILED", message = "File is too large.", details = null }
       timestamp = null
       traceId   = null
     })
