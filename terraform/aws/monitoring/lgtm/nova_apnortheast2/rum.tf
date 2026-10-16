@@ -197,7 +197,7 @@ resource "aws_ecs_service" "rum" {
 }
 
 # 판매 오픈처럼 사용자가 몰리면 늘린다. 상한 3대는 실측 전 추정이다(한 대가 초당 수백 요청, 오픈 때 예상 유입은 그 1/4~1/2).
-# 늘려도 저장은 Loki 수집 한도(테넌트 초당 4 MB)에 묶인다. 자체 지표(job="rum-collector")를 본 뒤 조정한다.
+# 늘려도 브라우저 로그(대부분의 양)는 Loki 수집 한도(테넌트 초당 4 MB)에 묶인다. 트레이스는 Tempo 로 간다. 자체 지표(job="rum-collector")를 본 뒤 조정한다.
 # 상태를 들고 있지 않아 줄여도 잃는 것이 거의 없다
 resource "aws_appautoscaling_target" "rum" {
   count = local.rum_enabled ? 1 : 0
