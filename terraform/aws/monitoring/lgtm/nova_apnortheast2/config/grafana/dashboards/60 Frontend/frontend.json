@@ -1,0 +1,1635 @@
+{
+  "uid": "nova-frontend",
+  "title": "nova · 프런트 (실사용자)",
+  "tags": [
+    "nova",
+    "frontend"
+  ],
+  "description": "브라우저에서 Grafana Faro SDK 가 보낸 것(웹 바이탈 · JS 오류 · 핵심 동작 · API 호출). 세션 샘플링 뒤라 수는 전체가 아니라 샘플이다",
+  "schemaVersion": 39,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "graphTooltip": 1,
+  "timezone": "browser",
+  "editable": false,
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "한눈에 보기 (샘플에 든 세션)",
+      "collapsed": false,
+      "panels": [],
+      "id": 1,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "세션",
+      "description": "선택한 기간에 시작한 세션 수. 프런트가 세션의 일부(설정한 샘플 비율)만 보내므로 실제 방문 수가 아니다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum(count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "JS 오류",
+      "description": "브라우저에서 난 오류 수(샘플에 든 세션)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum(count_over_time({service_name=\"nova-web\"} | kind=\"exception\" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "LCP p75",
+      "description": "가장 큰 콘텐츠가 그려지기까지. 좋음 ≤ 2.5초, 나쁨 > 4초(Google 기준)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2500
+              },
+              {
+                "color": "red",
+                "value": 4000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" | unwrap value_lcp | __error__=\"\" [$__range]) by ()",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "INP p75",
+      "description": "클릭 · 입력 뒤 화면이 반응하기까지. 좋음 ≤ 200ms, 나쁨 > 500ms",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 200
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_inp!=\"\" | unwrap value_inp | __error__=\"\" [$__range]) by ()",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CLS p75",
+      "description": "화면이 밀리는 정도. 좋음 ≤ 0.1, 나쁨 > 0.25",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_cls!=\"\" | unwrap value_cls | __error__=\"\" [$__range]) by ()",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "API 체감 p95",
+      "description": "브라우저가 잰 API 호출 시간(네트워크 · Vercel · CloudFront · 서버 포함). 실시간 알림 연결은 뺀다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" | unwrap event_data_duration_ns | __error__=\"\" [$__range]) by () / 1e9",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      }
+    },
+    {
+      "type": "row",
+      "title": "웹 바이탈",
+      "collapsed": false,
+      "panels": [],
+      "id": 8,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "LCP · INP p75",
+      "description": "페이지 표시(LCP)와 반응(INP)의 75번째 백분위. 점선은 '나쁨' 기준",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 4000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" | unwrap value_lcp | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "LCP"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "B",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_inp!=\"\" | unwrap value_inp | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "INP"
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "timeseries",
+      "title": "CLS p75",
+      "description": "화면 밀림의 75번째 백분위. 점선은 '나쁨' 기준(0.25)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "axisSoftMax": 0.3,
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_cls!=\"\" | unwrap value_cls | __error__=\"\" [$__auto]) by ()",
+          "legendFormat": "CLS"
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "table",
+      "title": "페이지별 웹 바이탈 (p75)",
+      "description": "페이지(경로 패턴)마다 선택한 기간의 75번째 백분위. 측정 수가 적은 페이지는 값이 흔들린다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "LCP"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 2500
+                    },
+                    {
+                      "color": "red",
+                      "value": 4000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "INP"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 200
+                    },
+                    {
+                      "color": "red",
+                      "value": 500
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CLS"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.1
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.25
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "LCP",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "view_name": "페이지",
+              "Value #A": "LCP",
+              "Value #B": "INP",
+              "Value #C": "CLS",
+              "Value #D": "측정 수"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" | unwrap value_lcp | __error__=\"\" [$__range]) by (view_name)",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "B",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_inp!=\"\" | unwrap value_inp | __error__=\"\" [$__range]) by (view_name)",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "C",
+          "expr": "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_cls!=\"\" | unwrap value_cls | __error__=\"\" [$__range]) by (view_name)",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "D",
+          "expr": "sum by (view_name) (count_over_time({service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "type": "row",
+      "title": "오류",
+      "collapsed": false,
+      "panels": [],
+      "id": 12,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "JS 오류 (종류별)",
+      "description": "브라우저 오류 수. 화면을 떠나며 취소한 요청은 프런트가 보내지 않는다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (type) (count_over_time({service_name=\"nova-web\"} | kind=\"exception\" | logfmt [$__auto]))",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "table",
+      "title": "오류 메시지 Top",
+      "description": "같은 메시지끼리 센다. 메시지 안의 URL 쿼리는 지워져 있다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "수"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "페이지"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "수",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "value": "메시지",
+              "view_name": "페이지",
+              "Value #A": "수"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "topk(20, sum by (value, view_name) (count_over_time({service_name=\"nova-web\"} | kind=\"exception\" | logfmt [$__range])))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      }
+    },
+    {
+      "type": "logs",
+      "title": "최근 오류",
+      "description": "줄을 펼쳐 스택 · 브라우저 · 세션을 본다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "{service_name=\"nova-web\"} | kind=\"exception\"",
+          "legendFormat": ""
+        }
+      ],
+      "id": 15,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      }
+    },
+    {
+      "type": "row",
+      "title": "핵심 동작",
+      "collapsed": false,
+      "panels": [],
+      "id": 16,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      }
+    },
+    {
+      "type": "table",
+      "title": "동작별 소요 시간 · API 실패",
+      "description": "버튼에 이름(data-faro-user-action-name)을 단 동작만 센다. 소요 시간은 누른 뒤 그 동작이 일으킨 요청 · 화면 변화가 끝나기까지. API 실패율은 그 동작에서 나간 호출 중 5xx 비율",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1000
+                    },
+                    {
+                      "color": "red",
+                      "value": 3000
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "API 실패율"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.01
+                    },
+                    {
+                      "color": "red",
+                      "value": 0.05
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "p95",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "event_data_userActionName": "동작",
+              "Value #A": "횟수",
+              "Value #B": "p50",
+              "Value #C": "p95",
+              "Value #D": "API 실패율"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "B",
+          "expr": "quantile_over_time(0.5, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__range]) by (event_data_userActionName)",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "C",
+          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__range]) by (event_data_userActionName)",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "D",
+          "expr": "(sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | event_data_http_response_status_code >= 500 | label_format event_data_userActionName=\"{{.action_name}}\" [$__range])) or 0 * sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | label_format event_data_userActionName=\"{{.action_name}}\" [$__range]))) / sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | label_format event_data_userActionName=\"{{.action_name}}\" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "동작별 소요 시간 p95",
+      "description": "핵심 동작이 사용자 기준으로 얼마나 걸리는지",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__auto]) by (event_data_userActionName)",
+          "legendFormat": "{{event_data_userActionName}}"
+        }
+      ],
+      "id": 18,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "row",
+      "title": "API 체감 시간",
+      "collapsed": false,
+      "panels": [],
+      "id": 19,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "브라우저 vs 서버 (p95)",
+      "description": "같은 시간대의 API p95. 브라우저 값은 네트워크 · Vercel · CloudFront · ALB 를 포함하고, 서버 값은 앱이 잰 처리 시간이다. 둘의 차이가 서버 밖에서 쓴 시간이다. 실시간 알림 연결은 둘 다 뺀다",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" | unwrap event_data_duration_ns | __error__=\"\" [$__auto]) by () / 1e9",
+          "legendFormat": "브라우저"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval])))",
+          "legendFormat": "서버"
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 57
+      },
+      "interval": "5m"
+    },
+    {
+      "type": "table",
+      "title": "느린 API (브라우저 기준 p95)",
+      "description": "브라우저가 잰 시간이 긴 순. URL 에 ID 가 들어간 경로는 따로 센다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 2
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "p95",
+            "desc": true
+          }
+        ],
+        "cellHeight": "sm"
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "event_data_http_request_method": "메서드",
+              "event_data_url_full": "URL",
+              "Value #A": "p95",
+              "Value #B": "호출 수"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "topk(15, quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" | unwrap event_data_duration_ns | __error__=\"\" [$__range]) by (event_data_http_request_method, event_data_url_full) / 1e9)",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "B",
+          "expr": "sum by (event_data_http_request_method, event_data_url_full) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" [$__range]))",
+          "legendFormat": "",
+          "queryType": "instant",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "id": 21,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 57
+      }
+    },
+    {
+      "type": "row",
+      "title": "사용 환경",
+      "collapsed": false,
+      "panels": [],
+      "id": 22,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 65
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "브라우저",
+      "description": "세션 시작 기준",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (browser_name) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" | logfmt [$__range]))",
+          "legendFormat": "{{browser_name}}"
+        }
+      ],
+      "id": 23,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 66
+      },
+      "maxDataPoints": 1
+    },
+    {
+      "type": "piechart",
+      "title": "운영체제",
+      "description": "세션 시작 기준",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (browser_os) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" | logfmt [$__range]))",
+          "legendFormat": "{{browser_os}}"
+        }
+      ],
+      "id": 24,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 66
+      },
+      "maxDataPoints": 1
+    },
+    {
+      "type": "piechart",
+      "title": "모바일",
+      "description": "세션 시작 기준",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (browser_mobile) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" | logfmt [$__range]))",
+          "legendFormat": "{{browser_mobile}}"
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 66
+      },
+      "maxDataPoints": 1
+    }
+  ]
+}

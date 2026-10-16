@@ -1,5 +1,5 @@
 # Grafana 관리 경보 규칙. 알림은 notify.yaml(SNS → Chatbot → Slack)로 간다.
-# 질의는 Mimir(PromQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(grafana/dashboards/**/*.json)와 같다.
+# 질의는 Mimir(PromQL)다. 프런트 경보 둘은 Loki(LogQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(grafana/dashboards/**/*.json)와 같다.
 # 트래픽이 없어 질의가 비면(NoData) 정상으로 본다. 질의가 실패하면 Error 상태 경보가 따로 간다.
 # summary 는 Grafana 템플릿이다. 달러 기호를 쓰지 않고 .Values · .Labels 로 쓴다.
 # .Values 에는 쿼리(A)가 아니라 식(reduce · threshold)만 들어간다. 그래서 A → B(reduce: last) → C(threshold) 로 두고 B 를 찍는다.
@@ -149,6 +149,74 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.05]}
+      - uid: nova-frontend-errors
+        title: 프런트 JS 오류 급증
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "브라우저 오류가 15분에 30건을 넘고 지난주 같은 시각의 3배를 넘었다(샘플에 든 세션 기준) — 값 {{ with .Values.B }}{{ .Value }}{{ end }}건"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#프런트-js-오류-급증"
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange: {from: 900, to: 0}
+            model:
+              refId: A
+              queryType: instant
+              expr: "sum(count_over_time({service_name=\"nova-web\"} | kind=\"exception\" [15m])) > 30 and sum(count_over_time({service_name=\"nova-web\"} | kind=\"exception\" [15m])) > 3 * (sum(count_over_time({service_name=\"nova-web\"} | kind=\"exception\" [15m] offset 1w)) or vector(0))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: nova-frontend-lcp
+        title: 프런트 LCP 악화
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "30분 동안 LCP p75 가 4초('나쁨' 기준)를 넘었다(측정 30건 이상일 때만) — 값 {{ with .Values.B }}{{ printf `%.0f` .Value }}ms{{ end }}"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#프런트-lcp-악화"
+        data:
+          - refId: A
+            datasourceUid: loki
+            relativeTimeRange: {from: 1800, to: 0}
+            model:
+              refId: A
+              queryType: instant
+              expr: "quantile_over_time(0.75, {service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" | unwrap value_lcp | __error__=\"\" [30m]) by () > 4000 and on() sum(count_over_time({service_name=\"nova-web\"} | kind=\"measurement\" |= \"type=web-vitals\" | logfmt | value_lcp!=\"\" [30m])) > 30"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
       - uid: obs-ingest-errors
         title: obs 수집 실패
         condition: C
