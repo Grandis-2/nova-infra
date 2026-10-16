@@ -543,6 +543,7 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 
 앱의 OTLP 를 obs 태스크 밖에서 받는 Collector 다. obs 는 한 호스트의 디렉터리를 써서 재배포 때 몇 분 비는데, 게이트웨이는 별도 서비스라 그동안에도 받는다.
 
+- 관측 클러스터(`nova-prod-observability`)에서 돈다. 앱 클러스터와 같은 Service Connect 네임스페이스라 앱은 그대로 `otel-gateway` 이름으로 보낸다.
 - Fargate(온디맨드, 0.5 vCPU · 2 GiB), 롤링 배포. Spot 은 쓰지 않는다. 회수되면 다음 태스크가 뜰 때까지 수집이 멈춘다.
 - 설정은 `gateway/collector.yaml` 내용을 환경 변수로 넣는다(`--config=env:COLLECTOR_CONFIG`). S3 내려받기와 태스크 역할이 필요 없고, 설정이 바뀌면 다시 배포된다.
 - obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기마다 메모리 전송 큐(바이트로 세어 128 MiB, 셋 합 384 MiB)에 쌓였다가 15분까지 다시 보낸다. 큐가 차면 새로 들어오는 것을 버린다(`otelcol_exporter_enqueue_failed_*`).

@@ -13,6 +13,9 @@
 #   게이트웨이 자신은 롤링 배포라 새 태스크가 뜬 뒤 옛 태스크가 내려간다. 겹치는 1~2분은 한 트레이스의 스팬이
 #   두 태스크로 나뉘어 tail sampling 결정이 어긋날 수 있다(받아들인다).
 #
+#   관측 클러스터(nova-prod-observability)에서 돈다. 같은 Service Connect 네임스페이스라 앱 클러스터의 앱이 그대로 이름으로 보낸다.
+#   클러스터를 바꾸면 서비스를 지우고 다시 만든다(그동안 수집이 멈추고, 앱 태스크를 다시 띄워야 이름이 풀릴 수 있다).
+#
 #   설정은 파일 내용을 환경 변수로 넣는다(--config=env:COLLECTOR_CONFIG). S3 내려받기 · 태스크 역할이 필요 없고,
 #   설정이 바뀌면 작업 정의가 바뀌어 재배포된다. config/ 밖에 두어 obs 태스크의 설정 해시에 들지 않는다.
 #   Spot 은 쓰지 않는다. 회수되면 다음 태스크가 뜰 때까지 모든 수집이 멈춘다.
@@ -104,7 +107,7 @@ resource "aws_ecs_service" "gateway" {
   count = local.gateway_enabled ? 1 : 0
 
   name            = local.gateway_name
-  cluster         = local.obs_cluster_arn
+  cluster         = data.terraform_remote_state.ecs.outputs.observability_cluster_arn
   task_definition = aws_ecs_task_definition.gateway[0].arn
   desired_count   = 1
   launch_type     = "FARGATE"
@@ -176,7 +179,7 @@ resource "aws_cloudwatch_metric_alarm" "gateway_no_task" {
   treat_missing_data  = "breaching"
 
   dimensions = {
-    ClusterName = local.cluster_name
+    ClusterName = data.terraform_remote_state.ecs.outputs.observability_cluster_name
     ServiceName = aws_ecs_service.gateway[0].name
   }
 
