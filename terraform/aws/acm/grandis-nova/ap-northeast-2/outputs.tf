@@ -26,3 +26,17 @@ output "grafana_cloudfront_certificate_arn" {
   description = "edge 스택의 Grafana CloudFront 가 쓴다"
   value       = local.grafana_enabled ? try(aws_acm_certificate_validation.grafana_cloudfront[0].certificate_arn, aws_acm_certificate.grafana_cloudfront[0].arn) : ""
 }
+
+output "rum_domain_name" {
+  value = local.rum_enabled ? var.rum_domain_name : ""
+}
+
+output "rum_alb_certificate_arn" {
+  description = "monitoring/lgtm 스택이 ALB 리스너에 SNI 로 붙인다"
+  value       = local.rum_enabled ? try(aws_acm_certificate_validation.rum_alb[0].certificate_arn, aws_acm_certificate.rum_alb[0].arn) : ""
+}
+
+output "rum_cloudfront_certificate_arn" {
+  description = "edge 스택의 수집용 CloudFront 가 쓴다"
+  value       = local.rum_enabled ? try(aws_acm_certificate_validation.rum_cloudfront[0].certificate_arn, aws_acm_certificate.rum_cloudfront[0].arn) : ""
+}

@@ -27,3 +27,9 @@ variable "grafana_domain_name" {
   type        = string
   default     = ""
 }
+
+variable "rum_domain_name" {
+  description = "브라우저 실사용자 모니터링(Faro) 수집 주소. 비우면 인증서를 만들지 않는다"
+  type        = string
+  default     = ""
+}
