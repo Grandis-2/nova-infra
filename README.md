@@ -33,6 +33,7 @@
 | --- | --- |
 | 프런트엔드 | Vercel (`www.grandis-nova.link`) |
 | API 진입 | CloudFront + WAF (`api.grandis-nova.link`) → ALB (HTTPS) → ECS |
+| 브라우저 수집 | CloudFront + 전용 WAF (`rum.grandis-nova.link`) → ALB → 브라우저 수집기 → OTel 게이트웨이 |
 | 이미지 | S3 업로드 버킷 → CloudFront (`cdn.grandis-nova.link`, OAC) |
 | 애플리케이션 | ECS Fargate Spot, 2 AZ (2a · 2c) |
 | 캐시 · 메시지 | ElastiCache Valkey 9.1 (TLS), SQS 큐 8개 + DLQ |
