@@ -13,8 +13,10 @@
 
 locals {
   ecs_cluster_arn = data.terraform_remote_state.ecs.outputs.cluster_arn
+  # 배포 · 배치 실패는 관측 클러스터(obs · 게이트웨이 · 브라우저 수집기)도 본다. 태스크 죽음은 앱 서비스만 본다
+  ecs_watched_cluster_arns = [local.ecs_cluster_arn, data.terraform_remote_state.ecs.outputs.observability_cluster_arn]
   # arn:aws:ecs:<리전>:<계정>:cluster/<이름> → 서비스 ARN 접두사 arn:aws:ecs:<리전>:<계정>:service/<이름>/
-  ecs_service_arn_prefix = "${replace(local.ecs_cluster_arn, ":cluster/", ":service/")}/"
+  ecs_service_arn_prefixes = [for arn in local.ecs_watched_cluster_arns : { prefix = "${replace(arn, ":cluster/", ":service/")}/" }]
   # 서비스 태스크만 본다. 단독 실행 태스크(group = family:<이름>)와 batch 는 batch_failure 가 본다
   ecs_event_groups = [for key, name in local.service_names : "service:${name}" if key != "batch"]
 
@@ -24,7 +26,7 @@ locals {
       pattern = {
         source      = ["aws.ecs"]
         detail-type = ["ECS Deployment State Change"]
-        resources   = [{ prefix = local.ecs_service_arn_prefix }]
+        resources   = local.ecs_service_arn_prefixes
         detail      = { eventName = ["SERVICE_DEPLOYMENT_FAILED"] }
       }
       paths    = { service = "$.resources[0]", reason = "$.detail.reason" }
@@ -37,7 +39,7 @@ locals {
         source      = ["aws.ecs"]
         detail-type = ["ECS Service Action"]
         detail = {
-          clusterArn = [local.ecs_cluster_arn]
+          clusterArn = local.ecs_watched_cluster_arns
           eventName  = ["SERVICE_TASK_PLACEMENT_FAILURE", "SERVICE_TASK_CONFIGURATION_FAILURE"]
         }
       }

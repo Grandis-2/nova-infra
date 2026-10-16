@@ -94,17 +94,6 @@ resource "aws_iam_role_policy" "github_deploy" {
         }
       },
       {
-        # 관측 서비스는 같은 클러스터에 있지만 앱 배포가 건드리면 안 된다. 게이트웨이가 다시 뜨면 메모리 큐가 사라진다.
-        # 이름 규칙이 앱과 같아(nova-prod-*) 허용 목록으로 가르지 않고 여기서 막는다
-        Sid    = "KeepObservabilityServices"
-        Effect = "Deny"
-        Action = "ecs:UpdateService"
-        Resource = [
-          "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service/${local.name_prefix}/${local.name_prefix}-obs",
-          "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service/${local.name_prefix}/${local.name_prefix}-otel-gateway",
-        ]
-      },
-      {
         # DescribeClusters 는 ecs:cluster 조건 키를 지원하지 않아 리소스로 제한한다
         Sid      = "DescribeCluster"
         Effect   = "Allow"
