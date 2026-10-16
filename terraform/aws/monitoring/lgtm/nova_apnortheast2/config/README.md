@@ -513,9 +513,13 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
   디스크 큐는 쓰지 않는다. Fargate 디스크는 태스크와 함께 사라져 게이트웨이 자신이 교체될 때는 디스크 큐도 잃는다. 지키려는 것은 obs 재배포 동안이라 메모리 큐로 충분하다.
 - 게이트웨이 배포 중에는 두 태스크가 1~2분 함께 떠 한 트레이스의 스팬이 나뉠 수 있다. 그동안은 tail sampling 결정이 어긋날 수 있다.
 - 자체 지표는 obs 가 긁을 수 없어 30초마다 Mimir 로 직접 보낸다(`job="otel-gateway"`).
-- 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. 서비스 CPU 지표(`AWS/ECS`)가 끊긴 것을 장애로 본다.
+- 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. `AWS/ECS` `LiveTaskCount` 가 0 이거나 끊긴 것을 장애로 본다.
 - **게이트웨이와 obs 를 같은 apply 에서 재배포하지 않는다.** obs 가 내려간 사이 게이트웨이 옛 태스크가 교체되면 그 태스크의 큐가 사라진다(NV-543 적용 때 약 650건). `gateway/` 와 `config/` · obs 작업 정의 변경은 PR 을 나눈다.
 - 앱은 `otel-gateway.<네임스페이스>:4318` 로 보낸다(ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT`).
+- **ECS 밖의 송신자는 `otel-ingest.<네임스페이스>:4318`** 로 보낸다(출력 `gateway_ingest_endpoint`). Service Connect 이름은 ECS 서비스 태스크 안에서만 풀려서 Lambda 같은 송신자는 쓸 수 없다.
+  그래서 같은 네임스페이스에 게이트웨이 태스크 IP 를 가리키는 DNS A 레코드(TTL 10초)를 따로 둔다. Service Connect 가 같은 이름의 Cloud Map 서비스를 만들기 때문에 이름은 달라야 한다.
+  내부 NLB 를 두는 방법(월 약 16달러)보다 싸다. 대신 롤링 배포 중 몇 초는 옛 태스크 IP 로 갈 수 있어 송신자가 다시 시도해야 한다.
+  송신자 SG 는 securitygroup 스택에서 게이트웨이 SG 4318 에 연다.
 - **Service Connect 별칭은 태스크가 뜰 때 정해진다.** 그 뒤에 생긴 이름은 이미 떠 있는 태스크에서 풀리지 않는다(`no such host`).
   obs 가 `loki` · `tempo-otlp` · `mimir` 를 새로 내놓거나 이름을 바꾸면 게이트웨이를 다시 띄운다(`update-service --force-new-deployment`). 게이트웨이를 새로 만들 때도 같다.
 - 별칭은 IPv4(127.255.0.x) · IPv6(2600:f0f0::x) 두 주소로 풀린다. 태스크에 IPv6 경로가 없어 gRPC(Tempo) 가 IPv6 시도를 `network is unreachable` 경고로 남기고 IPv4 로 붙는다. 내보내기 실패가 아니다.

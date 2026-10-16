@@ -50,3 +50,8 @@ output "otel_gateway_security_group_id" {
   description = "OTel 게이트웨이(NV-543) 태스크 SG. 서비스 SG 에서 4317 · 4318 을 받고 obs 의 Loki · Tempo · Mimir 로 보낸다"
   value       = aws_security_group.otel_gateway.id
 }
+
+output "edge_logs_security_group_id" {
+  description = "엣지 로그 Lambda(NV-542) SG. 게이트웨이 4318 과 443 으로만 나간다"
+  value       = aws_security_group.edge_logs.id
+}
