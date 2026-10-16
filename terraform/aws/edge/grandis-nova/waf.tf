@@ -11,7 +11,7 @@ locals {
   #   EC2MetaDataSSRF_BODY   카카오 콜백 본문의 redirectUri(로컬 개발이면 http://localhost:5173/…)가 걸린다 → SsrfBodyExceptKakaoCallback
   #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 받은 URL 로 서버가 요청하지 않아 표시만 남긴다
   #   SizeRestrictions_BODY  본문 8KB 상한. 관리자 사진 업로드(파일이 본문)는 넘고, 사진이 많은 상품 등록도 넘을 수 있다 → SizeBodyExceptAdminUpload
-  #                          두 경로의 상한은 앱이 지킨다(사진 10MB · 요청 11MB, 상품 등록 256KB)
+  #                          두 경로는 대신 UploadContentLengthLimit 이 막고, 정확한 상한은 앱이 지킨다(사진 10MB · 요청 11MB, 상품 등록 256KB)
   managed_rule_overrides = {
     AWSManagedRulesCommonRuleSet = ["EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE", "SizeRestrictions_BODY"]
   }
@@ -21,6 +21,12 @@ locals {
   # 경로 둘을 or 로 묶으면 provider 스키마의 문장 깊이(3단)를 넘어 정규식 하나로 쓴다. 끝까지 일치라 /products/{id} 같은 하위 경로는 빠지지 않는다
   size_body_label         = "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"
   size_body_allowed_regex = "^/api/v1/admin/(images|products)$"
+
+  # 위 두 경로(POST)의 Content-Length 상한 10,599,999바이트. 사진은 한 요청에 한 장(10MiB = 10,485,760)이라 멀티파트 머리 · 경계 몫으로 약 110KB 를 더 둔다
+  # WAF 는 본문 앞 16KB 만 보므로 헤더로 판단한다. 헤더가 없으면(chunked) 막힌다
+  # 앱의 사진 상한(CatalogDefaults)이나 한 요청의 장 수를 바꾸면 이 값도 고친다
+  upload_content_length_regex = "^([0-9]{1,7}|10[0-5][0-9]{5})$"
+  frontend_origin             = "https://www.grandis-nova.link" # 앱 CORS 허용 목록(common:cors CorsDefaults)에 있는 출처
 
   # 대기열(줄 서기 POST · 조회 GET). 오픈 때 줄 서기가 한꺼번에 몰리고 대기자는 2~4초마다 조회하므로
   # 같은 공인 IP(회사 · 학교 · 통신사 NAT) 뒤에 여럿이면 ApiRateLimit 에 닿는다. 이 경로는 그 규칙에서 빼고 QueueRateLimit 으로 따로 센다
@@ -35,6 +41,19 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   default_action {
     allow {}
+  }
+
+  # 앱의 ApiResponse 실패 봉투와 같은 모양(WAF 응답이라 timestamp · traceId 는 null)
+  custom_response_body {
+    key          = "upload_too_large"
+    content_type = "APPLICATION_JSON"
+    content = jsonencode({
+      success   = false
+      data      = null
+      error     = { code = "VALIDATION_FAILED", message = "파일이 너무 큽니다.", details = null }
+      timestamp = null
+      traceId   = null
+    })
   }
 
   dynamic "rule" {
@@ -206,6 +225,108 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "SizeBodyExceptAdminUpload"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # 8KB 검사에서 뺀 두 경로(POST)는 Content-Length 가 없거나 상한을 넘으면 본문이 앱에 닿기 전에 막는다.
+  # 앱의 상한 초과와 같은 413 · 응답 봉투로 돌려준다 — 프런트가 413 으로 "파일이 너무 큽니다" 를 가른다.
+  # WAF 응답은 앱의 CORS 를 거치지 않아 헤더를 직접 단다. 값이 고정이라 프런트 출처 하나만 둔다(apex 는 www 로 308 이동한다)
+  rule {
+    name     = "UploadContentLengthLimit"
+    priority = 17
+
+    action {
+      dynamic "block" {
+        for_each = var.waf_block_mode ? [1] : []
+        content {
+          custom_response {
+            response_code            = 413
+            custom_response_body_key = "upload_too_large"
+
+            response_header {
+              name  = "Access-Control-Allow-Origin"
+              value = local.frontend_origin
+            }
+
+            response_header {
+              name  = "Access-Control-Allow-Credentials"
+              value = "true"
+            }
+
+            response_header {
+              name  = "Vary"
+              value = "Origin"
+            }
+          }
+        }
+      }
+
+      dynamic "count" {
+        for_each = var.waf_block_mode ? [] : [1]
+        content {}
+      }
+    }
+
+    statement {
+      and_statement {
+        statement {
+          byte_match_statement {
+            positional_constraint = "EXACTLY"
+            search_string         = "POST"
+
+            field_to_match {
+              method {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
+
+        statement {
+          regex_match_statement {
+            regex_string = local.size_body_allowed_regex
+
+            field_to_match {
+              uri_path {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
+
+        statement {
+          not_statement {
+            statement {
+              regex_match_statement {
+                regex_string = local.upload_content_length_regex
+
+                field_to_match {
+                  single_header {
+                    name = "content-length"
+                  }
+                }
+
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "UploadContentLengthLimit"
       sampled_requests_enabled   = true
     }
   }
