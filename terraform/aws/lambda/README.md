@@ -37,9 +37,10 @@ terraform/aws/lambda/
 fn=nova-prod-edge-logs
 q=$(aws sqs get-queue-url --queue-name "$fn-failed" --query QueueUrl --output text)
 while m=$(aws sqs receive-message --queue-url "$q" --query 'Messages[0]' --output json) && [ "$m" != null ]; do
-  # 메시지의 requestPayload 가 원래 이벤트다
-  aws lambda invoke --function-name "$fn" --invocation-type Event --cli-binary-format raw-in-base64-out \
-    --payload "$(jq -r .Body <<<"$m" | jq -c .requestPayload)" /dev/null
+  # 메시지의 requestPayload 가 원래 이벤트다. 호출이 받아들여졌을 때(202)만 큐에서 지운다
+  code=$(aws lambda invoke --function-name "$fn" --invocation-type Event --cli-binary-format raw-in-base64-out \
+    --payload "$(jq -r .Body <<<"$m" | jq -c .requestPayload)" --query StatusCode --output text /dev/null) || break
+  [ "$code" = 202 ] || { echo "invoke returned $code, stopping"; break; }
   aws sqs delete-message --queue-url "$q" --receipt-handle "$(jq -r .ReceiptHandle <<<"$m")"
 done
 ```

@@ -112,11 +112,14 @@ class OtlpTest(unittest.TestCase):
         self.assertIsNone(handler.source_of("cloudfront-grafana/E2.x.gz"))
 
     def test_partial_success(self):
-        self.assertEqual(handler.rejected_count(b""), 0)
+        self.assertEqual(handler.rejected_count(b'{"partialSuccess":{}}'), 0)  # 게이트웨이가 다 받았을 때
         self.assertEqual(handler.rejected_count(b"{}"), 0)
-        self.assertEqual(handler.rejected_count(b'{"partialSuccess":{}}'), 0)
         self.assertEqual(handler.rejected_count(b'{"partialSuccess":{"rejectedLogRecords":"3","errorMessage":"x"}}'), 3)
-        self.assertEqual(handler.rejected_count(b"not json"), 0)
+
+    def test_invalid_response_is_failure(self):
+        for body in (b"", b"not json", b"[]", b"null"):
+            with self.assertRaises(RuntimeError):
+                handler.rejected_count(body)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,7 @@ ENDPOINT = os.environ["OTLP_ENDPOINT"].rstrip("/") + "/v1/logs"
 ENVIRONMENT = os.environ.get("DEPLOYMENT_ENVIRONMENT", "prod")
 BATCH = int(os.environ.get("BATCH_SIZE", "500"))
 TIMEOUT = 10
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024  # OTLP 명세가 권하는 응답 크기 한도
 RETRIES = 3
 
 s3 = boto3.client("s3")
@@ -217,7 +218,10 @@ def post(source, records):
         request = urllib.request.Request(ENDPOINT, data=data, headers={"Content-Type": "application/json"}, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-                return rejected_count(response.read())
+                body = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(body) > MAX_RESPONSE_BYTES:
+                raise RuntimeError("OTLP response is larger than 4 MiB")
+            return rejected_count(body)
         except urllib.error.HTTPError as e:
             # 4xx(429 제외)는 다시 보내도 같다
             if e.code < 500 and e.code != 429:
@@ -230,12 +234,13 @@ def post(source, records):
 
 
 def rejected_count(body):
-    # 200 이어도 일부를 거절할 수 있다(OTLP partialSuccess). 본문이 비어 있으면 모두 받은 것이다
+    # 200 이어도 일부를 거절할 수 있다(OTLP partialSuccess). 다 받으면 게이트웨이는 {"partialSuccess":{}} 를 돌려준다.
+    # 본문이 비었거나 형식이 다르면 받았는지 알 수 없으므로 실패로 본다
     try:
-        partial = (json.loads(body or b"{}") or {}).get("partialSuccess") or {}
+        partial = json.loads(body).get("partialSuccess") or {}
         count = int(partial.get("rejectedLogRecords") or 0)
-    except (ValueError, TypeError, AttributeError):
-        return 0
+    except (ValueError, TypeError, AttributeError) as e:
+        raise RuntimeError(f"invalid OTLP response: {body[:200]!r}") from e
     if count:
         print(json.dumps({"rejected": count, "message": partial.get("errorMessage", "")}))
     return count
