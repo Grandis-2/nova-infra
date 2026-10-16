@@ -11,7 +11,7 @@ nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보
 
 | 신호 | 들어오는 길 | 게이트웨이 처리 | 저장 | 보존 |
 |---|---|---|---|---|
-| 로그 | 앱 → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
+| 로그 | 앱 → OTLP. ALB · CloudFront 접근 로그 → Lambda → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
 | 트레이스 | 앱 → OTLP | tail sampling(오류 · 1초 초과는 전부, 나머지 10%), 마스킹 | Tempo → S3 | 14일 |
 | 지표 | 앱 → OTLP, 게이트웨이가 트레이스로 만든 것(span metrics · 서비스 그래프), obs Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
 | 프로파일 | 앱 → Pyroscope (켠 서비스만) | — | Pyroscope → 데이터 EBS | 7일 |
@@ -42,7 +42,9 @@ flowchart LR
   cw[("CloudWatch")]
   slack(["Slack"])
 
+  edge[("ALB · CloudFront<br/>접근 로그 S3")]
   app -- "OTLP" --> gw
+  edge -- "S3 이벤트 → Lambda<br/>otel-ingest" --> gw
   gw -- "Service Connect" --> loki & tempo & mimir
   app -. "프로파일 (켠 서비스)<br/>수신 전용 프록시" .-> pyro
   exp -- "긁기" --> col
@@ -395,7 +397,13 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
 ```
 {service_name="preorder", deployment_environment="prod"} | event_id="<uuid>"
 {service_namespace="nova"} | aggregate_type="PREORDER" | aggregate_id="<uuid>"
+{service_name="cloudfront"} | http_response_status_code >= 500
+{service_name="alb"} | aws_xray_trace_id="Root=1-<…>"
 ```
+
+- **엣지 접근 로그**는 `service_namespace="edge"` 에 `service_name` 이 `alb` · `cloudfront` 다. 파일이 몇 분 늦게 도착해 실시간이 아니다.
+  남기는 필드와 버리는 필드(쿼리 문자열 · 쿠키 · User-Agent, 사용자 IP 는 대역만)는 `functions/edge-logs/handler.py` 머리말에 있다. 원본은 로그 버킷에 남는다.
+- 엣지 로그와 앱 트레이스는 요청 ID 로 잇는다. CloudFront `aws_cloudfront_request_id` = 앱 스팬 `http.request.header.x-amz-cf-id`, ALB `aws_xray_trace_id` = 앱 스팬 `http.request.header.x-amzn-trace-id`.
 
 **지표.** Mimir 에서 PromQL 로 본다. 이름은 Prometheus 관례(단위 · 종류 접미사)를 따른다. 예: `http.server.request.duration` → `http_server_request_duration_seconds_bucket`.
 - `job` 은 `<service.namespace>/<service.name>`(예 `nova/preorder`)이다. `deployment_environment` · `service_namespace` 도 라벨로 붙는다. 그 밖의 리소스 속성은 `target_info` 에만 있다.
