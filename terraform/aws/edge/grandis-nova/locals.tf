@@ -21,9 +21,7 @@ locals {
 # 프런트는 Vercel 이 호스팅하므로 정적 원본이 없다. 업로드 이미지는 cdn 스택이 맡는다.
 # ALB 보안 그룹이 CloudFront prefix list 만 허용하므로 사용자는 CloudFront 를 거쳐야 ALB 에 닿는다.
 #
-# WAF 는 두 곳에 건다.
-#   CloudFront(글로벌) : 봇과 악성 요청을 엣지에서 끊는다
-#   ALB(리전)          : 우회 경로가 생겨도 원본 앞에서 한 번 더 막는다
+# WAF 는 CloudFront 한 곳에만 건다(waf.tf). ALB 는 위 prefix list 와 비밀 헤더로 CloudFront 를 거치지 않은 요청을 받지 않는다.
 # ─────────────────────────────────────────────────────────────
 
 locals {
