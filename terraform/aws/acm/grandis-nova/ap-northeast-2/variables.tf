@@ -33,3 +33,9 @@ variable "rum_domain_name" {
   type        = string
   default     = ""
 }
+
+variable "atlantis_domain_name" {
+  description = "Atlantis 주소. 비우면 인증서를 만들지 않는다(Atlantis 가 자기 ALB 를 쓸 때)"
+  type        = string
+  default     = ""
+}
