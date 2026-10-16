@@ -37,3 +37,5 @@ queues:
   send: [preorder-events, order-events, preorder-register, preorder-cancel, draw-register]
   # 다시 보내도 같은 확정 거절(be 계약 contracts/draw-entry-sync.md)은 재시도하지 않고 DLQ 에 바로 넣는다
   dlq_send: [draw-register]
+
+profiling: true                 # 프로파일(Pyroscope)을 보낸다. preorder 에서 부담을 잰 뒤 넓혔다(CPU +0.2%p, 메모리 약 60 MiB)

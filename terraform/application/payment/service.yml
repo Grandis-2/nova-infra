@@ -19,3 +19,5 @@ redis: main
 queues:
   send: [order-events]
   consume: [payment-events]
+
+profiling: true                 # 프로파일(Pyroscope)을 보낸다. preorder 에서 부담을 잰 뒤 넓혔다(CPU +0.2%p, 메모리 약 60 MiB)
