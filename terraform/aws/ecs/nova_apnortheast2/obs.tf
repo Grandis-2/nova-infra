@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# obs 용량 공급자 — 관측 스택(monitoring 스택의 obs 서비스, NV-425)을 올리는 EC2 1대
+# obs 용량 공급자 — 관측 스택(monitoring 스택의 obs 서비스)을 올리는 EC2 1대. 관측 클러스터(observability.tf)에 붙는다
 #
 # 다른 서비스는 Fargate 다. obs 만 EC2 에 두는 이유는 Loki · Tempo · Mimir 의 WAL · TSDB 와 Grafana DB 가
 # 재시작에도 남는 디스크에 있어야 하기 때문이다. Fargate 디스크는 태스크와 함께 사라진다.
@@ -97,7 +97,7 @@ resource "aws_launch_template" "obs" {
     region       = var.aws_region
     volume_id    = aws_ebs_volume.obs_data.id
     mount_path   = local.obs_mount_path
-    cluster_name = aws_ecs_cluster.this.name
+    cluster_name = aws_ecs_cluster.observability.name # 관측 클러스터에 등록한다
     data_dirs    = local.obs_data_dirs
   }))
 

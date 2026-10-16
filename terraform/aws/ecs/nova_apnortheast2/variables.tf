@@ -77,9 +77,9 @@ variable "db_ssl_mode" {
 }
 
 variable "obs_instance_type" {
-  description = "관측 스택(obs)을 올리는 EC2. ARM(Graviton) 이어야 한다 (ECS 최적화 AL2023 arm64 AMI)"
+  description = "관측 스택(obs)을 올리는 EC2. ARM(Graviton) 이어야 한다 (ECS 최적화 AL2023 arm64 AMI). 메모리를 바꾸면 monitoring 스택의 obs_task_memory · 컨테이너 한도(obs_memory)도 맞춘다"
   type        = string
-  default     = "t4g.large"
+  default     = "t4g.medium"
 }
 
 variable "obs_data_volume_size" {

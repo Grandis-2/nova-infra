@@ -23,3 +23,9 @@ resource "aws_ecs_cluster" "observability" {
 
   tags = { Name = "${local.name_prefix}-observability" }
 }
+
+# obs(EC2 용량 공급자, obs.tf). 게이트웨이 · 브라우저 수집기는 launch_type FARGATE 라 따로 붙이지 않는다
+resource "aws_ecs_cluster_capacity_providers" "observability" {
+  cluster_name       = aws_ecs_cluster.observability.name
+  capacity_providers = [aws_ecs_capacity_provider.obs.name]
+}

@@ -24,9 +24,11 @@
 locals {
   obs_name = "${local.name_prefix}-obs"
 
-  obs_cluster_arn = data.terraform_remote_state.ecs.outputs.cluster_arn
-  obs_mount_path  = data.terraform_remote_state.ecs.outputs.obs_data_mount_path
-  obs_data_dirs   = data.terraform_remote_state.ecs.outputs.obs_data_dirs # 디렉터리 -> uid:gid
+  # 관측 클러스터(ecs 스택 observability.tf). obs 용량 공급자도 이 클러스터에 붙어 있다
+  obs_cluster_arn  = data.terraform_remote_state.ecs.outputs.observability_cluster_arn
+  obs_cluster_name = data.terraform_remote_state.ecs.outputs.observability_cluster_name
+  obs_mount_path   = data.terraform_remote_state.ecs.outputs.obs_data_mount_path
+  obs_data_dirs    = data.terraform_remote_state.ecs.outputs.obs_data_dirs # 디렉터리 -> uid:gid
 
   obs_config_bucket = data.terraform_remote_state.s3.outputs.obs_config_bucket.id
   obs_config_prefix = "lgtm"
@@ -68,6 +70,22 @@ locals {
   obs_log_group = "/ecs/${local.obs_name}"
 
   # 모든 컨테이너 공통: 리눅스 권한을 모두 버리고(1024 위 포트만 쓴다), 죽으면 태스크를 내리지 않고 그 컨테이너만 다시 띄운다
+  # 컨테이너 메모리 한도(MiB). 인스턴스 t4g.medium 이 ECS 에 등록하는 메모리(약 3.7 GiB) 안에서 나눈다.
+  # 7일 최대 RSS(2026-10-16) 의 1.4~2.5배: tempo 770 · mimir 405 · grafana 328 · loki 204 · pyroscope 165 · mysqld 19
+  # Go 프로세스는 한도의 90% 를 GOMEMLIMIT 로 줘서 한도에 다가가면 GC 를 더 돌려 OOM 종료 대신 버티게 한다
+  obs_memory = {
+    config-init      = 96
+    otel-collector   = 192
+    loki             = 512
+    tempo            = 1152
+    mimir            = 640
+    grafana          = 448
+    mysqld-exporter  = 48
+    pyroscope        = 256
+    pyroscope-ingest = 32
+  }
+  obs_gomemlimit = { for k, v in local.obs_memory : k => { name = "GOMEMLIMIT", value = "${floor(v * 0.9)}MiB" } }
+
   obs_common = {
     # add = [] 는 AWS 가 저장할 때 채우는 기본값이다. 적지 않으면 plan 마다 차이로 보여 작업 정의를 다시 만든다(obs 재배포)
     linuxParameters = { capabilities = { add = [], drop = ["ALL"] } }
@@ -120,7 +138,6 @@ locals {
 
   # 경보 토픽은 monitoring/cloudwatch 스택이 만든다 (Chatbot → Slack 이 이미 구독)
   alerts_topic_arn = data.aws_sns_topic.alerts.arn
-  cluster_name     = data.terraform_remote_state.ecs.outputs.cluster_name
 
   obs_containers = concat(
     [
@@ -129,7 +146,7 @@ locals {
         name      = "config-init"
         image     = local.obs_images.aws_cli
         essential = false
-        memory    = 128
+        memory    = local.obs_memory["config-init"]
         command   = ["s3", "cp", "--recursive", "--only-show-errors", "s3://${local.obs_config_bucket}/${local.obs_config_prefix}/", "/config/"]
         # 값은 쓰지 않는다. 설정이 바뀌면 작업 정의가 바뀌어 새 태스크가 뜨게 하는 표시다
         environment = [
@@ -145,7 +162,7 @@ locals {
         image     = local.obs_images.otel_collector
         essential = true
         # 긁기 · hostmetrics 만 한다. memory_limiter 는 이 안에서 160 MiB
-        memory  = 256
+        memory  = local.obs_memory["otel-collector"]
         command = ["--config=/config/collector.yaml"]
         environment = [
           { name = "MIMIR_OTLP_ENDPOINT", value = "http://localhost:${local.obs_ports.mimir_http}/otlp" },
@@ -166,14 +183,14 @@ locals {
         name      = "loki"
         image     = local.obs_images.loki
         essential = true
-        # 실제 사용은 이보다 훨씬 적다(obs 태스크 전체가 최근 최대 약 1.1 GiB). Pyroscope 몫을 여기서 덜어 냈다
-        memory  = 1536
-        user    = local.obs_data_dirs["loki"]
-        command = ["-config.file=/config/loki.yaml", "-config.expand-env=true"]
+        memory    = local.obs_memory["loki"]
+        user      = local.obs_data_dirs["loki"]
+        command   = ["-config.file=/config/loki.yaml", "-config.expand-env=true"]
         environment = [
           { name = "LOKI_S3_BUCKET", value = data.terraform_remote_state.s3.outputs.loki_bucket.id },
           { name = "LOKI_S3_REGION", value = var.aws_region },
           { name = "LOKI_RETENTION_PERIOD", value = var.obs_retention.logs },
+          local.obs_gomemlimit["loki"],
         ]
         # 게이트웨이(gateway.tf)가 Service Connect loki 로 보낸다
         portMappings     = [{ name = "loki-http", containerPort = local.obs_ports.loki_http, protocol = "tcp", appProtocol = "http" }]
@@ -188,13 +205,14 @@ locals {
         name      = "tempo"
         image     = local.obs_images.tempo
         essential = true
-        memory    = 1536
+        memory    = local.obs_memory["tempo"]
         user      = local.obs_data_dirs["tempo"]
         command   = ["-config.file=/config/tempo.yaml", "-config.expand-env=true"]
         environment = [
           { name = "TEMPO_S3_BUCKET", value = data.terraform_remote_state.s3.outputs.tempo_bucket.id },
           { name = "TEMPO_S3_REGION", value = var.aws_region },
           { name = "TEMPO_RETENTION", value = var.obs_retention.traces },
+          local.obs_gomemlimit["tempo"],
         ]
         # 게이트웨이가 Service Connect tempo-otlp 로 보낸다(OTLP gRPC)
         portMappings     = [{ name = "tempo-otlp", containerPort = local.obs_ports.tempo_otlp, protocol = "tcp", appProtocol = "grpc" }]
@@ -210,13 +228,14 @@ locals {
         name      = "mimir"
         image     = local.obs_images.mimir
         essential = true
-        memory    = 1536
+        memory    = local.obs_memory["mimir"]
         user      = local.obs_data_dirs["mimir"]
         command   = ["-config.file=/config/mimir.yaml", "-config.expand-env=true"]
         environment = [
           { name = "MIMIR_S3_BUCKET", value = data.terraform_remote_state.s3.outputs.mimir_bucket.id },
           { name = "MIMIR_S3_REGION", value = var.aws_region },
           { name = "MIMIR_RETENTION", value = var.obs_retention.metrics },
+          local.obs_gomemlimit["mimir"],
         ]
         # 게이트웨이가 Service Connect mimir 로 보낸다(OTLP HTTP)
         portMappings     = [{ name = "mimir-http", containerPort = local.obs_ports.mimir_http, protocol = "tcp", appProtocol = "http" }]
@@ -231,10 +250,11 @@ locals {
         name      = "grafana"
         image     = local.obs_images.grafana
         essential = true
-        memory    = 512
+        memory    = local.obs_memory["grafana"]
         user      = local.obs_data_dirs["grafana"]
         environment = [
           { name = "GF_PATHS_PROVISIONING", value = "/config/grafana/provisioning" },
+          local.obs_gomemlimit["grafana"],
           # 로그인하면 개요 대시보드부터 본다(config/grafana/dashboards)
           { name = "GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH", value = "/config/grafana/dashboards/01 Overview/overview.json" },
           { name = "GF_SERVER_ROOT_URL", value = local.grafana_url },
@@ -294,7 +314,7 @@ locals {
         name      = "mysqld-exporter"
         image     = local.obs_images.mysqld_exp
         essential = false
-        memory    = 128
+        memory    = local.obs_memory["mysqld-exporter"]
         command = concat([
           "--mysqld.address=${data.terraform_remote_state.database.outputs.db_address}:${data.terraform_remote_state.database.outputs.db_port}",
           "--mysqld.username=${data.terraform_remote_state.database.outputs.exporter_username}",
@@ -317,11 +337,11 @@ locals {
         name      = "pyroscope"
         image     = local.obs_images.pyroscope
         essential = false
-        memory    = 512
+        memory    = local.obs_memory["pyroscope"]
         user      = local.obs_data_dirs["pyroscope"]
         command   = ["-config.file=/config/pyroscope.yaml"]
         # 압축 작업 임시 디렉터리(/tmp)를 데이터 볼륨으로 돌린다. 루트 파일시스템을 읽기 전용으로 두기 위해서다
-        environment            = [{ name = "TMPDIR", value = "/data" }]
+        environment            = [{ name = "TMPDIR", value = "/data" }, local.obs_gomemlimit["pyroscope"]]
         mountPoints            = concat(local.obs_config_mount, [{ sourceVolume = "pyroscope-data", containerPath = "/data", readOnly = false }])
         dependsOn              = local.obs_after_config
         stopTimeout            = 60
@@ -338,7 +358,7 @@ locals {
         name                   = "pyroscope-ingest"
         image                  = local.obs_images.nginx
         essential              = false
-        memory                 = 32
+        memory                 = local.obs_memory["pyroscope-ingest"]
         command                = ["nginx", "-c", "/config/pyroscope-ingest.nginx.conf", "-g", "daemon off;"]
         portMappings           = [{ name = "pyroscope", containerPort = local.obs_ports.pyroscope_in, protocol = "tcp", appProtocol = "http" }]
         mountPoints            = local.obs_config_mount
@@ -416,10 +436,6 @@ resource "aws_ecs_task_definition" "obs" {
 }
 
 resource "aws_ecs_service" "obs" {
-  # 관측 클러스터로 옮기는 중(NV-588 1/2). 용량 공급자를 옮기려면 쓰는 서비스가 없어야 해서 먼저 내린다.
-  # 2/2 에서 관측 클러스터에 다시 만든다
-  count = 0
-
   name            = local.obs_name
   cluster         = local.obs_cluster_arn
   task_definition = aws_ecs_task_definition.obs.arn
@@ -517,8 +533,8 @@ resource "aws_cloudwatch_metric_alarm" "obs_no_task" {
   treat_missing_data  = "breaching"
 
   dimensions = {
-    ClusterName = local.cluster_name
-    ServiceName = local.obs_name
+    ClusterName = local.obs_cluster_name
+    ServiceName = aws_ecs_service.obs.name
   }
 
   alarm_actions = [local.alerts_topic_arn]

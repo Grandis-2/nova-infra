@@ -13,9 +13,9 @@ variable "obs_retention" {
 }
 
 variable "obs_task_memory" {
-  description = "obs 태스크 메모리(MiB). 컨테이너 한도의 합(6176)보다 크고 인스턴스(t4g.large)가 ECS 에 등록한 메모리(7813)보다 작아야 한다"
+  description = "obs 태스크 메모리(MiB). 컨테이너 한도의 합(main.tf obs_memory, 3376)보다 크고 인스턴스(t4g.medium)가 ECS 에 등록한 메모리(약 3.7 GiB)보다 작아야 한다"
   type        = number
-  default     = 7680
+  default     = 3584
 }
 
 variable "obs_log_retention_days" {
