@@ -12,9 +12,10 @@ locals {
   #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 받은 URL 로 서버가 요청하지 않아 표시만 남긴다
   #   SizeRestrictions_BODY  본문 8KB 상한. 관리자 사진 업로드(파일이 본문)는 넘고, 사진이 많은 상품 등록도 넘을 수 있다 → SizeBodyExceptAdminUpload
   #                          두 경로는 대신 UploadContentLengthLimit 이 막고, 정확한 상한은 앱이 지킨다(사진 10MB · 요청 11MB, 상품 등록 256KB)
-  #   GenericLFI_BODY        본문의 ../ 같은 경로 이동. 사진 업로드는 압축된 이미지 바이트에 우연히 ../ 가 생겨 걸린다 → LfiBodyExceptImageUpload
+  #   GenericLFI_BODY        본문의 ../ 같은 경로 이동. 사진 업로드는 압축된 이미지 바이트에 우연히 ../ 가 생겨 걸린다 → BodyPatternExceptImageUpload
+  #   CrossSiteScripting_BODY 본문의 XSS 패턴. 사진 바이트 · 메타데이터(XMP 의 xmlns)가 걸린다 → BodyPatternExceptImageUpload
   managed_rule_overrides = {
-    AWSManagedRulesCommonRuleSet = ["EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE", "SizeRestrictions_BODY", "GenericLFI_BODY"]
+    AWSManagedRulesCommonRuleSet = ["EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE", "SizeRestrictions_BODY", "GenericLFI_BODY", "CrossSiteScripting_BODY"]
   }
   ssrf_body_label   = "awswaf:managed:aws:core-rule-set:EC2MetaDataSSRF_Body"
   ssrf_allowed_path = "/api/v1/auth/kakao/callback"
@@ -23,9 +24,11 @@ locals {
   size_body_label         = "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"
   size_body_allowed_regex = "^/api/v1/admin/(images|products)$"
 
-  # 본문 경로 이동 검사(GenericLFI_BODY)는 사진 업로드(POST)에서만 뺀다. 본문이 이진 파일이라 텍스트 패턴 검사는 오탐만 낸다. 상품 등록(JSON)은 그대로 막는다
-  lfi_body_label         = "awswaf:managed:aws:core-rule-set:GenericLFI_Body"
-  lfi_body_allowed_regex = "^/api/v1/admin/images$"
+  # 본문 경로 이동 · XSS 검사는 사진 업로드(POST)에서만 뺀다. 본문이 이진 파일이라 텍스트 패턴 검사는 오탐만 낸다. 상품 등록(JSON)은 그대로 막는다
+  # 전제: 앱이 JPEG · PNG 만 받아 다시 인코딩한 결과만 저장하고, 파일 이름 · 폼 값을 되돌려 주지 않는다. SVG · 원본 저장이 생기면 이 예외를 다시 본다
+  lfi_body_label                  = "awswaf:managed:aws:core-rule-set:GenericLFI_Body"
+  xss_body_label                  = "awswaf:managed:aws:core-rule-set:CrossSiteScripting_Body"
+  body_pattern_allowed_path_regex = "^/api/v1/admin/images$"
 
   # 위 두 경로(POST)의 Content-Length 상한 10,599,999바이트. 사진은 한 요청에 한 장(10MiB = 10,485,760)이라 멀티파트 머리 · 경계 몫으로 약 110KB 를 더 둔다
   # WAF 는 본문 앞 16KB 만 보므로 헤더로 판단한다. 헤더가 없으면(chunked) 막힌다
@@ -337,9 +340,9 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
-  # 위에서 표시만 한 본문 경로 이동 검사를 사진 업로드(POST) 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다)
+  # 위에서 표시만 한 본문 경로 이동 · XSS 검사를 사진 업로드(POST) 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다)
   rule {
-    name     = "LfiBodyExceptImageUpload"
+    name     = "BodyPatternExceptImageUpload"
     priority = 18
 
     action {
@@ -357,9 +360,20 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     statement {
       and_statement {
         statement {
-          label_match_statement {
-            scope = "LABEL"
-            key   = local.lfi_body_label
+          or_statement {
+            statement {
+              label_match_statement {
+                scope = "LABEL"
+                key   = local.lfi_body_label
+              }
+            }
+
+            statement {
+              label_match_statement {
+                scope = "LABEL"
+                key   = local.xss_body_label
+              }
+            }
           }
         }
 
@@ -385,7 +399,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
                 statement {
                   regex_match_statement {
-                    regex_string = local.lfi_body_allowed_regex
+                    regex_string = local.body_pattern_allowed_path_regex
 
                     field_to_match {
                       uri_path {}
@@ -406,7 +420,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "LfiBodyExceptImageUpload"
+      metric_name                = "BodyPatternExceptImageUpload"
       sampled_requests_enabled   = true
     }
   }
