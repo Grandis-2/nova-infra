@@ -1,17 +1,13 @@
-"""엣지 접근 로그 → OTel 게이트웨이(OTLP HTTP JSON) → Loki.
+"""ALB · CloudFront 접근 로그를 OTel 게이트웨이로 보낸다.
 
-S3 에 ALB(alb/) · CloudFront(cloudfront/) 접근 로그 파일이 생기면 한 파일을 읽어 줄마다 로그 레코드 하나로 보낸다.
-게이트웨이가 마스킹 · 리소스 허용 목록을 거쳐 Loki 로 넘긴다. Loki 에서는 service_name 라벨이 alb · cloudfront 이고,
-나머지 필드는 structured metadata 다(점은 밑줄로 바뀐다. 예: http.response.status_code → http_response_status_code).
+로그 버킷에 파일이 생기면 그 파일을 읽어 한 줄을 로그 레코드 하나로 바꾸고, OTLP HTTP(JSON)로 게이트웨이에 보낸다.
+게이트웨이가 마스킹을 거쳐 Loki 에 넣는다. Loki 라벨은 service_name(alb, cloudfront)이고 나머지 필드는 structured metadata 다.
 
-남기지 않는 것
-  쿼리 문자열 · 쿠키 · User-Agent · Referer: 토큰 · 개인정보가 섞일 수 있고 지연 · 오류를 보는 데 쓰지 않는다.
-  사용자 IP 는 대역만 남긴다(IPv4 /24, IPv6 /48). 원본은 로그 버킷에 보관 기간 동안 남는다.
-  ALB 의 클라이언트 주소는 CloudFront 엣지라 남기지 않는다.
+쿼리 문자열, 쿠키, User-Agent, Referer 는 보내지 않는다. 토큰이나 개인정보가 섞일 수 있고 지연 · 오류 분석에 필요 없다.
+사용자 IP 는 대역(IPv4 /24, IPv6 /48)까지만 보낸다. ALB 가 기록하는 클라이언트는 CloudFront 엣지라서 보내지 않는다.
 
-실패하면 예외를 던져 Lambda 비동기 재시도(2회)에 맡긴다. 파일 중간에서 실패하면 앞 묶음이 한 번 더 들어갈 수 있다.
-재시도까지 실패한 이벤트는 실패 큐(SQS)에 남는다. 다시 보내는 방법은 terraform/aws/lambda/README.md.
-받는 쪽이 일부만 거절하면(OTLP partialSuccess) 다시 보내지 않고 거절 수를 로그에 남긴다. 다시 보내면 받아들인 레코드가 중복된다.
+보내다 실패하면 예외를 던져 Lambda 재시도에 맡긴다. 게이트웨이가 일부 레코드만 거절하면 다시 보내지 않고 거절 수만 기록한다.
+다시 보내면 이미 받아들인 레코드가 중복되기 때문이다.
 """
 
 import gzip

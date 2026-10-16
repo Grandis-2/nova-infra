@@ -1,12 +1,6 @@
-# 엣지 접근 로그 → Loki (NV-542)
-#
-#   ALB · CloudFront 가 로그 버킷에 파일을 쓴다(몇 분 늦게, 하루 약 450개)
-#     ▶ S3 이벤트 ▶ 이 함수(VPC 안) ▶ OTel 게이트웨이 otel-ingest.<네임스페이스>:4318 (OTLP HTTP)
-#     ▶ 마스킹 · 리소스 허용 목록 ▶ Loki (service_name = alb · cloudfront)
-#
-# 무엇을 남기고 버리는지는 functions/edge-logs/handler.py 머리말에 있다.
-# 게이트웨이를 쓰는 이유: 마스킹을 한 곳에서 하고, obs 가 재배포되는 동안 게이트웨이 큐가 버틴다.
-# 실패하면 2번 다시 시도하고, 그래도 실패한 이벤트는 실패 큐에 남겨 경보를 낸다. 원본 파일은 로그 버킷에 남는다.
+# ALB · CloudFront 접근 로그 → OTel 게이트웨이 → Loki
+# 로그 버킷에 파일이 생기면(몇 분 늦게, 하루 약 450개) S3 이벤트로 돈다.
+# 게이트웨이를 거치는 이유: 마스킹을 한 곳에서 하고, obs 가 재배포되는 동안 게이트웨이 큐가 데이터를 들고 있는다.
 
 module "edge_logs" {
   source = "../_modules/function"

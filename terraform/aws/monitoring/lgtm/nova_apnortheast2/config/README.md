@@ -401,9 +401,9 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
 {service_name="alb"} | aws_xray_trace_id="Root=1-<…>"
 ```
 
-- **엣지 접근 로그**는 `service_namespace="edge"` 에 `service_name` 이 `alb` · `cloudfront` 다. 파일이 몇 분 늦게 도착해 실시간이 아니다.
-  남기는 필드와 버리는 필드(쿼리 문자열 · 쿠키 · User-Agent, 사용자 IP 는 대역만)는 `functions/edge-logs/handler.py` 머리말에 있다. 원본은 로그 버킷에 남는다.
-- 엣지 로그와 앱 트레이스는 요청 ID 로 잇는다. CloudFront `aws_cloudfront_request_id` = 앱 스팬 `http.request.header.x-amz-cf-id`, ALB `aws_xray_trace_id` = 앱 스팬 `http.request.header.x-amzn-trace-id`.
+- ALB · CloudFront 접근 로그는 `service_name` 이 `alb`, `cloudfront` 인 스트림이다. 로그 파일이 몇 분 늦게 올라와서 실시간으로는 보이지 않는다.
+- 쿼리 문자열, 쿠키, User-Agent 는 저장하지 않고 사용자 IP 는 /24 대역까지만 남긴다. 원본이 필요하면 로그 버킷을 본다.
+- 앱 트레이스와는 요청 ID 로 잇는다. CloudFront 의 `aws_cloudfront_request_id` 는 앱 스팬의 `x-amz-cf-id` 헤더와, ALB 의 `aws_xray_trace_id` 는 `x-amzn-trace-id` 헤더와 같은 값이다.
 
 **지표.** Mimir 에서 PromQL 로 본다. 이름은 Prometheus 관례(단위 · 종류 접미사)를 따른다. 예: `http.server.request.duration` → `http_server_request_duration_seconds_bucket`.
 - `job` 은 `<service.namespace>/<service.name>`(예 `nova/preorder`)이다. `deployment_environment` · `service_namespace` 도 라벨로 붙는다. 그 밖의 리소스 속성은 `target_info` 에만 있다.
@@ -524,10 +524,8 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - 태스크가 없으면 CloudWatch 경보(`nova-prod-otel-gateway-no-tasks`)가 울린다. `AWS/ECS` `LiveTaskCount` 가 0 이거나 끊긴 것을 장애로 본다.
 - **게이트웨이와 obs 를 같은 apply 에서 재배포하지 않는다.** obs 가 내려간 사이 게이트웨이 옛 태스크가 교체되면 그 태스크의 큐가 사라진다(NV-543 적용 때 약 650건). `gateway/` 와 `config/` · obs 작업 정의 변경은 PR 을 나눈다.
 - 앱은 `otel-gateway.<네임스페이스>:4318` 로 보낸다(ecs 스택 `otel.tf` 의 `OTEL_EXPORTER_OTLP_ENDPOINT`).
-- **ECS 밖의 송신자는 `otel-ingest.<네임스페이스>:4318`** 로 보낸다(출력 `gateway_ingest_endpoint`). Service Connect 이름은 ECS 서비스 태스크 안에서만 풀려서 Lambda 같은 송신자는 쓸 수 없다.
-  그래서 같은 네임스페이스에 게이트웨이 태스크 IP 를 가리키는 DNS A 레코드(TTL 10초)를 따로 둔다. Service Connect 가 같은 이름의 Cloud Map 서비스를 만들기 때문에 이름은 달라야 한다.
-  내부 NLB 를 두는 방법(월 약 16달러)보다 싸다. 대신 롤링 배포 중 몇 초는 옛 태스크 IP 로 갈 수 있어 송신자가 다시 시도해야 한다.
-  송신자 SG 는 securitygroup 스택에서 게이트웨이 SG 4318 에 연다.
+- **Lambda 처럼 ECS 밖에서 보내는 쪽은 `otel-ingest.<네임스페이스>:4318` 을 쓴다.** Service Connect 이름은 ECS 태스크 안에서만 풀려서, 게이트웨이 태스크 IP 를 가리키는 DNS 레코드(TTL 10초)를 따로 등록했다.
+  내부 NLB(월 약 16달러)보다 싸지만, 롤링 배포 중 몇 초는 내려간 태스크로 갈 수 있어 보내는 쪽이 다시 시도해야 한다. 이 이름은 Service Connect 이름(`otel-gateway`)과 겹치면 안 된다.
 - **Service Connect 별칭은 태스크가 뜰 때 정해진다.** 그 뒤에 생긴 이름은 이미 떠 있는 태스크에서 풀리지 않는다(`no such host`).
   obs 가 `loki` · `tempo-otlp` · `mimir` 를 새로 내놓거나 이름을 바꾸면 게이트웨이를 다시 띄운다(`update-service --force-new-deployment`). 게이트웨이를 새로 만들 때도 같다.
 - 별칭은 IPv4(127.255.0.x) · IPv6(2600:f0f0::x) 두 주소로 풀린다. 태스크에 IPv6 경로가 없어 gRPC(Tempo) 가 IPv6 시도를 `network is unreachable` 경고로 남기고 IPv4 로 붙는다. 내보내기 실패가 아니다.

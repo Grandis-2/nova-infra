@@ -1,6 +1,6 @@
 """파서 단위 시험. 실행: python -m unittest discover -s functions/edge-logs/tests
 
-로그 줄은 형식만 맞춘 합성 값이다(실제 IP · 요청 ID 를 넣지 않는다).
+로그 줄은 형식만 실제와 같고 값은 지어낸 것이다.
 """
 
 import importlib.util
