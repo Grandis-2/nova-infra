@@ -11,8 +11,8 @@ nova 서비스의 로그 · 트레이스 · 지표를 한곳에서 보고 경보
 
 | 신호 | 들어오는 길 | 게이트웨이 처리 | 저장 | 보존 |
 |---|---|---|---|---|
-| 로그 | 앱 → OTLP. ALB · CloudFront 접근 로그 → Lambda → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
-| 트레이스 | 앱 → OTLP | tail sampling(오류 · 1초 초과는 전부, 나머지 10%), 마스킹 | Tempo → S3 | 14일 |
+| 로그 | 앱 → OTLP. ALB · CloudFront 접근 로그 → Lambda → OTLP. 브라우저(Faro) → 브라우저 수집기 → OTLP | 리소스 속성 허용 목록, 개인정보 마스킹 | Loki → S3 | 90일 |
+| 트레이스 | 앱 → OTLP. 브라우저(Faro) → 브라우저 수집기 → OTLP | tail sampling(오류 · 1초 초과는 전부, 나머지 10%), 마스킹 | Tempo → S3 | 14일 |
 | 지표 | 앱 → OTLP, 게이트웨이가 트레이스로 만든 것(span metrics · 서비스 그래프), obs Collector 가 긁는 것(MySQL · LGTM 자체 · 호스트) | 리소스 속성 허용 목록 | Mimir → S3 | 90일 |
 | 프로파일 | 앱 → Pyroscope (켠 서비스만) | — | Pyroscope → 데이터 EBS | 7일 |
 | AWS 관리형 지표 | Grafana 가 CloudWatch 를 직접 조회 | — | CloudWatch | CloudWatch 기본 |
@@ -43,7 +43,11 @@ flowchart LR
   slack(["Slack"])
 
   edge[("ALB · CloudFront<br/>접근 로그 S3")]
+  br(["브라우저<br/>Faro SDK"])
+  rum["브라우저 수집기<br/>관측 클러스터"]
   app -- "OTLP" --> gw
+  br -- "rum.도메인/collect<br/>CloudFront · 전용 WAF · ALB" --> rum
+  rum -- "OTLP" --> gw
   edge -- "S3 이벤트 → Lambda<br/>otel-ingest" --> gw
   gw -- "Service Connect" --> loki & tempo & mimir
   app -. "프로파일 (켠 서비스)<br/>수신 전용 프록시" .-> pyro
@@ -143,6 +147,7 @@ flowchart LR
 | 경로 | 내용 |
 |---|---|
 | `../gateway/collector.yaml` | OTel 게이트웨이(별도 ECS 서비스). 수신(OTLP), 처리(memory_limiter → 리소스 허용 목록 → 트레이스는 APM 지표 · tail sampling 두 갈래 → 마스킹 → batch), 내보내기(Loki · Tempo · Mimir, 메모리 큐 · 15분 재시도). 자체 지표는 Mimir 로 직접 보낸다. `config/` 밖에 두어 obs 태스크를 다시 띄우지 않는다 |
+| `../rum/collector.yaml` | 브라우저 수집기(별도 ECS 서비스, 관측 클러스터). faro 수신(CORS 는 프런트 출처만) → 앱 이름이 `nova-web` 이 아니면 버림 → URL 쿼리 · 해시 삭제 → 게이트웨이. `config/` 밖에 두어 obs 태스크를 다시 띄우지 않는다 |
 | `collector.yaml` | obs Collector. 긁기(자신 · mysqld · LGTM 자체 · Pyroscope · hostmetrics) → Mimir. 받는 포트가 없다 |
 | `loki.yaml` | S3 저장, 보존 기간, 인덱스 라벨 지정, WAL, 삭제 요청 API 끔 |
 | `pyroscope-ingest.nginx.conf` | 앱이 닿는 수신 전용 프록시. `POST /ingest` 만 Pyroscope 로 넘기고 나머지(조회 API 등)는 403 |
@@ -536,6 +541,18 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - **Service Connect 별칭은 태스크가 뜰 때 정해진다.** 그 뒤에 생긴 이름은 이미 떠 있는 태스크에서 풀리지 않는다(`no such host`).
   obs 가 `loki` · `tempo-otlp` · `mimir` 를 새로 내놓거나 이름을 바꾸면 게이트웨이를 다시 띄운다(`update-service --force-new-deployment`). 게이트웨이를 새로 만들 때도 같다.
 - 별칭은 IPv4(127.255.0.x) · IPv6(2600:f0f0::x) 두 주소로 풀린다. 태스크에 IPv6 경로가 없어 gRPC(Tempo) 가 IPv6 시도를 `network is unreachable` 경고로 남기고 IPv4 로 붙는다. 내보내기 실패가 아니다.
+
+### 브라우저 수집기 (`../rum.tf`)
+
+프런트(Grafana Faro SDK)가 브라우저에서 바로 `https://rum.grandis-nova.link/collect` 로 보낸 것을 받는 Collector 다.
+
+- 경로: CloudFront(edge 스택 `rum.tf`, 전용 WAF) → ALB(Host · 원본 확인 헤더 · `/collect` 규칙) → 수집기 12347 → 게이트웨이 `otel-gateway.<네임스페이스>:4318`.
+- **게이트웨이와 따로 둔다.** 인터넷에서 누구나 보낼 수 있는 입구라, 몰려도 수집기의 작은 큐(200 묶음, 1분 재시도)에서만 버리고 앱 데이터가 지나는 게이트웨이를 밀어붙이지 않는다.
+- **관측 클러스터(`nova-prod-observability`)에 있다.** 게이트웨이(앱 클러스터)와 같은 Service Connect 네임스페이스라 클러스터가 달라도 이름으로 보낸다.
+- 막는 것: WAF(`POST /collect` 만, Content-Length 250KB 미만, IP 당 5분 3000건), CORS(`www.grandis-nova.link` · `grandis-nova.link`), 앱 이름(`nova-web` 이 아니면 버림). CORS 는 다른 사이트의 브라우저만 막고 직접 보내는 요청은 막지 못한다.
+- URL 쿼리 · 해시를 지운다. 프런트의 `beforeSend` 가 먼저 지우고 여기는 안전망이다. 이메일 · 전화번호 · 토큰 형태는 게이트웨이 마스킹이 지운다.
+- Fargate 0.25 vCPU · 512 MiB(`memory_limiter` 384 MiB), 롤링 배포. 태스크가 없으면 CloudWatch 경보(`nova-prod-rum-collector-no-tasks`)가 울린다. 앱 관측에는 영향이 없다.
+- CORS 허용 헤더를 지정하면 기본값이 사라진다. Faro 가 보내는 `content-type` · `content-encoding` · `x-faro-session-id` · `idempotency-key` 를 모두 둔다. Faro 에 `apiKey` 를 쓰면 `x-api-key` 가 붙어 막힌다.
 
 ### 작업 정의 제약 (`../main.tf`)
 

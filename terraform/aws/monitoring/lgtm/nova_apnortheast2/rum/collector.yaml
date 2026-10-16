@@ -1,0 +1,82 @@
+# 브라우저 수집기 — 프런트(Grafana Faro SDK)가 보낸 것을 받아 검사 · 정리한 뒤 OTel 게이트웨이로 넘긴다.
+#
+#   브라우저 ─POST /collect─▶ CloudFront(전용 WAF) ▶ ALB ▶ faro 수신(12347)
+#     ▶ 앱 이름 검사 · URL 쿼리 삭제 ▶ otel-gateway.<네임스페이스>:4318 (Service Connect)
+#
+# 마스킹 · 리소스 허용 목록 · 샘플링 · 저장소로 보내기는 게이트웨이가 앱 데이터와 같은 규칙으로 한다.
+# 공개 입구라 큐를 작게 둔다. 게이트웨이가 받지 못하면 여기서 버리고, 앱의 관측 데이터가 지나는 게이트웨이는 밀어붙이지 않는다.
+# 값은 ECS 작업 정의가 넘긴다: RUM_ALLOWED_ORIGINS(YAML 목록) · GATEWAY_OTLP_ENDPOINT
+
+extensions:
+  # ALB 대상 그룹 헬스 체크
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  faro:
+    endpoint: 0.0.0.0:12347
+    # Faro 는 한 번에 최대 50건을 압축 없이 보낸다. WAF 도 250KB 미만만 넘긴다(edge 스택 rum.tf)
+    max_request_body_size: 262144
+    cors:
+      allowed_origins: ${env:RUM_ALLOWED_ORIGINS}
+      # 지정하면 기본 허용 헤더가 사라진다. Faro 가 보내는 것을 모두 적어야 사전 요청이 통과한다
+      allowed_headers: [content-type, content-encoding, x-faro-session-id, idempotency-key]
+      max_age: 7200
+
+processors:
+  # 작업 정의 메모리 512MiB
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 384
+    spike_limit_mib: 96
+
+  # 앱 이름(Faro 의 app.name → service.name)이 프런트 것이 아니면 버린다. 누구나 보낼 수 있어 Loki 의 서비스 라벨을 지킨다
+  filter/app:
+    error_mode: ignore
+    logs:
+      log_record:
+        - resource.attributes["service.name"] != "nova-web"
+    traces:
+      span:
+        - resource.attributes["service.name"] != "nova-web"
+
+  # URL 의 쿼리 · 해시를 지운다. 결제 콜백(paymentKey · amount) · 카카오 콜백(code) · 검색어가 들어 있다.
+  # 프런트의 beforeSend 가 먼저 지우고, 여기는 그 뒤의 안전망이다
+  transform/strip-query:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - replace_pattern(body, "(https?://[^\\s?#\"]+|/[^\\s?#\"]*)[?#][^\\s\"]*", "$$1")
+          - replace_all_patterns(attributes, "value", "^((https?://[^?#]+)|(/[^?#]*))[?#].*$", "$$1")
+    trace_statements:
+      - context: span
+        statements:
+          - replace_all_patterns(attributes, "value", "^((https?://[^?#]+)|(/[^?#]*))[?#].*$", "$$1")
+
+  batch:
+    send_batch_size: 512
+    timeout: 2s
+
+exporters:
+  otlphttp/gateway:
+    endpoint: ${env:GATEWAY_OTLP_ENDPOINT}
+    sending_queue:
+      queue_size: 200
+    retry_on_failure:
+      max_elapsed_time: 60s
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    logs:
+      receivers: [faro]
+      processors: [memory_limiter, filter/app, transform/strip-query, batch]
+      exporters: [otlphttp/gateway]
+    traces:
+      receivers: [faro]
+      processors: [memory_limiter, filter/app, transform/strip-query, batch]
+      exporters: [otlphttp/gateway]
