@@ -34,6 +34,13 @@ variable "queue_rate_limit_per_5min" {
   default     = 300000
 }
 
+variable "rum_rate_limit_per_5min" {
+  description = "IP 하나가 5분 동안 브라우저 수집 주소(rum.<도메인>/collect)로 보낼 수 있는 요청 수. 넘으면 차단"
+  type        = number
+  # 한 사용자가 5분 동안 보내는 묶음은 수십 건이다. 회사 · 학교 NAT 뒤 수십 명까지 막히지 않게 둔다
+  default = 3000
+}
+
 variable "waf_block_mode" {
   description = "true 면 차단, false 면 집계만(Count). 도입 초기에는 false 로 지켜본다"
   type        = bool

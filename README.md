@@ -93,7 +93,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | NAT (fck-nat) | VPC 대역 | 전체 (고정 IP 2개로 나감) |
 
 - **진입 경로는 CloudFront 하나입니다.** ALB 보안 그룹은 CloudFront 대역만 받습니다. CloudFront가 붙이는 비밀 헤더가 없는 요청은 ALB가 404로 돌려보냅니다.
-- **WAF**: CloudFront 한 곳에만 겁니다. AWS 관리형 규칙 3종(Common, Known Bad Inputs, IP Reputation)과 IP별 요청 제한(`/api/`, 5분에 3000회. 대기열 `/api/v1/preorders/queue`(줄 서기 · 조회)는 따로 5분에 300,000회)을 적용합니다. 본문 SSRF 규칙은 카카오 콜백 경로만 예외입니다.
+- **WAF**: ALB 에는 걸지 않고 CloudFront 에만 겁니다. API 배포에는 AWS 관리형 규칙 3종(Common, Known Bad Inputs, IP Reputation)과 IP별 요청 제한(`/api/`, 5분에 3000회. 대기열 `/api/v1/preorders/queue`(줄 서기 · 조회)는 따로 5분에 300,000회)을 적용합니다. 본문 SSRF 규칙은 카카오 콜백 경로만 예외입니다. 브라우저 수집 주소(`rum.grandis-nova.link`)는 전용 WAF 로 `/collect` 의 POST 와 사전 요청(OPTIONS)만 받습니다(규칙은 `edge/grandis-nova/rum.tf`). 두 WAF 모두 `waf_block_mode` 가 true(지금 값)일 때 차단하고, false 면 집계만 합니다.
 - **TLS**: CloudFront는 TLS 1.2 이상, ALB는 `ELBSecurityPolicy-TLS13-1-2-2021-06`을 씁니다. Valkey와 DB 연결도 TLS입니다.
 - **서비스 간 규칙**: `service.yml`의 `calls`와 `jwt: verify`(member의 JWKS 조회)로 만들어집니다. 여기에 적지 않은 서비스끼리는 통신할 수 없습니다.
 - **VPC 엔드포인트**: S3는 게이트웨이 엔드포인트로 접근합니다. 인터페이스 엔드포인트(`vpce`)는 비용 때문에 꺼 두어서, ECR · Secrets Manager · 로그 호출은 NAT를 거칩니다.
