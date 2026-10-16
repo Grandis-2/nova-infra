@@ -603,7 +603,7 @@
             "uid": "mimir"
           },
           "refId": "F",
-          "expr": "1 - sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", le=\"1\"}[$__range])) / sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
+          "expr": "1 - sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", le=\"1\", http_route!=\"/api/v1/notifications/stream\"}[$__range])) / sum by (http_request_method, http_route) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range]))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -615,7 +615,7 @@
             "uid": "mimir"
           },
           "refId": "G",
-          "expr": "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])))",
+          "expr": "histogram_quantile(0.95, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range])))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -627,7 +627,7 @@
             "uid": "mimir"
           },
           "refId": "H",
-          "expr": "histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])))",
+          "expr": "histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range])))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -639,7 +639,7 @@
             "uid": "mimir"
           },
           "refId": "I",
-          "expr": "histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))) / (histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range] offset 1w))) > 0)",
+          "expr": "histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range]))) / (histogram_quantile(0.99, sum by (le, http_request_method, http_route) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range] offset 1w))) > 0)",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -1231,7 +1231,7 @@
                 "uid": "mimir"
               },
               "refId": "A",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval])))",
               "legendFormat": ""
             }
           ],
@@ -1336,7 +1336,7 @@
                 "uid": "mimir"
               },
               "refId": "A",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval])))",
               "legendFormat": "P50"
             },
             {
@@ -1345,7 +1345,7 @@
                 "uid": "mimir"
               },
               "refId": "B",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval])))",
               "legendFormat": "P99",
               "exemplar": true
             }

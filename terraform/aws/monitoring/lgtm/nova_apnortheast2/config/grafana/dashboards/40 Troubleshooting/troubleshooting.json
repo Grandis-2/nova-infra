@@ -334,7 +334,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval])))",
           "legendFormat": "지금"
         },
         {
@@ -343,7 +343,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\"}[$__rate_interval] offset 1w)))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval] offset 1w)))",
           "legendFormat": "지난주 같은 시간"
         }
       ],
@@ -664,7 +664,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "topk(20, histogram_quantile(0.99, sum by (le, service, http_route) (label_replace(rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\"}[$__range]), \"service\", \"$1\", \"job\", \"nova/(.+)\"))))",
+          "expr": "topk(20, histogram_quantile(0.99, sum by (le, service, http_route) (label_replace(rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__range]), \"service\", \"$1\", \"job\", \"nova/(.+)\"))))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -731,7 +731,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (le) (increase(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\"}[$__rate_interval]))",
+          "expr": "sum by (le) (increase(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", job=~\"nova/(${service:regex})\", http_route!~\"/actuator.*\", http_route=~\"$route\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval]))",
           "legendFormat": "{{le}}",
           "exemplar": true,
           "format": "heatmap"
@@ -808,7 +808,7 @@
           "queryType": "traceql",
           "limit": 50,
           "tableType": "traces",
-          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route=~`${route:regex}` && duration > $slow}"
+          "query": "{resource.service.namespace=\"nova\" && resource.service.name=~\"${service:regex}\" && kind=server && span.http.route != \"/api/v1/notifications/stream\" && span.http.route=~`${route:regex}` && duration > $slow}"
         }
       ],
       "id": 11,
@@ -927,7 +927,7 @@
             "uid": "mimir"
           },
           "refId": "D",
-          "expr": "clamp_min(sum(rate(traces_spanmetrics_duration_seconds_sum{job=~\"nova/(${service:regex})\", span_kind=~\"SPAN_KIND_(SERVER|CONSUMER)\"}[$__rate_interval])) - (sum(rate(traces_spanmetrics_duration_seconds_sum{job=~\"nova/(${service:regex})\", span_kind=~\"SPAN_KIND_(CLIENT|PRODUCER)\"}[$__rate_interval])) or vector(0)), 0)",
+          "expr": "clamp_min(sum(rate(traces_spanmetrics_duration_seconds_sum{job=~\"nova/(${service:regex})\", span_kind=~\"SPAN_KIND_(SERVER|CONSUMER)\", span_name!=\"GET /api/v1/notifications/stream\"}[$__rate_interval])) - (sum(rate(traces_spanmetrics_duration_seconds_sum{job=~\"nova/(${service:regex})\", span_kind=~\"SPAN_KIND_(CLIENT|PRODUCER)\", span_name!=\"GET /api/v1/notifications/stream\"}[$__rate_interval])) or vector(0)), 0)",
           "legendFormat": "자체 (코드 · 대기)"
         }
       ],
