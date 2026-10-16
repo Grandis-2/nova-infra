@@ -36,3 +36,5 @@ queues:
 # preorder 와 같은 값을 쓴다 (공유 시크릿 nova-prod/shared/waiting-token)
 generated_secrets:
   WAITING_TOKEN_SECRET: shared/waiting-token
+
+profiling: true                 # 프로파일(Pyroscope)을 보낸다. preorder 에서 부담을 잰 뒤 넓혔다(CPU +0.2%p, 메모리 약 60 MiB)
