@@ -66,7 +66,7 @@ obs Collector 는 mysqld_exporter, LGTM 구성 요소와 Grafana 의 `/metrics`,
 ## 설계 결정
 
 **1. 단일 바이너리 · 단일 태스크.**
-지금 트래픽에서는 마이크로서비스 모드의 수평 확장이 필요 없다. 그래서 다섯 구성 요소를 EC2(t4g.large) 한 대의 ECS 태스크 하나에 모놀리식 모드로 띄운다.
+지금 트래픽에서는 마이크로서비스 모드의 수평 확장이 필요 없다. 그래서 다섯 구성 요소를 관측 클러스터의 EC2(t4g.medium, 2 vCPU · 4 GiB) 한 대, ECS 태스크 하나에 모놀리식 모드로 띄운다.
 컨테이너들은 localhost 를 같이 쓰므로 포트가 겹치지 않게 맞춘다(아래 "포트").
 대가는 가용성이다. obs 가 내려가 있는 동안에는 조회와 Grafana 경보가 멈춘다. 그래서 obs 태스크와 인스턴스는 CloudWatch 경보(monitoring/cloudwatch 스택)가 따로 감시한다.
 앱 데이터는 받는 쪽을 obs 밖으로 떼어 지킨다(2-1).
@@ -576,8 +576,9 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 ### 작업 정의 제약 (`../main.tf`)
 
 - 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`, pyroscope `/data`(넷 다 UID 10001), grafana `/var/lib/grafana`(UID 472). 디렉터리는 ecs 스택의 `obs_data_dirs` 가 정하고 obs 인스턴스가 부팅할 때 만든다. 디렉터리를 더하면 인스턴스가 한 번 교체된다.
-- Pyroscope 는 ecs 스택에 `pyroscope` 디렉터리가 있을 때만 띄운다. 압축 작업 임시 디렉터리를 `TMPDIR=/data` 로 돌려 루트 파일시스템을 읽기 전용으로 둔다. 메모리 512 MiB 는 Loki 한도(2048 → 1536)에서 덜어 냈다. 실제 obs 사용은 그보다 훨씬 적다.
-- obs Collector 는 긁기만 해 256 MiB 를 준다(`memory_limiter` 160 MiB). tail sampling · servicegraph 의 메모리는 게이트웨이(2 GiB, `memory_limiter` 1536 MiB)가 진다.
+- Pyroscope 는 ecs 스택에 `pyroscope` 디렉터리가 있을 때만 띄운다. 압축 작업 임시 디렉터리를 `TMPDIR=/data` 로 돌려 루트 파일시스템을 읽기 전용으로 둔다.
+- 컨테이너 메모리 한도는 `main.tf` 의 `obs_memory` 한 곳에서 정한다(합 3376 MiB, 태스크 3584 MiB, t4g.medium 이 ECS 에 등록하는 약 3.7 GiB 안). 7일 최대 RSS 의 1.4~2.5배로 잡았다(tempo 1152 · mimir 640 · loki 512 · grafana 448 · pyroscope 256). Go 프로세스에는 한도의 90% 를 `GOMEMLIMIT` 로 줘 한도에 다가가면 GC 를 더 돌린다. 한 컨테이너가 한도를 넘으면 그 컨테이너만 다시 뜬다(`restartPolicy`). 자주 다시 뜨면 LGTM 대시보드의 메모리(RSS)를 보고 `obs_memory` 를 다시 나눈다.
+- obs Collector 는 긁기만 해 192 MiB 를 준다(`memory_limiter` 160 MiB). tail sampling · servicegraph 의 메모리는 게이트웨이(2 GiB, `memory_limiter` 1536 MiB)가 진다.
 - Grafana 는 기동할 때 Drilldown 앱(Traces · Logs · Metrics · Profiles)을 grafana.com 에서 받는다. `GF_PLUGINS_PREINSTALL` 로 버전을 고정해 재배포마다 화면이 바뀌지 않게 한다. 올릴 때는 이 값을 바꾼다.
 
 ### admin 비밀번호 교체
