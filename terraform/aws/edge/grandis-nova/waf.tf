@@ -7,15 +7,20 @@ locals {
     { name = "AWSManagedRulesAmazonIpReputationList", priority = 30 },
   ]
 
-  # 그룹 안에서 차단 대신 표시(label)만 하는 규칙. 우리 API 는 받은 URL 로 서버가 요청하지 않는다.
-  #   EC2MetaDataSSRF_BODY   카카오 콜백 본문의 redirectUri(로컬 개발이면 http://localhost:5173/…)가 걸린다.
-  #                          아래 SsrfBodyExceptKakaoCallback 이 그 경로만 빼고 다시 막는다
-  #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 쿠키 값을 URL 로 쓰지 않아 표시만 남긴다
+  # 그룹 안에서 차단 대신 표시(label)만 하는 규칙. BODY 둘은 아래 규칙이 허용 경로 밖에서 다시 막는다
+  #   EC2MetaDataSSRF_BODY   카카오 콜백 본문의 redirectUri(로컬 개발이면 http://localhost:5173/…)가 걸린다 → SsrfBodyExceptKakaoCallback
+  #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 받은 URL 로 서버가 요청하지 않아 표시만 남긴다
+  #   SizeRestrictions_BODY  본문 8KB 상한. 관리자 사진 업로드(파일이 본문)는 넘고, 사진이 많은 상품 등록도 넘을 수 있다 → SizeBodyExceptAdminUpload
+  #                          두 경로의 상한은 앱이 지킨다(사진 10MB · 요청 11MB, 상품 등록 256KB)
   managed_rule_overrides = {
-    AWSManagedRulesCommonRuleSet = ["EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE"]
+    AWSManagedRulesCommonRuleSet = ["EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE", "SizeRestrictions_BODY"]
   }
   ssrf_body_label   = "awswaf:managed:aws:core-rule-set:EC2MetaDataSSRF_Body"
   ssrf_allowed_path = "/api/v1/auth/kakao/callback"
+
+  # 경로 둘을 or 로 묶으면 provider 스키마의 문장 깊이(3단)를 넘어 정규식 하나로 쓴다. 끝까지 일치라 /products/{id} 같은 하위 경로는 빠지지 않는다
+  size_body_label         = "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"
+  size_body_allowed_regex = "^/api/v1/admin/(images|products)$"
 
   # 대기열(줄 서기 POST · 조회 GET). 오픈 때 줄 서기가 한꺼번에 몰리고 대기자는 2~4초마다 조회하므로
   # 같은 공인 IP(회사 · 학교 · 통신사 NAT) 뒤에 여럿이면 ApiRateLimit 에 닿는다. 이 경로는 그 규칙에서 빼고 QueueRateLimit 으로 따로 센다
@@ -127,6 +132,80 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "SsrfBodyExceptKakaoCallback"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # 위에서 표시만 한 8KB 본문 상한을 관리자 사진 업로드 · 상품 등록(POST) 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다)
+  rule {
+    name     = "SizeBodyExceptAdminUpload"
+    priority = 16
+
+    action {
+      dynamic "block" {
+        for_each = var.waf_block_mode ? [1] : []
+        content {}
+      }
+
+      dynamic "count" {
+        for_each = var.waf_block_mode ? [] : [1]
+        content {}
+      }
+    }
+
+    statement {
+      and_statement {
+        statement {
+          label_match_statement {
+            scope = "LABEL"
+            key   = local.size_body_label
+          }
+        }
+
+        statement {
+          not_statement {
+            statement {
+              and_statement {
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "EXACTLY"
+                    search_string         = "POST"
+
+                    field_to_match {
+                      method {}
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
+                }
+
+                statement {
+                  regex_match_statement {
+                    regex_string = local.size_body_allowed_regex
+
+                    field_to_match {
+                      uri_path {}
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "SizeBodyExceptAdminUpload"
       sampled_requests_enabled   = true
     }
   }
