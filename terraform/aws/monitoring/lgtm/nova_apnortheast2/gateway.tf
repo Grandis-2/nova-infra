@@ -5,6 +5,9 @@
 #     ▶ 게이트웨이(Fargate, 롤링 배포): 마스킹 · 리소스 허용 목록 · tail sampling · span metrics · 서비스 그래프
 #     ▶ obs 태스크의 loki:3100 · tempo-otlp:14317 · mimir:9009 (Service Connect)
 #
+#   ECS 밖의 송신자(엣지 로그 Lambda)는 otel-ingest.<네임스페이스>:4318 로 보낸다. Service Connect 이름은 ECS 서비스
+#   태스크 안에서만 풀리므로, 같은 네임스페이스에 태스크 IP 를 가리키는 DNS A 레코드를 따로 둔다.
+#
 #   obs 는 한 호스트의 디렉터리를 써서 옛 태스크를 내린 뒤 새 태스크를 띄운다. 그동안 게이트웨이는 계속 받고,
 #   보내지 못한 데이터는 메모리 전송 큐에 쌓았다가 최대 15분 동안 다시 보낸다(gateway/collector.yaml).
 #   게이트웨이 자신은 롤링 배포라 새 태스크가 뜬 뒤 옛 태스크가 내려간다. 겹치는 1~2분은 한 트레이스의 스팬이
@@ -76,6 +79,27 @@ resource "aws_ecs_task_definition" "gateway" {
   ])
 }
 
+# Service Connect 와 같은 네임스페이스를 쓰되 이름은 달라야 한다(Service Connect 가 같은 이름의 Cloud Map 서비스를 만든다)
+resource "aws_service_discovery_service" "gateway_ingest" {
+  count = local.gateway_enabled ? 1 : 0
+
+  name = "otel-ingest"
+
+  dns_config {
+    namespace_id   = data.terraform_remote_state.ecs.outputs.service_discovery_namespace_id
+    routing_policy = "MULTIVALUE"
+
+    # 롤링 배포로 태스크가 바뀌면 새 IP 를 빨리 따라간다
+    dns_records {
+      type = "A"
+      ttl  = 10
+    }
+  }
+
+  # 등록 · 해제는 ECS 가 태스크 상태에 맞춰 한다
+  health_check_custom_config {}
+}
+
 resource "aws_ecs_service" "gateway" {
   count = local.gateway_enabled ? 1 : 0
 
@@ -101,6 +125,10 @@ resource "aws_ecs_service" "gateway" {
     subnets          = data.terraform_remote_state.vpc.outputs.app_subnet_ids
     security_groups  = [local.gateway_sg]
     assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.gateway_ingest[0].arn
   }
 
   # 앱은 otel-gateway.<네임스페이스>:4318(HTTP) · otel-gateway-grpc.<네임스페이스>:4317(gRPC) 로 보낸다(ecs 스택 otel.tf).

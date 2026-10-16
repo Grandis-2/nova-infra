@@ -1,7 +1,7 @@
 # OTel 게이트웨이 — 앱의 OTLP 를 받아 샘플링 · 마스킹 · APM 지표를 만들고 obs 의 Loki · Tempo · Mimir 로 보내는 Collector(NV-543).
 # 태스크는 monitoring/lgtm 스택이 만들고, 서비스 SG 를 참조해야 해서 SG 는 여기 둔다.
 #
-# 인바운드  4317 · 4318(OTLP) — 서비스 SG 에서만. 앱은 Service Connect(otel-gateway.<네임스페이스>)로 붙는다
+# 인바운드  4317 · 4318(OTLP) — 서비스 SG 에서. 앱은 Service Connect(otel-gateway.<네임스페이스>)로 붙는다. 4318 은 엣지 로그 Lambda(edge_logs.tf)도
 # 아웃바운드 obs 의 Loki 3100 · Tempo OTLP 14317 · Mimir 9009 (Service Connect), 443(이미지 · 로그 · AWS API)
 locals {
   otel_gateway_obs_ports = { 3100 = "Loki", 14317 = "Tempo OTLP", 9009 = "Mimir" }
