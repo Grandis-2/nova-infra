@@ -112,3 +112,8 @@ output "observability_cluster_name" {
 output "observability_cluster_arn" {
   value = aws_ecs_cluster.observability.arn
 }
+
+output "alb_https_listener_arn" {
+  description = "메인 ALB 의 HTTPS 리스너. 다른 저장소(atlantis-deploy)가 자기 서비스의 규칙 · SNI 인증서를 이 리스너에 붙인다"
+  value       = try(aws_lb_listener.https[0].arn, "")
+}

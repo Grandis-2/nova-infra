@@ -8,5 +8,3 @@ subject_alternative_names = ["cdn.grandis-nova.link"]
 grafana_domain_name = "grafana.grandis-nova.link"
 # 브라우저 실사용자 모니터링(Faro) 수집 주소. 프런트가 바로 보낸다
 rum_domain_name = "rum.grandis-nova.link"
-# Atlantis 주소. 메인 ALB 로 받는다(atlantis-deploy 의 전용 ALB 를 없앤다)
-atlantis_domain_name = "atlantis.grandis-nova.link"
