@@ -40,17 +40,3 @@ output "rum_cloudfront_certificate_arn" {
   description = "edge 스택의 수집용 CloudFront 가 쓴다"
   value       = local.rum_enabled ? try(aws_acm_certificate_validation.rum_cloudfront[0].certificate_arn, aws_acm_certificate.rum_cloudfront[0].arn) : ""
 }
-
-output "atlantis_domain_name" {
-  value = local.atlantis_enabled ? var.atlantis_domain_name : ""
-}
-
-output "atlantis_alb_certificate_arn" {
-  description = "ecs 스택이 메인 ALB 리스너에 SNI 로 붙인다"
-  value       = local.atlantis_enabled ? try(aws_acm_certificate_validation.atlantis_alb[0].certificate_arn, aws_acm_certificate.atlantis_alb[0].arn) : ""
-}
-
-output "atlantis_cloudfront_certificate_arn" {
-  description = "edge 스택의 Atlantis CloudFront 가 쓴다"
-  value       = local.atlantis_enabled ? try(aws_acm_certificate_validation.atlantis_cloudfront[0].certificate_arn, aws_acm_certificate.atlantis_cloudfront[0].arn) : ""
-}

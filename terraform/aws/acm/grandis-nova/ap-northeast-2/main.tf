@@ -119,38 +119,6 @@ resource "aws_acm_certificate" "rum_cloudfront" {
   }
 }
 
-# Atlantis 주소. 메인 ALB(CloudFront 뒤)로 받는다. Grafana 와 같이 CloudFront 가 Host 를 넘기므로 ALB 에도 한 장 둔다
-locals {
-  atlantis_enabled = local.enabled && var.atlantis_domain_name != ""
-}
-
-resource "aws_acm_certificate" "atlantis_alb" {
-  count = local.atlantis_enabled ? 1 : 0
-
-  domain_name       = var.atlantis_domain_name
-  validation_method = "DNS"
-
-  tags = { Name = "${local.name_prefix}-atlantis-alb" }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-resource "aws_acm_certificate" "atlantis_cloudfront" {
-  provider = aws.us_east_1
-  count    = local.atlantis_enabled ? 1 : 0
-
-  domain_name       = var.atlantis_domain_name
-  validation_method = "DNS"
-
-  tags = { Name = "${local.name_prefix}-atlantis-cloudfront" }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # 두 인증서의 검증 레코드를 도메인별로 하나씩만 만든다.
 # 키는 변수로 이미 아는 도메인 목록으로 정한다 — 인증서를 만들기 전에는 검증 정보를 몰라서,
 # 그걸로 키를 만들면 첫 plan 이 for_each 를 계산하지 못해 실패한다.
@@ -160,7 +128,6 @@ locals {
     [var.domain_name], var.subject_alternative_names, [local.origin_host],
     local.grafana_enabled ? [var.grafana_domain_name] : [],
     local.rum_enabled ? [var.rum_domain_name] : [],
-    local.atlantis_enabled ? [var.atlantis_domain_name] : [],
   ))) : toset([])
 
   validation_options = local.enabled ? concat(
@@ -168,7 +135,6 @@ locals {
     tolist(aws_acm_certificate.cloudfront[0].domain_validation_options),
     local.grafana_enabled ? tolist(aws_acm_certificate.grafana_alb[0].domain_validation_options) : [],
     local.rum_enabled ? tolist(aws_acm_certificate.rum_alb[0].domain_validation_options) : [],
-    local.atlantis_enabled ? tolist(aws_acm_certificate.atlantis_alb[0].domain_validation_options) : [],
   ) : []
 }
 
@@ -242,27 +208,6 @@ resource "aws_acm_certificate_validation" "rum_cloudfront" {
   certificate_arn = aws_acm_certificate.rum_cloudfront[0].arn
   validation_record_fqdns = [
     for opt in aws_acm_certificate.rum_cloudfront[0].domain_validation_options :
-    aws_route53_record.validation[opt.domain_name].fqdn
-  ]
-}
-
-resource "aws_acm_certificate_validation" "atlantis_alb" {
-  count = local.atlantis_enabled && local.route53_zone_id != "" ? 1 : 0
-
-  certificate_arn = aws_acm_certificate.atlantis_alb[0].arn
-  validation_record_fqdns = [
-    for opt in aws_acm_certificate.atlantis_alb[0].domain_validation_options :
-    aws_route53_record.validation[opt.domain_name].fqdn
-  ]
-}
-
-resource "aws_acm_certificate_validation" "atlantis_cloudfront" {
-  provider = aws.us_east_1
-  count    = local.atlantis_enabled && local.route53_zone_id != "" ? 1 : 0
-
-  certificate_arn = aws_acm_certificate.atlantis_cloudfront[0].arn
-  validation_record_fqdns = [
-    for opt in aws_acm_certificate.atlantis_cloudfront[0].domain_validation_options :
     aws_route53_record.validation[opt.domain_name].fqdn
   ]
 }
