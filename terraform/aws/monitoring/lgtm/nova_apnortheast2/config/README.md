@@ -550,8 +550,8 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - **게이트웨이와 따로 둔다.** 인터넷에서 누구나 보낼 수 있는 입구라, 몰려도 수집기의 작은 큐(200 묶음, 1분 재시도)에서만 버리고 앱 데이터가 지나는 게이트웨이를 밀어붙이지 않는다.
 - **관측 클러스터(`nova-prod-observability`)에 있다.** 게이트웨이(앱 클러스터)와 같은 Service Connect 네임스페이스라 클러스터가 달라도 이름으로 보낸다.
 - 막는 것: WAF(`POST /collect` 만, Content-Length 250KB 미만, IP 당 5분 3000건), CORS(`www.grandis-nova.link` · `grandis-nova.link`), 앱 이름(`nova-web` 이 아니면 버림). CORS 는 다른 사이트의 브라우저만 막고 직접 보내는 요청은 막지 못한다.
-- URL 쿼리 · 해시를 지운다. 프런트의 `beforeSend` 가 먼저 지우고 여기는 안전망이다. 이메일 · 전화번호 · 토큰 형태는 게이트웨이 마스킹이 지운다.
-- Fargate 0.25 vCPU · 512 MiB(`memory_limiter` 384 MiB), 롤링 배포. 태스크가 없으면 CloudWatch 경보(`nova-prod-rum-collector-no-tasks`)가 울린다. 앱 관측에는 영향이 없다.
+- URL 쿼리 · 해시를 지운다(로그 본문 · 속성, 스팬 · 스팬 이벤트 속성). 프런트의 `beforeSend` 가 먼저 지우고 여기는 안전망이다. 이메일 · 전화번호 · 토큰 형태는 게이트웨이 마스킹이 지운다.
+- Fargate 0.25 vCPU · 512 MiB(`memory_limiter` 384 MiB), 롤링 배포. CPU 평균 60% 를 기준으로 1~3대로 늘고 준다. 세 대를 넘기면 Loki 수집 한도가 먼저 걸려 늘려도 저장되지 않는다. 자체 지표는 게이트웨이를 거쳐 Mimir 로 간다(`job="rum-collector"`). 태스크가 없으면 CloudWatch 경보(`nova-prod-rum-collector-no-tasks`)가 울린다. 앱 관측에는 영향이 없다.
 - CORS 허용 헤더를 지정하면 기본값이 사라진다. Faro 가 보내는 `content-type` · `content-encoding` · `x-faro-session-id` · `idempotency-key` 를 모두 둔다. Faro 에 `apiKey` 를 쓰면 `x-api-key` 가 붙어 막힌다.
 
 ### 작업 정의 제약 (`../main.tf`)

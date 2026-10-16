@@ -189,6 +189,44 @@ resource "aws_ecs_service" "rum" {
   }
 
   depends_on = [aws_lb_listener_rule.rum]
+
+  # 대수는 오토스케일링이 정한다
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+}
+
+# 판매 오픈처럼 사용자가 몰리면 늘린다. 한 대가 초당 수백 요청을 받는다고 보고, 세 대를 넘기면 Loki 수집 한도가 먼저 걸려
+# 늘려도 저장되지 않는다. 상태를 들고 있지 않아 줄여도 잃는 것이 거의 없다
+resource "aws_appautoscaling_target" "rum" {
+  count = local.rum_enabled ? 1 : 0
+
+  service_namespace  = "ecs"
+  resource_id        = "service/${local.rum_cluster.name}/${aws_ecs_service.rum[0].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = 1
+  max_capacity       = 3
+}
+
+resource "aws_appautoscaling_policy" "rum_cpu" {
+  count = local.rum_enabled ? 1 : 0
+
+  name               = "${local.rum_name}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  service_namespace  = aws_appautoscaling_target.rum[0].service_namespace
+  resource_id        = aws_appautoscaling_target.rum[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.rum[0].scalable_dimension
+
+  target_tracking_scaling_policy_configuration {
+    target_value = 60
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
 }
 
 # 수집기가 없으면 프런트 기록이 모두 사라진다(앱 관측에는 영향 없다)
