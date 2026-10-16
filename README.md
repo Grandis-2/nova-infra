@@ -79,12 +79,13 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 
 | 보안 그룹 | 인바운드 | 아웃바운드 |
 | --- | --- | --- |
-| `alb` | CloudFront 관리형 prefix list, 443 | 서비스의 앱 · 헬스 포트 |
+| `alb` | CloudFront 관리형 prefix list, 443 | 서비스의 앱 · 헬스 포트, 브라우저 수집기 12347 · 13133 |
 | `<서비스>` (서비스마다 하나) | ALB (앱 · 헬스 포트), 자신을 호출하는 서비스 (앱 포트) | 전체 (NAT 경유) |
 | `redis` | 캐시를 쓰는 서비스, 6379 | — |
 | `vpce` | 서비스, bastion, obs, migration, 443 | — |
 | `bastion` | 없음 (SSM Session Manager로만 접속) | 전체 |
-| `otel-gateway` (OTel 게이트웨이) | 서비스, 4317 · 4318 (OTLP). 엣지 로그 Lambda, 4318 | obs 3100 · 14317 · 9009, 443 |
+| `otel-gateway` (OTel 게이트웨이) | 서비스, 4317 · 4318 (OTLP). 엣지 로그 Lambda · 브라우저 수집기, 4318 | obs 3100 · 14317 · 9009, 443 |
+| `rum-collector` (브라우저 수집기) | ALB, 12347 (Faro) · 13133 (헬스 체크) | OTel 게이트웨이 4318, 443 |
 | `edge-logs` (엣지 로그 Lambda) | 없음 | OTel 게이트웨이 4318, 443 (S3 · 로그) |
 | `obs` (관측 스택) | OTel 게이트웨이, 3100 · 14317 · 9009 (Loki · Tempo · Mimir). 프로파일을 켠 서비스(`profiling: true`), 4041. ALB, 3000 (Grafana — `https://grafana.grandis-nova.link`, Cognito 로그인. 사용자는 `cognito/.../users.sops.yml`) | 443, 3306 (NCP DB, mysqld_exporter) |
 | `obs-instance` (관측 스택 EC2) | 없음 | 443 |
