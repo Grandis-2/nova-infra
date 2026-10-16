@@ -172,6 +172,7 @@ flowchart LR
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), 접근 로그로 본 요청 구간(CloudFront 응답 시간 · 구간별 시간 · 캐시 결과 · 엣지 위치별, 느린 요청과 5xx 로그에서 앱 트레이스로), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
 | `50 URLs` | URL 목록 (`nova-url`) · URL 그리드 (`nova-url-grid`) · URL 상세 (`nova-url-detail`) | 실제 요청으로 본 API(메서드 + 경로)별 값. 목록은 API × 시간 히트맵, API 표(요청 수 · 지난주 대비 증감 · 성공률 · 4xx · 1초 초과 비율 · P95 · P99 · P99 증감), 새로 생긴 · 사라진 API(최근 7일), 서비스 시간대 잔디, 경로마다 펼쳐 보는 행. 그리드는 API 마다 카드. 상세는 401 · 403 · 404 · 429 수, 응답 코드별 요청량, 지연 분포, 요청량 · P99 · 성공률 지난주 대비, 시간 구성(트레이스 표본), 날짜 × 시각(KST) 잔디, 느린/오류 트레이스 |
+| `60 Frontend` | 프런트 · 실사용자 (`nova-frontend`) | 브라우저(Faro)가 보낸 것으로 본 사용자 체감. 세션 · JS 오류 · LCP · INP · CLS p75, 페이지별 웹 바이탈, 오류 종류 · 메시지 Top · 최근 오류, 핵심 동작(버튼 이름)별 소요 시간 · API 실패율, 브라우저와 서버가 잰 API p95, 느린 API, 브라우저 · OS · 모바일 비율. 세션 샘플이라 수는 전체가 아니다 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 자체가 데이터를 빠뜨리거나 디스크 · 메모리가 모자라지 않은지, 카디널리티 · 한도(시계열 · 스트림 한도 사용률, 시계열 많은 지표 · job Top 10, 게이트웨이 전송 큐) |
 
 - 폴더 앞 번호는 목록 순서다. Grafana 는 폴더를 이름순으로만 정렬한다. 사이에 폴더를 끼울 수 있게 10 단위로 띄운다.
@@ -251,6 +252,8 @@ flowchart LR
 | HTTP P99 응답 시간 | 서비스별 P99 > 2초 | 10분 | warning |
 | JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
 | 메시지 처리 오류율 | 큐별 처리 스팬 중 오류 비율 > 5% (10분에 6건 넘게 처리한 큐만) | 10분 | warning |
+| 프런트 JS 오류 급증 | 브라우저 오류 15분 > 30건 그리고 지난주 같은 시각의 3배 초과 (Loki) | 5분 | warning |
+| 프런트 LCP 악화 | LCP p75 30분 > 4초 (측정 30건 이상일 때만, Loki) | 15분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
 | MySQL 수집 끊김 | `mysql_up` 또는 exporter 수집 대상의 `up` < 1 (exporter 를 띄운 환경만) | 5분 | critical |
 | MySQL 연결 사용률 | 연결 수 / max_connections > 80% | 10분 | warning |
@@ -319,6 +322,18 @@ flowchart LR
 
 1. ECS · 컴퓨팅 대시보드에서 그 서비스의 실행 태스크 수 · 재시작을 본다. 태스크가 0 이면 CloudWatch 의 태스크 0개 경보도 울린다.
 2. 태스크는 도는데 지표만 없으면 게이트웨이나 obs 쪽이다. 게이트웨이 태스크(CloudWatch `nova-prod-otel-gateway-no-tasks`), obs 수집 실패 · LGTM 대시보드를 본다.
+
+### 프런트 JS 오류 급증
+
+1. 프런트 대시보드의 "오류 메시지 Top" 에서 늘어난 메시지와 페이지를 찾는다. 앱 버전(`app_version`)이 바뀐 직후면 프런트 배포를 의심한다.
+2. "최근 오류" 줄을 펼쳐 스택 · 브라우저를 본다. 한 브라우저 · OS 에만 몰리면 호환성 문제다.
+3. API 실패가 원인이면 같은 시각의 서비스 5xx · 엣지 5xx 를 본다. 수는 세션 샘플 기준이라 절대값보다 지난주 대비 증가를 본다.
+
+### 프런트 LCP 악화
+
+1. 프런트 대시보드의 "페이지별 웹 바이탈" 에서 어느 페이지인지 본다.
+2. 같은 시각 "브라우저 vs 서버" 의 서버 p95 가 올랐으면 API 쪽이다(응답 시간 급증 · URL 목록). 서버가 그대로면 이미지 · 번들 크기 · CDN 쪽이다.
+3. 엣지 대시보드의 CloudFront 응답 시간 · 캐시 결과로 정적 자원이 느린지 본다.
 
 ### obs 수집 실패
 
@@ -553,6 +568,8 @@ RDS 는 파라미터 그룹에서 `performance_schema` 가 켜져 있어야 상�
 - 막는 것: WAF(`POST /collect` 만, Content-Length 250KB 미만, IP 당 5분 3000건), CORS(`www.grandis-nova.link` · `grandis-nova.link`), 앱 이름(`nova-web` 이 아니면 버림). CORS 는 다른 사이트의 브라우저만 막고 직접 보내는 요청은 막지 못한다.
 - URL 쿼리 · 해시를 지운다(로그 본문 · 속성, 스팬 · 스팬 이벤트 속성). 프런트의 `beforeSend` 가 먼저 지우고 여기는 안전망이다. 이메일 · 전화번호는 게이트웨이가 지운다(아래 "저장 전 마스킹"). URL 밖에 놓인 토큰은 잡지 못하므로 프런트가 보내지 않는다.
 - Fargate 0.25 vCPU · 512 MiB(`memory_limiter` 384 MiB), 롤링 배포. CPU 평균 60% 를 기준으로 1~3대로 늘고 준다. 상한 3대는 실측 전 추정(한 대가 초당 수백 요청, 판매 오픈 때 예상 유입은 그 1/4~1/2)으로 정했다. 늘려도 브라우저 로그(대부분의 양)는 Loki 수집 한도(테넌트 초당 4 MB, 앱 로그와 같이 씀)에 묶이니(트레이스는 Tempo), 자체 지표와 Loki 수집량을 본 뒤 조정한다. 자체 지표는 게이트웨이를 거쳐 Mimir 로 간다(`job="rum-collector"`). 태스크가 없으면 CloudWatch 경보(`nova-prod-rum-collector-no-tasks`)가 울린다. 앱 관측에는 영향이 없다.
+- Loki 에서는 `service_name="nova-web"` 하나로 모이고 나머지는 본문(logfmt)에 있다. `kind` 로 나뉜다: 웹 바이탈은 `measurement`(`type=web-vitals`, `value_lcp` · `value_inp` · `value_cls`), 오류는 `exception`, 핵심 동작은 `event`(`event_name=faro.user.action`, `event_data_userActionName` · `event_data_userActionDuration` ms), API 호출은 `event`(`event_name=faro.tracing.fetch`). 페이지는 `view_name`(경로 패턴)이다. 화면은 `60 Frontend`.
+- 브라우저 기록의 `traceID=…` 는 Loki 데이터소스의 "브라우저 트레이스" 링크로 Tempo 에서 열린다. 브라우저 스팬 밑에 그 요청의 서버 스팬이 이어진다.
 - CORS 허용 헤더를 지정하면 기본값이 사라진다. Faro 가 보내는 `content-type` · `content-encoding` · `x-faro-session-id` · `idempotency-key` 를 모두 둔다. Faro 에 `apiKey` 를 쓰면 `x-api-key` 가 붙어 막힌다.
 
 ### 작업 정의 제약 (`../main.tf`)
