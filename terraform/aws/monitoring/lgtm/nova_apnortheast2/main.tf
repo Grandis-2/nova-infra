@@ -416,6 +416,10 @@ resource "aws_ecs_task_definition" "obs" {
 }
 
 resource "aws_ecs_service" "obs" {
+  # 관측 클러스터로 옮기는 중(NV-588 1/2). 용량 공급자를 옮기려면 쓰는 서비스가 없어야 해서 먼저 내린다.
+  # 2/2 에서 관측 클러스터에 다시 만든다
+  count = 0
+
   name            = local.obs_name
   cluster         = local.obs_cluster_arn
   task_definition = aws_ecs_task_definition.obs.arn
@@ -514,7 +518,7 @@ resource "aws_cloudwatch_metric_alarm" "obs_no_task" {
 
   dimensions = {
     ClusterName = local.cluster_name
-    ServiceName = aws_ecs_service.obs.name
+    ServiceName = local.obs_name
   }
 
   alarm_actions = [local.alerts_topic_arn]
