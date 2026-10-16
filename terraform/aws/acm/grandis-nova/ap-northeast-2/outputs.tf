@@ -32,7 +32,7 @@ output "rum_domain_name" {
 }
 
 output "rum_alb_certificate_arn" {
-  description = "monitoring/lgtm 스택이 ALB 리스너에 SNI 로 붙인다"
+  description = "monitoring/lgtm 스택이 브라우저 수집기용 ALB 리스너 규칙과 함께 SNI 로 붙인다"
   value       = local.rum_enabled ? try(aws_acm_certificate_validation.rum_alb[0].certificate_arn, aws_acm_certificate.rum_alb[0].arn) : ""
 }
 
