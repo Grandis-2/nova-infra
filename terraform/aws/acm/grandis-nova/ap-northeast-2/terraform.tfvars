@@ -6,3 +6,5 @@ route53_zone_name = "grandis-nova.link"
 subject_alternative_names = ["cdn.grandis-nova.link"]
 # Grafana 공개 주소. Cognito 로그인을 거친다(NV-517)
 grafana_domain_name = "grafana.grandis-nova.link"
+# 브라우저 실사용자 모니터링(Faro) 수집 주소. 프런트가 바로 보낸다
+rum_domain_name = "rum.grandis-nova.link"
