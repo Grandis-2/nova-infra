@@ -16,10 +16,13 @@ variable "log_retention_days" {
   default     = 14
 }
 
+# 끈다. 태스크 수 · CPU · 메모리는 무료 AWS/ECS 지표(LiveTaskCount · CPUUtilization · MemoryUtilization)로 보고,
+# 배포 실패, 태스크 배치 · 설정 실패, 필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패는 ECS 이벤트 경보(monitoring/cloudwatch)가 알린다.
+# Spot 회수로 내려간 태스크는 알리지 않는다(서비스가 다시 띄운다). 켜면 사용자 지정 지표로 과금된다
 variable "container_insights" {
   description = "enhanced | enabled | disabled. enhanced 는 태스크 단위 지표까지 본다"
   type        = string
-  default     = "enabled"
+  default     = "disabled"
 }
 
 variable "spring_profile" {

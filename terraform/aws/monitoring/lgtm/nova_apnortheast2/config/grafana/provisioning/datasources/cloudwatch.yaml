@@ -1,4 +1,4 @@
-# Grafana 데이터소스 — CloudWatch. AWS 관리형(SQS · ElastiCache · ECS Container Insights · ALB · CloudFront) 지표를 읽는다.
+# Grafana 데이터소스 — CloudWatch. AWS 관리형(SQS · ElastiCache · ECS · ALB · CloudFront) 지표를 읽는다.
 # 직접 운영하는 것(앱 · MySQL · LGTM · obs 호스트)은 Mimir 에 있다. 관리형 지표를 exporter 로 다시 긁어 오지 않는다.
 #
 # 자격 증명은 태스크 역할(nova-prod-obs)이다(authType: default — SDK 기본 체인). 권한은 iam 스택 obs.tf 의 CloudWatchRead.
