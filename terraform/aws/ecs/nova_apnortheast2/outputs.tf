@@ -112,3 +112,8 @@ output "observability_cluster_name" {
 output "observability_cluster_arn" {
   value = aws_ecs_cluster.observability.arn
 }
+
+output "atlantis_target_group_arn" {
+  description = "Atlantis 서비스(atlantis-deploy)가 태스크를 붙이는 메인 ALB 대상 그룹"
+  value       = try(aws_lb_target_group.atlantis[0].arn, "")
+}

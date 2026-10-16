@@ -21,3 +21,11 @@ output "rum_collect_url" {
   description = "브라우저 실사용자 모니터링(Faro) 수집 주소. 프런트 VITE_FARO_URL"
   value       = local.rum_enabled ? "https://${local.rum_domain}${local.rum_collect_path}" : ""
 }
+
+output "atlantis_cloudfront" {
+  description = "atlantis-deploy 가 DNS 레코드(alias)를 이 배포로 바꿀 때 쓴다"
+  value = local.atlantis_enabled ? {
+    domain_name    = aws_cloudfront_distribution.atlantis[0].domain_name
+    hosted_zone_id = aws_cloudfront_distribution.atlantis[0].hosted_zone_id
+  } : null
+}

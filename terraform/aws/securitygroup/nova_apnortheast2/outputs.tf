@@ -60,3 +60,8 @@ output "rum_collector_security_group_id" {
   description = "브라우저 수집기 태스크 SG. ALB 에서 12347 · 13133 을 받고 게이트웨이 4318 로 보낸다"
   value       = aws_security_group.rum_collector.id
 }
+
+output "atlantis_ingress_security_group_id" {
+  description = "Atlantis 태스크에 더 붙이는 SG(atlantis-deploy). 메인 ALB 에서 4141 을 받는다"
+  value       = aws_security_group.atlantis.id
+}
