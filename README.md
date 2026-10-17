@@ -221,6 +221,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 ├── docs/architecture/img/     아키텍처 그림
 ├── functions/<함수>/          Lambda 코드(Python)와 단위 시험
 ├── scripts/                   tf.sh(로컬 plan), validate-all.sh(전체 검사), link-global.sh(새 스택), app-secrets.sh(외부 비밀)
+│                              route-check/(be API 와 ALB 경로 · WAF 본문 상한 대조, 매일 GitHub Actions)
 └── terraform/
     ├── application/<서비스>/  service.yml(인프라), application.yml(Spring 설정)
     ├── variables/             공용 변수, 서비스 목록
