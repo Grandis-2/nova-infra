@@ -166,6 +166,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | `migration` | 없음 | DB 3306, 443 |
 
 - WAF는 CloudFront에만 겁니다. API에는 AWS 관리형 규칙 3종과 IP별 요청 제한(`/api/` 5분에 3,000회, 대기열 경로는 5분에 300,000회)을 적용합니다. 브라우저 수집 주소에는 전용 WAF를 두어 `/collect`의 POST와 OPTIONS만 받습니다.
+- 본문은 8KB까지 받습니다. 주문 생성은 64KB, 관리자 API는 512KB, 사진 업로드는 11MB까지 받습니다. WAF가 막은 요청에는 앱과 같은 형식의 오류 응답(`REQUEST_BLOCKED`, `TOO_MANY_REQUESTS`, 413)을 돌려줍니다.
 - CloudFront는 TLS 1.2 이상, ALB는 `ELBSecurityPolicy-TLS13-1-2-2021-06`을 씁니다. RDS와 Valkey 연결도 TLS입니다.
 - S3는 게이트웨이 엔드포인트, ECR · CloudWatch Logs · Secrets Manager · SSM은 인터페이스 엔드포인트로 접근합니다. NAT Gateway는 AZ마다 하나씩 두어, 외부 API를 호출할 때만 씁니다.
 - VPC Flow Logs로 거부된 연결과 이상 트래픽을 기록합니다.
