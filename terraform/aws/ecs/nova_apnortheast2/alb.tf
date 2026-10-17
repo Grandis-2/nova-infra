@@ -23,6 +23,22 @@ resource "aws_lb" "this" {
   tags = { Name = "${local.name_prefix}-alb" }
 }
 
+# ALB 가 직접 끝내는 응답. 앱의 ApiResponse 실패 봉투와 같은 모양이고, 코드는 앱(CommonErrorCode)과 같은 이름이다.
+# 앱을 거치지 않았다는 표시로 details.source 를 둔다. 고정 응답이라 timestamp · traceId 는 null 이고 헤더(CORS)는 붙일 수 없다
+locals {
+  alb_errors = {
+    not_found = { code = "NOT_FOUND", message = "Not found." }
+    forbidden = { code = "FORBIDDEN", message = "Forbidden." }
+  }
+  alb_error_body = { for k, v in local.alb_errors : k => jsonencode({
+    success   = false
+    data      = null
+    error     = { code = v.code, message = v.message, details = { source = "edge" } }
+    timestamp = null
+    traceId   = null
+  }) }
+}
+
 # 인증서가 없을 때만 HTTP 로 서비스한다 (CloudFront 가 HTTP 로 원본에 붙는 경우).
 # 인증서가 있으면 ALB 보안 그룹이 CloudFront 의 443 만 받으므로 80 리스너는 닿을 수 없어 만들지 않는다.
 # 사용자 쪽은 CloudFront 가 HTTPS 만 받는다 (edge 스택 viewer_protocol_policy).
@@ -36,10 +52,10 @@ resource "aws_lb_listener" "http" {
   default_action {
     type = "fixed-response"
 
-    # 어떤 규칙에도 걸리지 않은 경로는 그냥 404. 기본 서비스를 두지 않는다.
+    # 어떤 규칙에도 걸리지 않은 경로는 404. 기본 서비스를 두지 않는다(서비스는 자기 자원 경로만 받는다)
     fixed_response {
       content_type = "application/json"
-      message_body = "{\"message\":\"not found\"}"
+      message_body = local.alb_error_body.not_found
       status_code  = "404"
     }
   }
@@ -59,7 +75,7 @@ resource "aws_lb_listener" "https" {
 
     fixed_response {
       content_type = "application/json"
-      message_body = "{\"message\":\"not found\"}"
+      message_body = local.alb_error_body.not_found
       status_code  = "404"
     }
   }
@@ -149,7 +165,7 @@ resource "aws_lb_listener_rule" "mock_admin_block" {
 
     fixed_response {
       content_type = "application/json"
-      message_body = "{\"message\":\"forbidden\"}"
+      message_body = local.alb_error_body.forbidden
       status_code  = "403"
     }
   }
