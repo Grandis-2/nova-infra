@@ -622,31 +622,25 @@
           },
           "refId": "A",
           "expr": "max(preorder_expiry_overdue)",
-          "legendFormat": "overdue",
-          "instant": true,
-          "range": false
+          "legendFormat": "overdue"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "mimir"
           },
-          "refId": "A",
+          "refId": "B",
           "expr": "max(preorder_expiry_blocked)",
-          "legendFormat": "blocked",
-          "instant": true,
-          "range": false
+          "legendFormat": "blocked"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "mimir"
           },
-          "refId": "A",
+          "refId": "C",
           "expr": "sum(rate(preorder_expiry_started_total[$__rate_interval])) * 60",
-          "legendFormat": "시작 (분당)",
-          "instant": true,
-          "range": false
+          "legendFormat": "시작 (분당)"
         }
       ],
       "fieldConfig": {
@@ -704,20 +698,16 @@
           },
           "refId": "A",
           "expr": "max(preorder_dlq_waiting)",
-          "legendFormat": "DLQ 대기",
-          "instant": true,
-          "range": false
+          "legendFormat": "DLQ 대기"
         },
         {
           "datasource": {
             "type": "prometheus",
             "uid": "mimir"
           },
-          "refId": "A",
+          "refId": "B",
           "expr": "max(preorder_open_alert_pending)",
-          "legendFormat": "오픈 알림 대기",
-          "instant": true,
-          "range": false
+          "legendFormat": "오픈 알림 대기"
         }
       ],
       "fieldConfig": {
