@@ -10,9 +10,9 @@ locals {
   # 그룹 안에서 차단 대신 표시(label)만 하는 규칙. BODY 둘은 아래 규칙이 허용 경로 밖에서 다시 막는다
   #   EC2MetaDataSSRF_BODY   카카오 콜백 본문의 redirectUri(로컬 개발이면 http://localhost:5173/…)가 걸린다 → SsrfBodyExceptKakaoCallback
   #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 받은 URL 로 서버가 요청하지 않아 표시만 남긴다
-  #   SizeRestrictions_BODY  본문 8KB 상한. 관리자 API 는 넘을 수 있다(사진 업로드, 긴 상품 설명, 재고 · 재처리 일괄 요청) → SizeBodyExceptAdmin
-  #                          관리자 경로는 대신 Content-Length 로 막는다 — 사진 업로드 11MB(UploadContentLengthLimit), 그 밖 512KB(AdminBodyContentLength).
-  #                          관리자 API 는 ADMIN 토큰이 있어야 닿고, 필드별 상한은 앱이 지킨다
+  #   SizeRestrictions_BODY  본문 8KB 상한. 관리자 API(사진 업로드, 긴 상품 설명, 재고 · 재처리 일괄 요청)와 주문 생성(항목 50개 + 배송지, 약 10KB)은 넘을 수 있다 → SizeBodyExceptAllowed
+  #                          두 곳은 대신 Content-Length 로 막는다 — 사진 업로드 11MB(UploadContentLengthLimit), 관리자 그 밖 512KB(AdminBodyContentLength),
+  #                          주문 생성 64KB(OrderBodyContentLength). 관리자 API 는 ADMIN 토큰, 주문은 회원 토큰이 있어야 닿고, 필드별 상한은 앱이 지킨다
   #   GenericLFI_BODY        본문의 ../ 같은 경로 이동. 사진 업로드는 압축된 이미지 바이트에 우연히 ../ 가 생겨 걸린다 → BodyPatternExceptImageUpload
   #   CrossSiteScripting_BODY 본문의 XSS 패턴. 사진 바이트 · 메타데이터(XMP 의 xmlns)가 걸린다 → BodyPatternExceptImageUpload
   managed_rule_overrides = {
@@ -24,6 +24,11 @@ locals {
   size_body_label         = "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"
   admin_path_prefix       = "/api/v1/admin/"
   admin_login_path_prefix = "/api/v1/admin/session" # 토큰 없이 부르는 관리자 로그인. 8KB 예외에서 뺀다
+  order_create_path       = "/api/v1/orders"
+  # 8KB 검사에서 빼는 경로: 관리자 API 전체, 주문 생성(끝까지 일치)
+  size_body_exempt_regex = "^/api/v1/admin/|^/api/v1/orders$"
+  # 주문 생성 본문 상한 65,536바이트(64KB). 0 ~ 65536 만 맞는다
+  order_content_length_regex = "^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-6])$"
   # 관리자 API(사진 업로드 제외) 본문 상한 524,288바이트(512KB). 0 ~ 524288 만 맞는다. 부족하면 이 값을 늘린다
   admin_content_length_regex = "^([0-9]{1,5}|[1-4][0-9]{5}|5[01][0-9]{4}|52[0-3][0-9]{3}|524[01][0-9]{2}|5242[0-7][0-9]|52428[0-8])$"
 
@@ -241,10 +246,10 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
-  # 위에서 표시만 한 8KB 본문 상한을 관리자 API 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다). 관리자 API 는 아래 Content-Length 규칙이 막는다.
-  # 관리자 로그인(/api/v1/admin/session)은 토큰 없이 부를 수 있어 8KB 를 그대로 둔다
+  # 위에서 표시만 한 8KB 본문 상한을 관리자 API · 주문 생성 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다).
+  # 두 곳은 아래 Content-Length 규칙이 막는다. 관리자 로그인(/api/v1/admin/session)은 토큰 없이 부를 수 있어 8KB 를 그대로 둔다
   rule {
-    name     = "SizeBodyExceptAdmin"
+    name     = "SizeBodyExceptAllowed"
     priority = 16
 
     action {
@@ -286,9 +291,8 @@ resource "aws_wafv2_web_acl" "cloudfront" {
             statement {
               not_statement {
                 statement {
-                  byte_match_statement {
-                    positional_constraint = "STARTS_WITH"
-                    search_string         = local.admin_path_prefix
+                  regex_match_statement {
+                    regex_string = local.size_body_exempt_regex
 
                     field_to_match {
                       uri_path {}
@@ -325,7 +329,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "SizeBodyExceptAdmin"
+      metric_name                = "SizeBodyExceptAllowed"
       sampled_requests_enabled   = true
     }
   }
@@ -623,6 +627,91 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "AdminBodyContentLength"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # 8KB 검사에서 뺀 주문 생성은 Content-Length 가 없거나 64KB 를 넘으면 앱에 닿기 전에 막는다. 8KB 를 넘은 요청(라벨)만 본다
+  rule {
+    name     = "OrderBodyContentLength"
+    priority = 20
+
+    action {
+      dynamic "block" {
+        for_each = var.waf_block_mode ? [1] : []
+        content {
+          custom_response {
+            response_code            = 413
+            custom_response_body_key = "body_too_large"
+
+            dynamic "response_header" {
+              for_each = local.cors_headers
+              content {
+                name  = response_header.key
+                value = response_header.value
+              }
+            }
+          }
+        }
+      }
+
+      dynamic "count" {
+        for_each = var.waf_block_mode ? [] : [1]
+        content {}
+      }
+    }
+
+    statement {
+      and_statement {
+        statement {
+          label_match_statement {
+            scope = "LABEL"
+            key   = local.size_body_label
+          }
+        }
+
+        statement {
+          byte_match_statement {
+            positional_constraint = "EXACTLY"
+            search_string         = local.order_create_path
+
+            field_to_match {
+              uri_path {}
+            }
+
+            text_transformation {
+              priority = 0
+              type     = "NONE"
+            }
+          }
+        }
+
+        statement {
+          not_statement {
+            statement {
+              regex_match_statement {
+                regex_string = local.order_content_length_regex
+
+                field_to_match {
+                  single_header {
+                    name = "content-length"
+                  }
+                }
+
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "OrderBodyContentLength"
       sampled_requests_enabled   = true
     }
   }
