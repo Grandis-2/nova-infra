@@ -21,8 +21,9 @@ locals {
   ssrf_body_label   = "awswaf:managed:aws:core-rule-set:EC2MetaDataSSRF_Body"
   ssrf_allowed_path = "/api/v1/auth/kakao/callback"
 
-  size_body_label   = "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"
-  admin_path_prefix = "/api/v1/admin/"
+  size_body_label         = "awswaf:managed:aws:core-rule-set:SizeRestrictions_Body"
+  admin_path_prefix       = "/api/v1/admin/"
+  admin_login_path_prefix = "/api/v1/admin/session" # 토큰 없이 부르는 관리자 로그인. 8KB 예외에서 뺀다
   # 관리자 API(사진 업로드 제외) 본문 상한 524,288바이트(512KB). 0 ~ 524288 만 맞는다. 부족하면 이 값을 늘린다
   admin_content_length_regex = "^([0-9]{1,5}|[1-4][0-9]{5}|5[01][0-9]{4}|52[0-3][0-9]{3}|524[01][0-9]{2}|5242[0-7][0-9]|52428[0-8])$"
 
@@ -51,8 +52,14 @@ locals {
     body_too_large    = { code = "VALIDATION_FAILED", message = "Request body is too large." }
   }
 
-  # WAF 응답은 앱의 CORS 를 거치지 않아 헤더를 직접 단다. 값이 고정이라 프런트 출처 하나만 둔다(apex 는 www 로 308 이동한다)
-  cors_headers       = { "Access-Control-Allow-Origin" = local.frontend_origin, "Access-Control-Allow-Credentials" = "true", "Vary" = "Origin" }
+  # WAF 응답은 앱의 CORS 를 거치지 않아 헤더를 직접 단다. 값이 고정이라 프런트 출처 하나만 둔다(apex 는 www 로 308 이동한다).
+  # 브라우저 코드가 요청 ID(x-amz-cf-id, CloudFront 가 붙임)와 다시 시도할 시각(Retry-After)을 읽을 수 있게 노출한다
+  cors_headers = {
+    "Access-Control-Allow-Origin"      = local.frontend_origin
+    "Access-Control-Allow-Credentials" = "true"
+    "Access-Control-Expose-Headers"    = "Retry-After, X-Amz-Cf-Id"
+    "Vary"                             = "Origin"
+  }
   rate_limit_headers = merge(local.cors_headers, { "Retry-After" = "60" })
 
   # 관리형 그룹에서 막는 규칙. 그룹이 막으면 WAF 기본 403(HTML)이 나가므로 규칙마다 봉투 응답으로 바꿔 단다.
@@ -234,7 +241,8 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
-  # 위에서 표시만 한 8KB 본문 상한을 관리자 API 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다). 관리자 API 는 아래 Content-Length 규칙이 막는다
+  # 위에서 표시만 한 8KB 본문 상한을 관리자 API 밖에서는 다시 막는다 (관리형 그룹 10 뒤에 평가해야 라벨이 있다). 관리자 API 는 아래 Content-Length 규칙이 막는다.
+  # 관리자 로그인(/api/v1/admin/session)은 토큰 없이 부를 수 있어 8KB 를 그대로 둔다
   rule {
     name     = "SizeBodyExceptAdmin"
     priority = 16
@@ -274,11 +282,31 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         }
 
         statement {
-          not_statement {
+          or_statement {
+            statement {
+              not_statement {
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "STARTS_WITH"
+                    search_string         = local.admin_path_prefix
+
+                    field_to_match {
+                      uri_path {}
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
+                }
+              }
+            }
+
             statement {
               byte_match_statement {
                 positional_constraint = "STARTS_WITH"
-                search_string         = local.admin_path_prefix
+                search_string         = local.admin_login_path_prefix
 
                 field_to_match {
                   uri_path {}
