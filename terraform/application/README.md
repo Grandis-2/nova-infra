@@ -17,7 +17,7 @@ application/<서비스>/
 | `routes` · `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
 | `calls` · `jwt` | 호출하는 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup · ecs) |
 | `db` · `extra_databases` | DB 계정과 비밀, DB 보안 그룹 규칙 (database · secretsmanager) |
-| `redis` · `queues` · `uploads` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
+| `redis` · `queues` · `uploads` · `upload_cleanup` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
 | `generated_secrets` · `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager · iam) |
 | `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs · securitygroup) |
 
@@ -61,7 +61,8 @@ db: null                  # DB 이름
 extra_databases: {}       # 같은 계정으로 붙는 추가 DB: 속성 접두사
 redis: null               # 캐시 클러스터 키 (main)
 queues: { send: [], consume: [], dlq: [], dlq_send: [] }   # dlq: DLQ 들여다보기 · 옮기기, dlq_send: 확정 거절을 그 큐의 DLQ 에 바로 넣기(본 큐 이름)
-uploads: false            # true면 업로드 버킷 쓰기 권한
+uploads: false            # true면 업로드 버킷에 사진 올리기 권한
+upload_cleanup: false     # true면 업로드 버킷의 사진 지우기 권한 (정리 배치)
 generated_secrets: {}     # 아래 '비밀' 참고
 environment: {}
 profiling: false          # true면 프로파일(Pyroscope)을 보냄. 이미지에 /otel/pyroscope-otel.jar 가 있어야 함
@@ -78,7 +79,7 @@ be의 `application.yml.example`을 복사해 운영 값으로 고칩니다. 공�
 - `spring.application.name`, `server.port`, `management.server.port`
 - `spring.datasource.url`, `spring.data.redis.*`
 - `jwt.jwk-set-uri`, `calls`에 적은 속성, SQS 리전
-- `uploads: true`이면 `nova.upload.bucket`, `nova.upload.cdn-base-url`, `nova.upload.region`
+- `uploads: true` 또는 `upload_cleanup: true`이면 `nova.upload.bucket`, `nova.upload.cdn-base-url`, `nova.upload.region`
 
 비밀 값이나 `localhost`를 적으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
 

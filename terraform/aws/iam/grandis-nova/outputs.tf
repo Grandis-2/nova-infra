@@ -59,6 +59,7 @@ output "service_permissions" {
       dlq            = v.queues.dlq
       dlq_send       = v.queues.dlq_send
       uploads        = v.uploads
+      upload_cleanup = v.upload_cleanup
     }
   }
 }

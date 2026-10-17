@@ -1,5 +1,5 @@
 # 프런트는 Vercel 이 호스팅하므로 정적 파일 버킷은 없다.
-#   upload : 사용자 업로드 이미지. 브라우저가 presigned URL 로 PUT 하고,
+#   upload : 사용자 업로드 이미지. catalog 가 받아 버킷에 올리고(브라우저가 직접 PUT 하지 않아 CORS 도 없다),
 #            조회는 CloudFront(OAC)로만 한다. 버킷은 비공개
 #   log    : ALB, CloudFront 액세스 로그
 #   loki   : 관측 스택(obs)의 Loki 청크 · 인덱스. 설정은 obs.tf
@@ -9,7 +9,7 @@
 #
 # upload 버킷의 정책(CloudFront 읽기 + 비TLS 요청 거부)은 cdn 스택이 붙인다. CloudFront 읽기 조건에 배포 ARN 이
 # 필요한데 cdn 이 s3 에 의존하므로 여기서는 만들 수 없다. 버킷 정책은 하나뿐이라 여기서 따로 붙이면 서로 덮어쓴다.
-# cdn 이 적용되기 전까지는 버킷이 비공개 · 업로드 권한 없음(uploads: true 인 서비스 없음) 상태라 노출 경로가 없다.
+# cdn 이 적용되기 전까지는 버킷이 비공개 · 업로드 권한 없음(uploads · upload_cleanup 인 서비스 없음) 상태라 노출 경로가 없다.
 
 data "aws_caller_identity" "current" {}
 
@@ -95,19 +95,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "log" {
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
     }
-  }
-}
-
-resource "aws_s3_bucket_cors_configuration" "upload" {
-  bucket = aws_s3_bucket.this["upload"].id
-
-  # 조회는 CloudFront 로 하므로 PUT 만 연다
-  cors_rule {
-    allowed_methods = ["PUT"]
-    allowed_origins = var.upload_cors_origins
-    allowed_headers = ["*"]
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3000
   }
 }
 

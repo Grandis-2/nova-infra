@@ -10,12 +10,6 @@ variable "log_retention_days" {
   default     = 30
 }
 
-variable "upload_cors_origins" {
-  description = "upload 버킷에 presigned URL 로 PUT 할 수 있는 오리진 (프런트 주소)"
-  type        = list(string)
-  default     = ["https://grandis-nova.link", "https://www.grandis-nova.link"]
-}
-
 variable "loki_expiration_days" {
   description = "loki 버킷의 객체 만료(일). Loki compactor 가 멈췄을 때를 위한 안전망이라 보존 기간(90일)보다 길게 둔다"
   type        = number

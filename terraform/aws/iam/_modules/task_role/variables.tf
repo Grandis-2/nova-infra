@@ -42,12 +42,18 @@ variable "dlq_send_arns" {
 }
 
 variable "upload_bucket_arn" {
-  description = "이미지 업로드 버킷. uploads 가 true 일 때만 권한을 준다"
+  description = "이미지 업로드 버킷. uploads · upload_cleanup 이 true 일 때만 권한을 준다"
   type        = string
 }
 
 variable "uploads" {
-  description = "업로드 버킷에 쓸 수 있는지 (presigned URL 서명)"
+  description = "업로드 버킷에 사진을 올릴 수 있는지 (catalog 의 PutObject)"
+  type        = bool
+  default     = false
+}
+
+variable "upload_cleanup" {
+  description = "업로드 버킷의 사진을 지울 수 있는지 (정리 배치의 DeleteObject)"
   type        = bool
   default     = false
 }
