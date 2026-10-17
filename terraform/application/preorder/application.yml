@@ -52,7 +52,7 @@ nova:
       concurrency: 1
       wait-seconds: 20
       visibility: 5m
-      backoff-base: 5s
+      backoff-base: 30s    # 실패는 대개 DB 장애다. DLQ 로 넘어가기 전 재수신 5회가 장애 조치보다 길게(약 6~12분)
       backoff-max: 5m
     dead-letter:
       enabled: true
@@ -65,6 +65,9 @@ nova:
     refresh-interval: 30s
   external-mock:
     scope: preorder
+  # 결제 기한이 지난 예약을 만료 취소한다. 태스크마다 돌지만 예약 행을 잠근 뒤 다시 확인해 한 번만 처리된다
+  preorder-expiry:
+    enabled: true
 management:
   endpoints:
     web:
