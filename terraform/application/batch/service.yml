@@ -8,3 +8,5 @@ deployment: singleton           # 옛 태스크를 먼저 내려 같은 작업�
 db: shop
 extra_databases:
   external_mock: external-mock.datasource    # 같은 DB 서버. batch 계정은 SELECT 만 할 수 있다
+
+upload_cleanup: true            # 안 쓰는 사진 정리. 업로드 버킷 products/ · promotions/ 에서 지울 권한과 nova.upload.* 설정을 받는다

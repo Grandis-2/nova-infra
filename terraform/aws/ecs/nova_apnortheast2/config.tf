@@ -51,8 +51,8 @@ locals {
         "jwt.jwk-set-allow-http" = "true"
       } : {},
       { for p, to in v.calls : p => local.service_urls[to] },
-      # 이미지 업로드. 앱이 이 버킷에 presigned PUT URL 을 서명하고, 조회 URL 은 CDN 주소 + 키로 만든다
-      v.uploads ? {
+      # 이미지 업로드 버킷. catalog 는 여기에 올리고 조회 URL 을 CDN 주소 + 키로 만든다. 정리 배치는 같은 버킷에서 지운다
+      v.uploads || v.upload_cleanup ? {
         "nova.upload.bucket"       = data.terraform_remote_state.s3.outputs.upload_bucket.id
         "nova.upload.cdn-base-url" = data.terraform_remote_state.cdn.outputs.image_base_url
         "nova.upload.region"       = var.aws_region

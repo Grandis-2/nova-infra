@@ -84,20 +84,33 @@ resource "aws_iam_role_policy" "queue" {
   })
 }
 
-# 앱이 presigned URL 에 서명하면 브라우저가 버킷에 직접 PUT 한다. 조회는 CloudFront(cdn 스택)
+# 업로드 버킷의 사진. catalog 가 올리고(uploads), 정리 배치가 안 쓰는 사진을 지운다(upload_cleanup). 조회는 CloudFront(cdn 스택)
+# 키는 catalog ImagePurpose 의 접두 아래에만 생긴다. 용도를 늘리면 여기도 더한다 — 빠지면 그 용도의 업로드가 AccessDenied(503)다
+locals {
+  upload_objects = [for p in ["products/", "promotions/"] : "${var.upload_bucket_arn}/${p}*"]
+}
+
 resource "aws_iam_role_policy" "upload" {
-  count = var.uploads ? 1 : 0
+  count = var.uploads || var.upload_cleanup ? 1 : 0
 
   name = "upload"
   role = aws_iam_role.this.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid      = "UploadImages"
-      Effect   = "Allow"
-      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
-      Resource = "${var.upload_bucket_arn}/*"
-    }]
+    Statement = concat(
+      var.uploads ? [{
+        Sid      = "PutImages"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = local.upload_objects
+      }] : [],
+      var.upload_cleanup ? [{
+        Sid      = "DeleteImages"
+        Effect   = "Allow"
+        Action   = ["s3:DeleteObject"]
+        Resource = local.upload_objects
+      }] : [],
+    )
   })
 }

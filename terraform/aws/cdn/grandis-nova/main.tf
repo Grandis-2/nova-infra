@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # cdn — 업로드 이미지 조회 (cdn.grandis-nova.link → S3 업로드 버킷)
 #
-#   업로드 : 브라우저 → presigned URL 로 버킷에 직접 PUT (앱이 서명)
+#   업로드 : 브라우저 → API(catalog) → 버킷 PutObject (catalog 태스크 역할)
 #   조회   : 브라우저 → CloudFront → 버킷 (OAC, 버킷은 비공개)
 #
 # WAF 는 붙이지 않는다. 읽기 전용 정적 객체라 막을 앱 로직이 없고, Web ACL 은
@@ -30,6 +30,19 @@ resource "aws_cloudfront_origin_access_control" "upload" {
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
+}
+
+# 브라우저가 Content-Type 을 추측해 사진을 다른 형식(HTML · 스크립트)으로 해석하지 않게 nosniff 를 붙인다.
+# 버킷 객체는 catalog 가 올릴 때 형식에 맞는 Content-Type 을 적는다
+resource "aws_cloudfront_response_headers_policy" "images" {
+  name    = "${local.name_prefix}-images"
+  comment = "Uploaded images: X-Content-Type-Options nosniff"
+
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+  }
 }
 
 # 쿼리 · 쿠키 · 헤더를 캐시 키에 넣지 않는다 (같은 이미지는 하나만 캐시)
@@ -73,12 +86,13 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   default_cache_behavior {
-    target_origin_id       = "upload"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"] # 조회 전용. 업로드는 presigned URL 로 버킷에 직접 한다
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    cache_policy_id        = aws_cloudfront_cache_policy.images.id
+    target_origin_id           = "upload"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD"] # 조회 전용. 업로드는 catalog 가 버킷에 한다
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.images.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.images.id
   }
 
   restrictions {
@@ -105,7 +119,7 @@ resource "aws_cloudfront_distribution" "this" {
   }
 }
 
-# 업로드 버킷은 이 배포의 읽기만 허용한다 (쓰기는 앱 역할의 presigned URL)
+# 업로드 버킷은 이 배포의 읽기만 허용한다 (올리기 · 지우기는 서비스 태스크 역할 — iam 스택)
 data "aws_iam_policy_document" "upload" {
   statement {
     sid       = "AllowCloudFrontRead"

@@ -21,7 +21,7 @@ locals {
   _service_fields = [
     "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "stop_timeout", "scaling",
     "health", "routes", "jwt", "calls", "db", "extra_databases", "redis", "queues", "uploads", "generated_secrets", "environment",
-    "profiling",
+    "profiling", "upload_cleanup",
   ]
 
   # 형식 검사. 오류가 있으면 services.name 계산에서 해당 폴더 이름과 함께 plan 을 멈춘다
@@ -37,7 +37,7 @@ locals {
       contains(["rolling", "blue_green", "singleton"], try(s.deployment, "rolling")) ? "" : "deployment 는 rolling | blue_green | singleton",
       contains(["sign", "verify", "none"], try(s.jwt, "none")) ? "" : "jwt 는 sign | verify | none",
       # 오타(treu) · 문자열("true")이 조용히 false 가 되지 않게 YAML 불리언만 받는다. 비우면(null) false
-      contains(["true", "false", "null"], jsonencode(try(s.profiling, false))) ? "" : "profiling 은 true | false",
+      [for f in ["profiling", "upload_cleanup"] : contains(["true", "false", "null"], jsonencode(try(s[f], false))) ? "" : "${f} 는 true | false"],
       try(s.deployment, "rolling") != "blue_green" || length(try(s.routes, [])) > 0 ? "" : "blue_green 은 routes 가 필요",
       length(try(s.routes, [])) == 0 || can(tonumber(s.health.port)) ? "" : "routes 가 있으면 health(port, path) 가 필요",
       [for r in try(s.routes, []) : length(try(r.paths, [])) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
@@ -120,7 +120,8 @@ locals {
         dlq_send = [for q in try(s.queues.dlq_send, []) : tostring(q)]
       }
       generated_secrets = { for e, t in try(s.generated_secrets, {}) : e => tostring(t) } # 환경변수 -> 만드는 방식
-      uploads           = try(tobool(s.uploads), false)                                   # 이미지 업로드 버킷 쓰기 권한
+      uploads           = try(tobool(s.uploads), false)                                   # 업로드 버킷에 사진 올리기 권한 (catalog)
+      upload_cleanup    = try(s.upload_cleanup, false) == true                            # 업로드 버킷의 사진 지우기 권한 (정리 배치)
       environment       = { for e, v in try(s.environment, {}) : e => tostring(v) }
     }
   }

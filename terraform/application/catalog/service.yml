@@ -35,6 +35,6 @@ redis: main                     # 상품 · 가격 · 홍보 캐시
 queues:
   send: [order-events, preorder-events]   # 아웃박스. 상품 등록 → preorder 회차 · 차수, order 초기 재고
 
-uploads: true                   # 상품 이미지. presigned PUT 서명 권한과 nova.upload.* 설정을 받는다
+uploads: true                   # 상품 · 홍보 사진. 업로드 버킷 products/ · promotions/ 에 올릴 권한과 nova.upload.* 설정을 받는다
 
 profiling: true                 # 프로파일(Pyroscope)을 보낸다. preorder 에서 부담을 잰 뒤 넓혔다(CPU +0.2%p, 메모리 약 60 MiB)
