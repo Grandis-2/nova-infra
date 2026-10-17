@@ -6,7 +6,7 @@ terraform/application/*/service.yml 의 routes 에 ALB 와 같은 방식(우선�
 
   다른 서비스로 가는 API   ALB 규칙이 다른 서비스의 경로를 먼저 잡는다
   규칙이 없는 API          어느 규칙에도 걸리지 않아 ALB 가 404 로 끝낸다
-  본문 상한을 넘을 수 있는 API  요청 타입의 @Size 상한으로 셈한 최대 본문이 WAF 상한(공개 8KB, 관리자 512KB)을 넘는다
+  본문 상한을 넘을 수 있는 API  요청 타입의 @Size 상한으로 셈한 최대 본문이 WAF 상한(공개 8KB, 주문 생성 64KB, 관리자 512KB)을 넘는다
   상한을 셀 수 없는 공개 API    상한이 없는 필드가 있어 최대 크기를 정할 수 없다(참고, 실패로 치지 않는다)
 
 사용: route_check.py --be <be 저장소 경로> [--infra <이 저장소 경로>] [--report <markdown 파일>]
@@ -28,6 +28,7 @@ PUBLIC_BODY_LIMIT = 8 * 1024  # WAF 관리형 SizeRestrictions_BODY
 ADMIN_BODY_LIMIT = 512 * 1024  # edge waf.tf AdminBodyContentLength
 ADMIN_PREFIX = "/api/v1/admin/"
 ADMIN_LOGIN_PREFIX = "/api/v1/admin/session"  # 토큰 없이 부르므로 공개 상한을 받는다
+BODY_LIMIT_OVERRIDES = {("POST", "/api/v1/orders"): 64 * 1024}  # waf.tf OrderBodyContentLength
 UPLOADS = {("POST", "/api/v1/admin/images")}  # 사진(멀티파트) — 본문 상한을 따로 둔다 (waf.tf UploadContentLengthLimit)
 HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 
@@ -246,7 +247,7 @@ def main() -> int:
                 misrouted.append(({**e, "method": method}, hit))
         if e["body"] and (e["method"], e["path"]) not in UPLOADS:
             admin = e["path"].startswith(ADMIN_PREFIX) and not e["path"].startswith(ADMIN_LOGIN_PREFIX)
-            limit = ADMIN_BODY_LIMIT if admin else PUBLIC_BODY_LIMIT
+            limit = BODY_LIMIT_OVERRIDES.get((e["method"], e["path"]), ADMIN_BODY_LIMIT if admin else PUBLIC_BODY_LIMIT)
             size, complete = max_body(sources, consts, e["body"])
             if size > limit:
                 too_large.append((e, size, limit))
