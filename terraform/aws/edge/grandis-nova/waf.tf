@@ -7,8 +7,10 @@ locals {
     { name = "AWSManagedRulesAmazonIpReputationList", priority = 30 },
   ]
 
-  # 관리형 그룹은 막지 않고 표시(label)만 한다. 그룹이 직접 막으면 WAF 기본 403(HTML)이 나가고, 규칙마다 봉투 응답을 달면
-  # 응답 헤더가 웹 ACL 한도(100개)를 넘는다. 그래서 막을 라벨을 ManagedRuleBlock 하나가 모아 봉투 응답으로 막는다.
+  # 관리형 그룹의 알려진 규칙은 규칙마다 표시(count)만 하게 한다. 그룹 전체를 count 로 바꾸면 그룹 안의 차단 규칙에 걸린 순간
+  # 그룹 평가가 멈춰 뒤 규칙의 라벨이 붙지 않는다(예외 경로에서 악성 본문이 빠진다). 규칙마다 count 면 모든 라벨이 붙는다.
+  # 막는 것은 ManagedRuleBlock 하나가 라벨을 모아 봉투 응답으로 한다. 규칙마다 봉투 응답을 달면 응답 헤더가 웹 ACL 한도(100개)를 넘는다.
+  # 여기 없는 규칙(AWS 가 새로 더한 것)은 그룹이 그대로 막는다(WAF 기본 403). 그때 아래 두 목록에 더한다.
   # 아래 다섯은 ManagedRuleBlock 에서 빼고 따로 다룬다(허용 경로 밖에서만 막거나, 표시만 남긴다)
   #   EC2MetaDataSSRF_BODY   카카오 콜백 본문의 redirectUri(로컬 개발이면 http://localhost:5173/…)가 걸린다 → SsrfBodyExceptKakaoCallback
   #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 받은 URL 로 서버가 요청하지 않아 표시만 남긴다
@@ -17,6 +19,22 @@ locals {
   #                          주문 생성 64KB(OrderBodyContentLength). 관리자 API 는 ADMIN 토큰, 주문은 회원 토큰이 있어야 닿고, 필드별 상한은 앱이 지킨다
   #   GenericLFI_BODY        본문의 ../ 같은 경로 이동. 사진 업로드는 압축된 이미지 바이트에 우연히 ../ 가 생겨 걸린다 → BodyPatternExceptImageUpload
   #   CrossSiteScripting_BODY 본문의 XSS 패턴. 사진 바이트 · 메타데이터(XMP 의 xmlns)가 걸린다 → BodyPatternExceptImageUpload
+  managed_count_rules = {
+    AWSManagedRulesCommonRuleSet = [
+      "NoUserAgent_HEADER", "UserAgent_BadBots_HEADER", "SizeRestrictions_QUERYSTRING", "SizeRestrictions_Cookie_HEADER", "SizeRestrictions_BODY",
+      "SizeRestrictions_URIPATH", "EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE", "EC2MetaDataSSRF_URIPATH", "EC2MetaDataSSRF_QUERYARGUMENTS",
+      "GenericLFI_QUERYARGUMENTS", "GenericLFI_URIPATH", "GenericLFI_BODY", "RestrictedExtensions_URIPATH", "RestrictedExtensions_QUERYARGUMENTS",
+      "GenericRFI_QUERYARGUMENTS", "GenericRFI_BODY", "GenericRFI_URIPATH", "CrossSiteScripting_COOKIE", "CrossSiteScripting_QUERYARGUMENTS",
+      "CrossSiteScripting_BODY", "CrossSiteScripting_URIPATH",
+    ]
+    AWSManagedRulesKnownBadInputsRuleSet = [
+      "JavaDeserializationRCE_BODY", "JavaDeserializationRCE_URIPATH", "JavaDeserializationRCE_QUERYSTRING", "JavaDeserializationRCE_HEADER",
+      "Host_localhost_HEADER", "PROPFIND_METHOD", "ExploitablePaths_URIPATH", "Log4JRCE_QUERYSTRING", "Log4JRCE_BODY", "Log4JRCE_URIPATH",
+      "Log4JRCE_HEADER", "ReactJSRCE_BODY",
+    ]
+    # AWSManagedIPDDoSList 는 AWS 기본값이 count 다
+    AWSManagedRulesAmazonIpReputationList = ["AWSManagedIPReputationList", "AWSManagedReconnaissanceList"]
+  }
   managed_label_prefix = { core = "awswaf:managed:aws:core-rule-set:", bad = "awswaf:managed:aws:known-bad-inputs:", ip = "awswaf:managed:aws:amazon-ip-list:" }
   # ManagedRuleBlock 이 막는 라벨. AWS 가 규칙(라벨)을 더하면 여기에 더한다. AWSManagedIPDDoSList 는 AWS 기본값대로 표시만 한다
   #   aws wafv2 describe-managed-rule-group --scope CLOUDFRONT --region us-east-1 --vendor-name AWS --name <그룹> --query AvailableLabels
@@ -117,15 +135,33 @@ resource "aws_wafv2_web_acl" "cloudfront" {
       name     = rule.value.name
       priority = rule.value.priority
 
-      # 표시만 한다. 막는 것은 ManagedRuleBlock 과 아래 예외 규칙들이 라벨을 보고 한다
+      # 알려진 규칙은 아래에서 규칙마다 count 로 바꾸므로, 그룹이 직접 막는 것은 목록에 없는(새) 규칙뿐이다
       override_action {
-        count {}
+        dynamic "none" {
+          for_each = var.waf_block_mode ? [1] : []
+          content {}
+        }
+
+        dynamic "count" {
+          for_each = var.waf_block_mode ? [] : [1]
+          content {}
+        }
       }
 
       statement {
         managed_rule_group_statement {
           vendor_name = "AWS"
           name        = rule.value.name
+
+          dynamic "rule_action_override" {
+            for_each = lookup(local.managed_count_rules, rule.value.name, [])
+            content {
+              name = rule_action_override.value
+              action_to_use {
+                count {}
+              }
+            }
+          }
         }
       }
 
