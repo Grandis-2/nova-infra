@@ -9,6 +9,18 @@ application/<서비스>/
 └── secrets.sops.yml   외부 비밀 암호화본 (선택)
 ```
 
+`service.yml`의 각 필드로 다음 리소스가 만들어집니다(괄호 안은 해당 스택).
+
+| 필드 | 만들어지는 것 |
+| --- | --- |
+| `cpu` · `memory` · `port` · `deployment` · `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
+| `routes` · `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
+| `calls` · `jwt` | 호출하는 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup · ecs) |
+| `db` · `extra_databases` | DB 계정과 비밀, DB 보안 그룹 규칙 (database · secretsmanager) |
+| `redis` · `queues` · `uploads` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
+| `generated_secrets` · `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager · iam) |
+| `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs · securitygroup) |
+
 ## service.yml
 
 ```yaml
