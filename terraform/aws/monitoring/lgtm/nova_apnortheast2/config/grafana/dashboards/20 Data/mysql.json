@@ -381,7 +381,7 @@
     {
       "type": "stat",
       "title": "느린 쿼리",
-      "description": "선택한 기간 동안 long_query_time 을 넘은 쿼리 수. 어떤 SQL 인지는 아래 상위 SQL",
+      "description": "선택한 기간 동안 long_query_time 을 넘은 쿼리 수. 어떤 SQL 인지는 아래 상위 SQL 느린 쿼리 기준은 long_query_time(지금 1초)이다.",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -449,7 +449,7 @@
       "id": 101,
       "type": "stat",
       "title": "버퍼 풀 사용률",
-      "description": "데이터가 들어 있는 버퍼 풀 페이지 비율. 계속 100% 에 붙어 있고 적중률이 떨어지면 innodb_buffer_pool_size 가 작다",
+      "description": "데이터가 들어 있는 버퍼 풀 페이지 비율. 오래 돈 DB 는 100% 가까이 차는 것이 정상이다. 높은 것만으로는 문제가 아니고, 적중률이 함께 떨어질 때 innodb_buffer_pool_size 가 작은 것이다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -461,16 +461,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.95
-              },
-              {
-                "color": "red",
-                "value": 0.99
               }
             ]
           },
@@ -568,7 +560,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval])",
+          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / (rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval]) > 0)",
           "legendFormat": ""
         }
       ],
@@ -635,7 +627,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "increase(mysql_global_status_created_tmp_disk_tables{job=\"mysqld\"}[$__range]) / increase(mysql_global_status_created_tmp_tables{job=\"mysqld\"}[$__range])",
+          "expr": "increase(mysql_global_status_created_tmp_disk_tables{job=\"mysqld\"}[$__range]) / (increase(mysql_global_status_created_tmp_tables{job=\"mysqld\"}[$__range]) > 0)",
           "legendFormat": ""
         }
       ],
@@ -649,7 +641,7 @@
     {
       "type": "stat",
       "title": "max_connections",
-      "description": "RDS 는 인스턴스 메모리로 정해진다(DBInstanceClassMemory / 12582880). 파라미터 그룹에서 바꿀 수 있다",
+      "description": "동시에 열 수 있는 연결 수 상한. 서비스 태스크 최대 수 × 커넥션 풀 크기의 합보다 커야 한다. RDS 는 인스턴스 메모리로 정해지고(DBInstanceClassMemory / 12582880) 파라미터 그룹에서 바꾼다. NCP 는 콘솔의 DB Config 에서 바꾼다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -707,7 +699,7 @@
     {
       "type": "stat",
       "title": "mysqld 메모리",
-      "description": "mysqld 가 지금 잡고 있는 메모리(performance_schema 메모리 계측 합). 버퍼 풀 포함. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "mysqld 가 지금 잡고 있는 메모리(performance_schema 메모리 계측 합). 버퍼 풀 포함. performance_schema 를 읽는다(NCP · RDS).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -987,7 +979,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=\"rollback\"}[$__rate_interval])) / sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=~\"commit|rollback\"}[$__rate_interval]))",
+          "expr": "sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=\"rollback\"}[$__rate_interval])) / (sum(rate(mysql_global_status_handlers_total{job=\"mysqld\", handler=~\"commit|rollback\"}[$__rate_interval])) > 0)",
           "legendFormat": "롤백 비율"
         }
       ],
@@ -1015,7 +1007,7 @@
     {
       "type": "table",
       "title": "상위 SQL (선택한 기간, 총 시간 순)",
-      "description": "SQL 형태(다이제스트)별 합계. 값 자리는 ? 로 바뀌어 있다. 검사 행 / 보낸 행이 크면 인덱스를 확인하고, 인덱스 없이가 0 이 아니면 EXPLAIN 을 본다. 최근 하루 동안 본 것 중 시간 순 100개를 모은다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "SQL 형태(다이제스트)별 합계. 값 자리는 ? 로 바뀌어 있다. 검사 행 / 보낸 행이 크면 인덱스를 확인하고, 인덱스 없이가 0 이 아니면 EXPLAIN 을 본다. 최근 하루 동안 본 것 중 시간 순 100개를 모은다. performance_schema 를 읽는다(NCP · RDS).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1298,7 +1290,7 @@
     {
       "type": "timeseries",
       "title": "SQL 별 시간 (상위 10)",
-      "description": "초당 쓴 실행 시간. 1 이면 평균 한 연결이 그 SQL 만 계속 돌린 것과 같다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "초당 쓴 실행 시간. 1 이면 평균 한 연결이 그 SQL 만 계속 돌린 것과 같다. performance_schema 를 읽는다(NCP · RDS).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1349,7 +1341,7 @@
     {
       "type": "timeseries",
       "title": "SQL 별 실행 수 (상위 10)",
-      "description": "RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "performance_schema 를 읽는다(NCP · RDS).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1650,8 +1642,8 @@
     {
       "id": 106,
       "type": "timeseries",
-      "title": "연결 메모리",
-      "description": "모든 연결이 쓰는 메모리(global_connection_memory). 연결 수와 같이 오르면 연결별 버퍼가 크다",
+      "title": "버퍼 풀 크기 · 사용",
+      "description": "설정한 버퍼 풀 크기(innodb_buffer_pool_size)와 실제로 데이터 · 변경 대기(dirty) 페이지가 차지한 바이트. 데이터가 크기에 붙고 적중률이 떨어지면 크기를 늘린다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1684,8 +1676,26 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "mysql_global_status_global_connection_memory{job=\"mysqld\"}",
-          "legendFormat": "연결 메모리"
+          "expr": "mysql_global_variables_innodb_buffer_pool_size{job=\"mysqld\"}",
+          "legendFormat": "크기"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "mysql_global_status_innodb_buffer_pool_bytes_data{job=\"mysqld\"}",
+          "legendFormat": "데이터"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "C",
+          "expr": "mysql_global_status_innodb_buffer_pool_bytes_dirty{job=\"mysqld\"}",
+          "legendFormat": "dirty"
         }
       ],
       "gridPos": {
@@ -1800,7 +1810,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval])",
+          "expr": "1 - rate(mysql_global_status_innodb_buffer_pool_reads{job=\"mysqld\"}[$__rate_interval]) / (rate(mysql_global_status_innodb_buffer_pool_read_requests{job=\"mysqld\"}[$__rate_interval]) > 0)",
           "legendFormat": "적중률"
         }
       ],
@@ -2010,7 +2020,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "rate(mysql_global_status_innodb_row_lock_time{job=\"mysqld\"}[$__rate_interval]) / rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval]) / 1000",
+          "expr": "rate(mysql_global_status_innodb_row_lock_time{job=\"mysqld\"}[$__rate_interval]) / (rate(mysql_global_status_innodb_row_lock_waits{job=\"mysqld\"}[$__rate_interval]) > 0) / 1000",
           "legendFormat": "평균"
         }
       ],
@@ -2025,7 +2035,7 @@
     {
       "type": "timeseries",
       "title": "느린 쿼리 · 임시 디스크 테이블",
-      "description": "0 이 아니면 상위 SQL 표에서 해당 SQL 을 찾아 실행 계획(EXPLAIN)을 본다",
+      "description": "0 이 아니면 상위 SQL 표에서 해당 SQL 을 찾아 실행 계획(EXPLAIN)을 본다 느린 쿼리 기준은 long_query_time(지금 1초)이다.",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -2346,7 +2356,7 @@
     {
       "type": "timeseries",
       "title": "mysqld 메모리 (상위 이벤트)",
-      "description": "메모리를 가장 많이 잡은 내부 영역. 보통 innodb 버퍼 풀이 맨 위다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "메모리를 가장 많이 잡은 내부 영역. 보통 innodb 버퍼 풀이 맨 위다. performance_schema 를 읽는다(NCP · RDS).",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
