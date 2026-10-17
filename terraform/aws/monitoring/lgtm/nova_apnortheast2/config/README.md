@@ -245,7 +245,7 @@ flowchart LR
 | `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. TPS · 5xx · P50/P95/P99 · 응답 시간 히트맵, DB TPS · 연결 사용률 · ALB 연결 · 새로 뜬 태스크 · DLQ · ERROR 로그, 서비스별 현황과 지금 울리는 경보, 서비스 맵, 서비스별 P99 · 동시 처리 요청. SLO (`nova-slo`): 서비스별 30일 가용성 · 응답 시간, 남은 오류 예산, 소진 속도 |
 | `05 Business` | 업무 (`nova-business`) | 예약 접수가 실제로 되는지 본다. 접수 중인 회차, 일반 회원 신규 예약, 최근 20분 접수 상태(접수 중인데 0건이면 "멈춤 의심"), 거절 · 오류 비율, 결과별 · 경로별 신규 예약, 예약 상태별 수, 결제 기한 지난 예약, DLQ · 오픈 알림 대기 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`)의 APM 화면. Apdex · 엔드포인트 표(시간 비중 순) · 처리 시간 구성(DB · 외부 · 메시징 · 자체) · 서비스 맵과 호출 상대 · 지난주 대비 · 오류 그룹. JVM · 외부 호출 · HikariCP 는 접힌 행에 있다 |
-| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS · 비동기 흐름 (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL · 잠금과 RDS 서버 자원, 캐시 적중률 · 메모리, 큐마다 보내는 서비스와 처리하는 서비스, 처리 오류율 · 처리 시간(트레이스) · 적체 · DLQ |
+| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS · 비동기 흐름 (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL, 버퍼 풀 사용률 · 적중률 · 디스크 I/O · 풀 스캔 · 테이블 캐시 · 잠금. NCP 에서 나오지 않는 패널(processlist · innodb_metrics · RDS 서버 자원)은 맨 아래 "RDS 전용" 행에 접어 둔다. 캐시 적중률 · 메모리, 큐마다 보내는 서비스와 처리하는 서비스, 처리 오류율 · 처리 시간(트레이스) · 적체 · DLQ |
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), 접근 로그로 본 요청 구간(CloudFront 응답 시간 · 구간별 시간 · 캐시 결과 · 엣지 위치별, 느린 요청과 5xx 로그에서 앱 트레이스로), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
 | `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
 | `50 URLs` | URL 목록 (`nova-url`) · URL 그리드 (`nova-url-grid`) · URL 상세 (`nova-url-detail`) | 실제 요청을 API(메서드 + 경로)별로 본다. 목록은 API × 시간 히트맵, API 표(요청 수 · 지난주 대비 증감 · 성공률 · 4xx · 1초 초과 비율 · P95 · P99 · P99 증감), 새로 생긴 · 사라진 API(최근 7일), 서비스 시간대 잔디, 경로마다 펼쳐 보는 행. 그리드는 API 마다 카드 하나. 상세는 401 · 403 · 404 · 429 수, 응답 코드별 요청량, 지연 분포, 요청량 · P99 · 성공률 지난주 대비, 시간 구성(트레이스 표본), 날짜 × 시각(KST) 잔디, 느린/오류 트레이스 |
@@ -554,8 +554,8 @@ exporter 는 `database` 원격 상태의 출력 네 개(`db_address` · `db_port
 
 | 값 | 계정 권한 | 더 켜는 것 |
 |---|---|---|
-| `ncp` | READ (PROCESS · REPLICATION CLIENT 없음) | 없음. 그 권한이 필요한 기본 수집기를 끈다 |
-| `rds` | `PROCESS` · `REPLICATION CLIENT` · `SELECT` | 다이제스트별 SQL 통계(상위 SQL), mysqld 메모리, 계정 · 상태별 연결(processlist), 교착 상태 |
+| `ncp` | READ (모든 테이블 SELECT, PROCESS · REPLICATION CLIENT 없음) | 다이제스트별 SQL 통계(상위 SQL), mysqld 메모리. PROCESS 가 필요한 기본 수집기는 끈다 |
+| `rds` | `PROCESS` · `REPLICATION CLIENT` · `SELECT` | ncp 것에 더해 계정 · 상태별 연결(processlist), 교착 상태 · 잠금 시간 초과(innodb_metrics) |
 
 RDS 는 파라미터 그룹에서 `performance_schema` 를 켜야 상위 SQL 이 나온다. 정적 파라미터라 바꾸려면 재부팅해야 하므로 인스턴스를 만들 때 켜 둔다.
 다이제스트 지표는 SQL 형태마다 한 벌씩 생긴다. 그래서 최근 하루 동안 관측된 것 중 시간 순으로 100개만 모으고, 대시보드에서 쓰지 않는 항목은 Collector 가 버린다(`collector.yaml` 의 mysqld `metric_relabel_configs`).

@@ -110,30 +110,33 @@ locals {
   obs_pyroscope = contains(keys(local.obs_data_dirs), "pyroscope")
 
   # mysqld_exporter 수집기는 DB 플랫폼이 주는 권한에 맞춘다(var.obs_mysql_platform)
-  #   ncp: 계정이 READ 뿐이라 PROCESS · REPLICATION CLIENT 가 필요한 기본 수집기를 끈다(켜 두면 긁을 때마다 오류를 남긴다).
-  #        slave_status(REPLICATION CLIENT, 복제도 없다) · info_schema.innodb_cmp/cmpmem(PROCESS) · info_schema.query_response_time(Percona 전용)
-  #   rds: 계정에 PROCESS · REPLICATION CLIENT · performance_schema 읽기를 주고 아래를 더 켠다
+  #   공통: performance_schema 는 SELECT 만 있으면 읽힌다(ncp 의 READ 는 모든 테이블 SELECT)
   #        perf_schema.eventsstatements — 다이제스트(SQL 형태)별 실행 수 · 시간 · 검사 행. 상위 SQL 표. 최근 하루 동안 본 것 중 시간 순 100개
   #        perf_schema.memory_events    — mysqld 내부 메모리 사용(이벤트별)
+  #   ncp: 계정이 READ 뿐이라 PROCESS · REPLICATION CLIENT 가 필요한 기본 수집기를 끈다(켜 두면 긁을 때마다 오류를 남긴다).
+  #        slave_status(REPLICATION CLIENT, 복제도 없다) · info_schema.innodb_cmp/cmpmem(PROCESS) · info_schema.query_response_time(Percona 전용)
+  #   rds: 계정에 PROCESS · REPLICATION CLIENT 를 주고 아래를 더 켠다
   #        info_schema.processlist      — 상태 · 사용자별 연결과 실행 시간(어느 서비스 계정이 연결을 쥐고 있나, 오래 도는 쿼리)
   #        info_schema.innodb_metrics   — 교착 상태 · 잠금 대기 시간 초과
   #        performance_schema 는 RDS 파라미터 그룹에서 켜져 있어야 한다(정적 값이라 바꾸면 재부팅)
+  obs_mysqld_perf_schema = [
+    "--collect.perf_schema.eventsstatements",
+    "--collect.perf_schema.eventsstatements.limit=100",
+    "--collect.perf_schema.memory_events",
+  ]
   obs_mysqld_collectors = {
-    ncp = [
+    ncp = concat(local.obs_mysqld_perf_schema, [
       "--no-collect.slave_status",
       "--no-collect.info_schema.innodb_cmp",
       "--no-collect.info_schema.innodb_cmpmem",
       "--no-collect.info_schema.query_response_time",
-    ]
-    rds = [
+    ])
+    rds = concat(local.obs_mysqld_perf_schema, [
       "--no-collect.info_schema.query_response_time",
-      "--collect.perf_schema.eventsstatements",
-      "--collect.perf_schema.eventsstatements.limit=100",
-      "--collect.perf_schema.memory_events",
       "--collect.info_schema.processlist",
       "--no-collect.info_schema.processlist.processes_by_host",
       "--collect.info_schema.innodb_metrics",
-    ]
+    ])
   }
 
   # 경보 토픽은 monitoring/cloudwatch 스택이 만든다 (Chatbot → Slack 이 이미 구독)
