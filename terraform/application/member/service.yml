@@ -18,10 +18,12 @@ health:
   matcher: "200"
 
 routes:
-  # 우선순위가 가장 낮다. 다른 규칙에 걸리지 않은 /api/v1/* 는 모두 member 가 받는다.
+  # member 가 가진 자원만 받는다. 어느 규칙에도 걸리지 않은 경로는 ALB 가 404 로 끝낸다(새 API 의 경로 누락이 다른 서비스의 401 · 404 로 숨지 않게)
   # /.well-known/jwks.json 은 공개키라 열어 둔다. /internal/* 은 ALB 에 열지 않는다 (서비스끼리 Service Connect 로만)
   - priority: 90
-    paths: ["/api/v1/*", "/.well-known/*"]
+    paths: ["/api/v1/auth*", "/api/v1/me*", "/api/v1/session*", "/api/v1/notifications*"]
+  - priority: 91
+    paths: ["/api/v1/admin/members*", "/api/v1/admin/session*", "/.well-known/*"]
 
 jwt: sign                       # JWKS 를 게시한다. verify 인 서비스는 member 접근이 자동으로 열린다
 db: shop
