@@ -210,7 +210,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "(max(nova_preorder_campaigns_accepting) > bool 0) * ((sum(increase(nova_preorder_created_total{result=\"success\",channel=\"user\"}[20m])) or vector(0)) == bool 0)",
+          "expr": "((max(nova_preorder_campaigns_accepting) or vector(0)) > bool 0) * ((sum(increase(nova_preorder_created_total{result=\"success\",channel=\"user\"}[20m])) or vector(0)) == bool 0)",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -293,7 +293,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum(increase(nova_preorder_created_total{result=~\"rejected|error\"}[$__range])) / sum(increase(nova_preorder_created_total[$__range]))",
+          "expr": "(sum(increase(nova_preorder_created_total{result=~\"rejected|error\"}[$__range])) or vector(0)) / (sum(increase(nova_preorder_created_total[$__range])) > 0)",
           "legendFormat": "",
           "instant": true,
           "range": false
