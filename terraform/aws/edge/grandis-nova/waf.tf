@@ -7,7 +7,9 @@ locals {
     { name = "AWSManagedRulesAmazonIpReputationList", priority = 30 },
   ]
 
-  # 그룹 안에서 차단 대신 표시(label)만 하는 규칙. BODY 둘은 아래 규칙이 허용 경로 밖에서 다시 막는다
+  # 관리형 그룹은 막지 않고 표시(label)만 한다. 그룹이 직접 막으면 WAF 기본 403(HTML)이 나가고, 규칙마다 봉투 응답을 달면
+  # 응답 헤더가 웹 ACL 한도(100개)를 넘는다. 그래서 막을 라벨을 ManagedRuleBlock 하나가 모아 봉투 응답으로 막는다.
+  # 아래 다섯은 ManagedRuleBlock 에서 빼고 따로 다룬다(허용 경로 밖에서만 막거나, 표시만 남긴다)
   #   EC2MetaDataSSRF_BODY   카카오 콜백 본문의 redirectUri(로컬 개발이면 http://localhost:5173/…)가 걸린다 → SsrfBodyExceptKakaoCallback
   #   EC2MetaDataSSRF_COOKIE 프런트(Auth.js) 쿠키에 URL 이 담겨 걸린다. API 는 받은 URL 로 서버가 요청하지 않아 표시만 남긴다
   #   SizeRestrictions_BODY  본문 8KB 상한. 관리자 API(사진 업로드, 긴 상품 설명, 재고 · 재처리 일괄 요청)와 주문 생성(항목 50개 + 배송지, 약 10KB)은 넘을 수 있다 → SizeBodyExceptAllowed
@@ -15,9 +17,23 @@ locals {
   #                          주문 생성 64KB(OrderBodyContentLength). 관리자 API 는 ADMIN 토큰, 주문은 회원 토큰이 있어야 닿고, 필드별 상한은 앱이 지킨다
   #   GenericLFI_BODY        본문의 ../ 같은 경로 이동. 사진 업로드는 압축된 이미지 바이트에 우연히 ../ 가 생겨 걸린다 → BodyPatternExceptImageUpload
   #   CrossSiteScripting_BODY 본문의 XSS 패턴. 사진 바이트 · 메타데이터(XMP 의 xmlns)가 걸린다 → BodyPatternExceptImageUpload
-  managed_rule_overrides = {
-    AWSManagedRulesCommonRuleSet = ["EC2MetaDataSSRF_BODY", "EC2MetaDataSSRF_COOKIE", "SizeRestrictions_BODY", "GenericLFI_BODY", "CrossSiteScripting_BODY"]
-  }
+  managed_label_prefix = { core = "awswaf:managed:aws:core-rule-set:", bad = "awswaf:managed:aws:known-bad-inputs:", ip = "awswaf:managed:aws:amazon-ip-list:" }
+  # ManagedRuleBlock 이 막는 라벨. AWS 가 규칙(라벨)을 더하면 여기에 더한다. AWSManagedIPDDoSList 는 AWS 기본값대로 표시만 한다
+  #   aws wafv2 describe-managed-rule-group --scope CLOUDFRONT --region us-east-1 --vendor-name AWS --name <그룹> --query AvailableLabels
+  managed_block_labels = concat(
+    [for l in [
+      "NoUserAgent_Header", "BadBots_Header", "SizeRestrictions_QueryString", "SizeRestrictions_Cookie_Header", "SizeRestrictions_URIPath",
+      "EC2MetaDataSSRF_URIPath", "EC2MetaDataSSRF_QueryArguments", "GenericLFI_QueryArguments", "GenericLFI_URIPath",
+      "RestrictedExtensions_URIPath", "RestrictedExtensions_QueryArguments", "GenericRFI_QueryArguments", "GenericRFI_Body", "GenericRFI_URIPath",
+      "CrossSiteScripting_Cookie", "CrossSiteScripting_QueryArguments", "CrossSiteScripting_URIPath",
+    ] : "${local.managed_label_prefix.core}${l}"],
+    [for l in [
+      "JavaDeserializationRCE_Body", "JavaDeserializationRCE_URIPath", "JavaDeserializationRCE_QueryString", "JavaDeserializationRCE_Header",
+      "Host_Localhost_Header", "Propfind_Method", "ExploitablePaths_URIPath",
+      "Log4JRCE_QueryString", "Log4JRCE_Body", "Log4JRCE_URIPath", "Log4JRCE_Header", "ReactJSRCE_Body",
+    ] : "${local.managed_label_prefix.bad}${l}"],
+    [for l in ["AWSManagedIPReputationList", "AWSManagedReconnaissanceList"] : "${local.managed_label_prefix.ip}${l}"],
+  )
   ssrf_body_label   = "awswaf:managed:aws:core-rule-set:EC2MetaDataSSRF_Body"
   ssrf_allowed_path = "/api/v1/auth/kakao/callback"
 
@@ -50,11 +66,12 @@ locals {
 
   # WAF 가 직접 끝내는 응답. 앱의 ApiResponse 실패 봉투와 같은 모양이고(timestamp · traceId 는 null), 앱을 거치지 않았다는 표시로 details.source 를 둔다.
   # 코드는 뜻이 같으면 앱(CommonErrorCode)의 이름을 쓰고, 앱의 FORBIDDEN(권한 없음)과 다른 보안 규칙 차단은 따로 둔다.
-  # AWS 로 보내는 값이라 메시지는 ASCII 다. 화면 문구는 프런트가 code 로 정한다. 요청을 찾을 때는 응답 헤더 x-amz-cf-id 를 쓴다
+  # 메시지는 앱(CommonErrorCode)처럼 사용자에게 보여 줄 수 있는 한국어로 쓴다(프런트가 error.message 를 그대로 보여 준다).
+  # 요청을 찾을 때는 응답 헤더 x-amz-cf-id 를 쓴다
   waf_errors = {
-    request_blocked   = { code = "REQUEST_BLOCKED", message = "The request was blocked by the security policy." }
-    too_many_requests = { code = "TOO_MANY_REQUESTS", message = "Too many requests. Please retry later." }
-    body_too_large    = { code = "VALIDATION_FAILED", message = "Request body is too large." }
+    request_blocked   = { code = "REQUEST_BLOCKED", message = "보안 정책에 따라 요청이 차단되었습니다." }
+    too_many_requests = { code = "TOO_MANY_REQUESTS", message = "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." }
+    body_too_large    = { code = "VALIDATION_FAILED", message = "요청 본문이 너무 큽니다." }
   }
 
   # WAF 응답은 앱의 CORS 를 거치지 않아 헤더를 직접 단다. 값이 고정이라 프런트 출처 하나만 둔다(apex 는 www 로 308 이동한다).
@@ -66,24 +83,6 @@ locals {
     "Vary"                             = "Origin"
   }
   rate_limit_headers = merge(local.cors_headers, { "Retry-After" = "60" })
-
-  # 관리형 그룹에서 막는 규칙. 그룹이 막으면 WAF 기본 403(HTML)이 나가므로 규칙마다 봉투 응답으로 바꿔 단다.
-  # 위 managed_rule_overrides(표시만)와 AWSManagedIPDDoSList(기본이 표시만)는 뺐다. AWS 가 규칙을 더하면 그 규칙은 기본 403 으로 막는다
-  #   aws wafv2 describe-managed-rule-group --scope CLOUDFRONT --region us-east-1 --vendor-name AWS --name <그룹>
-  managed_block_rules = {
-    AWSManagedRulesCommonRuleSet = [
-      "NoUserAgent_HEADER", "UserAgent_BadBots_HEADER", "SizeRestrictions_QUERYSTRING", "SizeRestrictions_Cookie_HEADER", "SizeRestrictions_URIPATH",
-      "EC2MetaDataSSRF_URIPATH", "EC2MetaDataSSRF_QUERYARGUMENTS", "GenericLFI_QUERYARGUMENTS", "GenericLFI_URIPATH",
-      "RestrictedExtensions_URIPATH", "RestrictedExtensions_QUERYARGUMENTS", "GenericRFI_QUERYARGUMENTS", "GenericRFI_BODY", "GenericRFI_URIPATH",
-      "CrossSiteScripting_COOKIE", "CrossSiteScripting_QUERYARGUMENTS", "CrossSiteScripting_URIPATH",
-    ]
-    AWSManagedRulesKnownBadInputsRuleSet = [
-      "JavaDeserializationRCE_BODY", "JavaDeserializationRCE_URIPATH", "JavaDeserializationRCE_QUERYSTRING", "JavaDeserializationRCE_HEADER",
-      "Host_localhost_HEADER", "PROPFIND_METHOD", "ExploitablePaths_URIPATH",
-      "Log4JRCE_QUERYSTRING", "Log4JRCE_BODY", "Log4JRCE_URIPATH", "Log4JRCE_HEADER", "ReactJSRCE_BODY",
-    ]
-    AWSManagedRulesAmazonIpReputationList = ["AWSManagedIPReputationList", "AWSManagedReconnaissanceList"]
-  }
 }
 
 resource "aws_wafv2_web_acl" "cloudfront" {
@@ -118,55 +117,15 @@ resource "aws_wafv2_web_acl" "cloudfront" {
       name     = rule.value.name
       priority = rule.value.priority
 
+      # 표시만 한다. 막는 것은 ManagedRuleBlock 과 아래 예외 규칙들이 라벨을 보고 한다
       override_action {
-        dynamic "none" {
-          for_each = var.waf_block_mode ? [1] : []
-          content {}
-        }
-
-        dynamic "count" {
-          for_each = var.waf_block_mode ? [] : [1]
-          content {}
-        }
+        count {}
       }
 
       statement {
         managed_rule_group_statement {
           vendor_name = "AWS"
           name        = rule.value.name
-
-          dynamic "rule_action_override" {
-            for_each = lookup(local.managed_rule_overrides, rule.value.name, [])
-            content {
-              name = rule_action_override.value
-              action_to_use {
-                count {}
-              }
-            }
-          }
-
-          dynamic "rule_action_override" {
-            for_each = lookup(local.managed_block_rules, rule.value.name, [])
-            content {
-              name = rule_action_override.value
-              action_to_use {
-                block {
-                  custom_response {
-                    response_code            = 403
-                    custom_response_body_key = "request_blocked"
-
-                    dynamic "response_header" {
-                      for_each = local.cors_headers
-                      content {
-                        name  = response_header.key
-                        value = response_header.value
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
       }
 
@@ -175,6 +134,57 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         metric_name                = rule.value.name
         sampled_requests_enabled   = true
       }
+    }
+  }
+
+  # 관리형 그룹이 표시한 라벨 중 막을 것을 봉투 응답(403)으로 막는다. 그룹 셋(10 · 20 · 30) 뒤에 평가해야 라벨이 있다
+  rule {
+    name     = "ManagedRuleBlock"
+    priority = 35
+
+    action {
+      dynamic "block" {
+        for_each = var.waf_block_mode ? [1] : []
+        content {
+          custom_response {
+            response_code            = 403
+            custom_response_body_key = "request_blocked"
+
+            dynamic "response_header" {
+              for_each = local.cors_headers
+              content {
+                name  = response_header.key
+                value = response_header.value
+              }
+            }
+          }
+        }
+      }
+
+      dynamic "count" {
+        for_each = var.waf_block_mode ? [] : [1]
+        content {}
+      }
+    }
+
+    statement {
+      or_statement {
+        dynamic "statement" {
+          for_each = local.managed_block_labels
+          content {
+            label_match_statement {
+              scope = "LABEL"
+              key   = statement.value
+            }
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "ManagedRuleBlock"
+      sampled_requests_enabled   = true
     }
   }
 
@@ -526,7 +536,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
     }
   }
 
-  # 8KB 검사에서 뺀 관리자 API(사진 업로드 제외)는 Content-Length 가 없거나 512KB 를 넘으면 앱에 닿기 전에 막는다.
+  # 8KB 검사에서 뺀 관리자 API(사진 업로드 POST 제외)는 Content-Length 가 없거나 512KB 를 넘으면 앱에 닿기 전에 막는다.
   # 8KB 를 넘은 요청(라벨)만 본다 — 본문 없는 GET 이나 작은 요청은 Content-Length 가 없어도 지나간다
   rule {
     name     = "AdminBodyContentLength"
@@ -585,16 +595,36 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         statement {
           not_statement {
             statement {
-              regex_match_statement {
-                regex_string = local.image_upload_path_regex
+              and_statement {
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "EXACTLY"
+                    search_string         = "POST"
 
-                field_to_match {
-                  uri_path {}
+                    field_to_match {
+                      method {}
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
                 }
 
-                text_transformation {
-                  priority = 0
-                  type     = "NONE"
+                statement {
+                  regex_match_statement {
+                    regex_string = local.image_upload_path_regex
+
+                    field_to_match {
+                      uri_path {}
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
                 }
               }
             }
@@ -634,7 +664,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
   # 8KB 검사에서 뺀 주문 생성은 Content-Length 가 없거나 64KB 를 넘으면 앱에 닿기 전에 막는다. 8KB 를 넘은 요청(라벨)만 본다
   rule {
     name     = "OrderBodyContentLength"
-    priority = 20
+    priority = 21
 
     action {
       dynamic "block" {
