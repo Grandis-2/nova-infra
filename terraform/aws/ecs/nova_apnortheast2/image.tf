@@ -9,8 +9,6 @@
 # 바꾸면 새 태스크 정의 리비전이 생기고, 서비스는 제자리에서 갱신돼 Blue/Green(또는 롤링)으로 배포된다.
 
 locals {
-  # be release 가 붙이는 버전 태그. variables/locals_services.tf 의 형식 검사 · ecr 스택 수명 정책과 같은 식이다
-  version_tag   = "^[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$"
   pinned_images = { for k, v in local.deployed_services : k => v.image_tag if v.image_tag != "latest" }
 
 }
@@ -27,7 +25,7 @@ locals {
   pinned_tags = {
     for k, tag in local.pinned_images : k => distinct([
       for id in data.aws_ecr_images.pinned[k].image_ids : id.image_tag
-      if id.image_tag != null && (can(regex(local.version_tag, tag))
+      if id.image_tag != null && (can(regex(local.image_version_tag, tag))
         ? id.image_tag == tag
         : can(regex("^[0-9a-f]{40}$", id.image_tag)) && startswith(id.image_tag, tag)
       )
