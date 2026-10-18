@@ -51,6 +51,15 @@ processors:
     metrics:
       metric:
         - 'IsMatch(metric.name, "^http\\.(server|client)\\.(request|response)\\.body\\.size$$")'
+  # 지표의 uri 태그에서 쿼리 문자열을 뗀다. Spring HTTP 인터페이스는 목록 쿼리 파라미터를 원소마다
+  # {queryParam-x}={queryParam-x[0]}&… 로 펼친 템플릿을 uri 태그에 넣는다. 원소 수마다 시계열이 생기고,
+  # 2048자를 넘으면 Mimir 가 그 시계열을 거부한다(max_label_value_length). 경로 템플릿만 남긴다
+  transform/metric-uri:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - 'replace_pattern(datapoint.attributes["uri"], "\\?.*$$", "") where datapoint.attributes["uri"] != nil'
   # 카디널리티 예산. 리소스 속성은 남길 것만 고른다(빼는 방식이 아니라 남기는 방식).
   # 여기를 통과한 리소스 속성은 Loki 에서 인덱스 라벨(loki.yaml 의 index_label)이거나
   # structured metadata 가 된다. 목록에 없는 속성은 저장되지 않는다.
@@ -297,7 +306,7 @@ service:
       exporters: [otlp/tempo]
     metrics:
       receivers: [otlp, spanmetrics, servicegraph]
-      processors: [memory_limiter, filter/unused-metrics, transform/resource-allowlist, batch]
+      processors: [memory_limiter, filter/unused-metrics, transform/metric-uri, transform/resource-allowlist, batch]
       exporters: [otlphttp/mimir]
   telemetry:
     logs:

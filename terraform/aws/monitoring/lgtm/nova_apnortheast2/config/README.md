@@ -382,6 +382,7 @@ OTEL_INSTRUMENTATION_HTTP_SERVER_CAPTURE_REQUEST_HEADERS=x-amz-cf-id,x-amzn-trac
   - 앱은 `pyroscope.<네임스페이스>:4040`(Service Connect 별칭)으로 보내지만 실제로는 수신 전용 프록시(4041)로 들어간다. Pyroscope 4040 은 조회 API 도 열어 두므로, 앱에 이 포트를 열면 Grafana 인증 없이 다른 서비스의 프로파일을 읽을 수 있다. obs 보안 그룹도 4041 만 연다.
   - 확장이 프로파일 샘플에는 스팬 ID 를, 스팬에는 `pyroscope.profile.id` 를 붙인다. Tempo 의 trace-to-profiles 는 이 두 값으로 스팬에서 그 시간대의 플레임 그래프를 연다.
 - 실험 텔레메트리는 동시 처리 요청 수(`http_server_active_requests`)를 보려고 켰다. 함께 켜지는 요청 · 응답 본문 크기 히스토그램은 쓰지 않아서 Collector 가 버린다(`filter/unused-metrics`).
+- 지표의 `uri` 태그는 Collector 가 `?` 앞의 경로 템플릿만 남긴다(`transform/metric-uri`). Spring HTTP 인터페이스는 목록 쿼리 파라미터를 원소마다 `{queryParam-x[0]}…` 로 펼쳐 `uri` 에 넣어서, 원소 수마다 시계열이 생기고 2048자를 넘으면 Mimir 가 거부한다.
 - 요청 헤더 두 개를 스팬 속성(`http.request.header.x-amz-cf-id` · `x-amzn-trace-id`)으로 남겨 CloudFront · ALB 로그의 요청 ID 와 트레이스를 잇는다. 클라이언트가 같은 이름의 헤더를 보내면 그 값이 섞일 수 있어서 Collector 가 AWS 형식에 맞는 값만 남긴다(위 "저장 전 마스킹 규칙").
 
 </details>
