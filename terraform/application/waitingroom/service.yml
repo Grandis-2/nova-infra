@@ -1,5 +1,5 @@
 # 대기열 입장 판정 + POST /api/v1/preorders 중계 (Spring Cloud Gateway)
-image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상 또는 버전 태그(0.0.N-rM)
 cpu: 1024
 memory: 2048
 port: 8085

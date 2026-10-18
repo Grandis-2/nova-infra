@@ -40,7 +40,9 @@ resource "aws_ecr_lifecycle_policy" "this" {
   repository = each.value.name
 
   # 먼저 걸린 규칙이 그 이미지를 차지한다 (뒤 규칙은 보지 않는다).
-  # service.yml 의 image_tag 로 고정한 커밋 이미지는 "최근 N개" 규칙보다 앞에서 잡아 지워지지 않게 한다
+  # service.yml 의 image_tag 로 고정한 이미지는 "최근 N개" 규칙보다 앞에서 잡아 지워지지 않게 한다.
+  # 커밋 해시는 접두사로, 버전 태그는 이름 그대로 맞춘다 — 접두사로 맞추면 0.0.3-r1 이 r10 · r11 까지 잡는다.
+  # 버전 태그 정규식은 variables/locals_services.tf 의 형식 검사 · ecs 스택 image.tf 의 version_tag 와 같아야 한다
   policy = jsonencode({
     rules = concat(
       [{
@@ -58,10 +60,10 @@ resource "aws_ecr_lifecycle_policy" "this" {
         rulePriority = 2
         description  = "Keep the image pinned by service.yml image_tag"
         selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = [local.repositories[each.key].image_tag]
-          countType     = "imageCountMoreThan"
-          countNumber   = 9999
+          tagStatus      = "tagged"
+          tagPatternList = [can(regex("^[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$", local.repositories[each.key].image_tag)) ? local.repositories[each.key].image_tag : "${local.repositories[each.key].image_tag}*"]
+          countType      = "imageCountMoreThan"
+          countNumber    = 9999
         }
         action = { type = "expire" }
       }] : [],

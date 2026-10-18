@@ -31,7 +31,7 @@ port: 8080                # 0 = 웹 서버 없음 (worker, batch)
 
 # 선택 (오른쪽이 기본값)
 deploy: true              # false면 ECS 서비스를 띄우지 않음
-image_tag: latest         # 커밋 해시 앞 6자리 이상이면 그 이미지로 고정 (따옴표 필수)
+image_tag: latest         # 커밋 해시 앞 6자리 이상 또는 버전 태그(0.0.N-rM)면 그 이미지로 고정 (숫자뿐인 커밋 해시는 따옴표 필수)
 management_port: 0
 deployment: rolling       # rolling | blue_green | singleton
 spot: true

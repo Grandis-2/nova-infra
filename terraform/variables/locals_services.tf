@@ -30,7 +30,8 @@ locals {
       can(keys(s)) ? "" : "YAML 맵이 아님",
       [for f in try(keys(s), []) : contains(local._service_fields, f) ? "" : "모르는 필드 '${f}'"],
       [for f in ["cpu", "memory", "port"] : can(tonumber(s[f])) ? "" : "필수 필드 '${f}'(숫자) 없음"],
-      can(regex("^(latest|[0-9a-f]{6,40})$", try(s.image_tag, "latest"))) ? "" : "image_tag 는 latest 또는 커밋 해시 앞 6자리 이상(소문자 16진수)",
+      # 버전 태그(0.0.N-rM) 정규식은 ecs 스택 image.tf 의 version_tag · ecr 스택 수명 정책과 같아야 한다 — 어긋나면 고정이 커밋 접두어로 읽힌다
+      can(regex("^(latest|[0-9a-f]{6,40}|[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+)$", try(s.image_tag, "latest"))) ? "" : "image_tag 는 latest · 커밋 해시 앞 6자리 이상(소문자 16진수) · 버전 태그(0.0.N-rM)",
       # 따옴표 없이 쓴 숫자뿐인 해시(0123456)는 YAML 이 숫자로 읽어 앞자리 0 이 사라진다
       startswith(jsonencode(try(s.image_tag, "latest")), "\"") ? "" : "image_tag 는 따옴표로 감싼다 (예: image_tag: \"0123456\")",
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && can(length(r.paths)) ? "" : "route 마다 priority(숫자)와 paths(목록)가 필요"],
@@ -71,7 +72,7 @@ locals {
         : try(tostring(s.name), k)
       )
       deploy    = try(tobool(s.deploy), true)
-      image_tag = try(tostring(s.image_tag), "latest") # latest 또는 커밋 해시 앞자리 (ecs 가 전체 태그 · 다이제스트로 찾는다)
+      image_tag = try(tostring(s.image_tag), "latest") # latest · 커밋 해시 앞자리 · 버전 태그 (ecs 가 태그 · 다이제스트로 찾는다)
       # 값이 없으면 형식 검사에서 이미 멈추므로 여기서는 오류를 또 내지 않는다
       cpu        = try(tonumber(s.cpu), 0)
       memory     = try(tonumber(s.memory), 0)
