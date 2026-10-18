@@ -10,6 +10,7 @@ variable "queues" {
     "payment-events",     # order → payment
     "notification",       # preorder, order → member : 알림
     "waitingroom-events", # preorder → waitingroom
+    "catalog-events",     # order → catalog : 일반 상품 판매 준비
   ]
 }
 
