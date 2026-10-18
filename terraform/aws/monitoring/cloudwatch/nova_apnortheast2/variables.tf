@@ -34,9 +34,6 @@ variable "queue_age_threshold_overrides" {
   default = {
     # worker 는 취소가 한 세대(4차례) 내내 실패하면 15분 지연을 두고 다시 보낸다
     "preorder-cancel" = 1200
-    # catalog 소비자가 나오기 전까지 order 의 판매 준비 이벤트가 쌓이기만 한다. 보관 기간(4일)과 같게 두어 울리지 않게 하고,
-    # 소비자가 배포되면 이 줄을 지운다
-    "catalog-events" = 345600
   }
 
   validation {
