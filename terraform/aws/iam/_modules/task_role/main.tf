@@ -87,7 +87,7 @@ resource "aws_iam_role_policy" "queue" {
 # 업로드 버킷의 사진. catalog 가 올리고(uploads), 정리 배치가 안 쓰는 사진을 지운다(upload_cleanup). 조회는 CloudFront(cdn 스택)
 # 키는 catalog ImagePurpose 의 접두 아래에만 생긴다. 용도를 늘리면 여기도 더한다 — 빠지면 그 용도의 업로드가 AccessDenied(503)다
 locals {
-  upload_objects = [for p in ["products/", "promotions/"] : "${var.upload_bucket_arn}/${p}*"]
+  upload_objects = [for p in ["products/", "promotions/", "banners/"] : "${var.upload_bucket_arn}/${p}*"]
 }
 
 resource "aws_iam_role_policy" "upload" {

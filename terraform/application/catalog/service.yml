@@ -22,8 +22,9 @@ routes:
   # /internal/* 은 ALB 에 열지 않는다 (preorder · order 가 Service Connect 로 부른다)
   - priority: 50
     paths: ["/api/v1/products*", "/api/v1/admin/products*", "/api/v1/reviews*", "/api/v1/categories*"]
-  - priority: 51                # 사전예약 홍보 · 관리자 이미지 업로드
-    paths: ["/api/v1/promotions*", "/api/v1/admin/promotions*", "/api/v1/admin/images*"]
+  - priority: 51                # 사전예약 홍보 · 관리자 이미지 업로드 · 메인 배너(고객 /api/v1/banners · 관리자 /api/v1/admin/banners 를 한 패턴으로)
+    # 규칙을 새로 만들면 routes 길이가 바뀌어 ECS 서비스가 교체된다(replace_triggered_by — 서비스가 잠깐 내려간다). 경로는 기존 규칙 안에서 늘린다
+    paths: ["/api/v1/promotions*", "/api/v1/admin/promotions*", "/api/v1/admin/images*", "/api/v1/*banners*"]
 
 jwt: verify
 calls:                          # 리뷰 작성 때만 부른다
@@ -36,6 +37,6 @@ queues:
   send: [order-events, preorder-events]   # 아웃박스. 상품 등록 → preorder 회차 · 차수, order 초기 재고
   consume: [catalog-events]               # order 가 보낸 일반 상품 판매 준비
 
-uploads: true                   # 상품 · 홍보 사진. 업로드 버킷 products/ · promotions/ 에 올릴 권한과 nova.upload.* 설정을 받는다
+uploads: true                   # 상품 · 홍보 · 배너 사진. 업로드 버킷 products/ · promotions/ · banners/ 에 올릴 권한과 nova.upload.* 설정을 받는다
 
 profiling: true                 # 프로파일(Pyroscope)을 보낸다. preorder 에서 부담을 잰 뒤 넓혔다(CPU +0.2%p, 메모리 약 60 MiB)
