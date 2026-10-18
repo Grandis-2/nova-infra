@@ -2,7 +2,7 @@
 #   사전예약: preorder-register · preorder-cancel → 외부 예약 등록 · 취소 → preorder-events
 #   럭키드로우: draw-register → 응모 전달 · 응모 수 대조 · 추첨 → order-events
 deploy: true
-image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상
+image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상 또는 버전 태그(0.0.N-rM)
 cpu: 1024
 memory: 2048
 port: 9087                      # health · prometheus 만 연다 (앱 기본값 WorkerDefaults). 외부 경로(routes)는 없다

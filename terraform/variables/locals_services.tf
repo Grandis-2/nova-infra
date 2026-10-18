@@ -9,6 +9,9 @@ locals {
     : "${regex("^(.*)/terraform/(?:aws|ncp)/", "${abspath(path.root)}/")[0]}/terraform/application"
   )
 
+  # be release 가 이미지마다 붙이는 버전 태그(0.0.N-rM). image_tag 형식 검사 · ecs 고정 조회 · ecr 고정 보호가 함께 쓴다
+  image_version_tag = "^[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$"
+
   _service_raw = {
     for f in fileset(local.application_dir, "*/service.yml") :
     dirname(f) => yamldecode(file("${local.application_dir}/${f}"))
@@ -30,7 +33,7 @@ locals {
       can(keys(s)) ? "" : "YAML 맵이 아님",
       [for f in try(keys(s), []) : contains(local._service_fields, f) ? "" : "모르는 필드 '${f}'"],
       [for f in ["cpu", "memory", "port"] : can(tonumber(s[f])) ? "" : "필수 필드 '${f}'(숫자) 없음"],
-      can(regex("^(latest|[0-9a-f]{6,40})$", try(s.image_tag, "latest"))) ? "" : "image_tag 는 latest 또는 커밋 해시 앞 6자리 이상(소문자 16진수)",
+      can(regex("^(latest|[0-9a-f]{6,40})$", try(s.image_tag, "latest"))) || can(regex(local.image_version_tag, try(s.image_tag, "latest"))) ? "" : "image_tag 는 latest · 커밋 해시 앞 6자리 이상(소문자 16진수) · 버전 태그(0.0.N-rM)",
       # 따옴표 없이 쓴 숫자뿐인 해시(0123456)는 YAML 이 숫자로 읽어 앞자리 0 이 사라진다
       startswith(jsonencode(try(s.image_tag, "latest")), "\"") ? "" : "image_tag 는 따옴표로 감싼다 (예: image_tag: \"0123456\")",
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && can(length(r.paths)) ? "" : "route 마다 priority(숫자)와 paths(목록)가 필요"],
@@ -71,7 +74,7 @@ locals {
         : try(tostring(s.name), k)
       )
       deploy    = try(tobool(s.deploy), true)
-      image_tag = try(tostring(s.image_tag), "latest") # latest 또는 커밋 해시 앞자리 (ecs 가 전체 태그 · 다이제스트로 찾는다)
+      image_tag = try(tostring(s.image_tag), "latest") # latest · 커밋 해시 앞자리 · 버전 태그 (ecs 가 태그 · 다이제스트로 찾는다)
       # 값이 없으면 형식 검사에서 이미 멈추므로 여기서는 오류를 또 내지 않는다
       cpu        = try(tonumber(s.cpu), 0)
       memory     = try(tonumber(s.memory), 0)
