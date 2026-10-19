@@ -27,3 +27,11 @@ output "grafana_admin_secret_arn" {
   description = "관측 호스트(obs) Grafana admin 비밀번호. obs 역할만 읽는다 (실행 역할은 ops/* 를 읽지 못한다)"
   value       = aws_secretsmanager_secret.grafana_admin.arn
 }
+
+output "loadtest_header_secret" {
+  description = "부하 시험 헤더 값. edge(WAF 규칙)와 부하 시험 실행 역할이 읽는다"
+  value = {
+    name = aws_secretsmanager_secret.loadtest_header.name
+    arn  = aws_secretsmanager_secret.loadtest_header.arn
+  }
+}

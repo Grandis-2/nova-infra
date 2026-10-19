@@ -31,3 +31,9 @@ variable "tempo_expiration_days" {
     error_message = "tempo_expiration_days 는 Tempo 보존 기간(14일, block_retention 336h)보다 길어야 합니다. 같거나 짧으면 compactor 보다 먼저 지웁니다."
   }
 }
+
+variable "loadtest_results_expiration_days" {
+  description = "loadtest 버킷 results/ 의 보관 기간(일). 시험 결과(plan · summary · 태스크별 k6 요약)다"
+  type        = number
+  default     = 180
+}

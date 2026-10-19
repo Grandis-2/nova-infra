@@ -44,3 +44,11 @@ output "obs_config_bucket" {
     arn = aws_s3_bucket.this["obs-config"].arn
   }
 }
+
+output "loadtest_bucket" {
+  description = "부하 시험 토큰 · 결과. iam 스택(시험 역할 권한)과 ecs 스택(실행 파라미터)이 읽는다"
+  value = {
+    id  = aws_s3_bucket.this["loadtest"].id
+    arn = aws_s3_bucket.this["loadtest"].arn
+  }
+}
