@@ -8,9 +8,17 @@
 
 보내다 실패하면 예외를 던져 Lambda 재시도에 맡긴다. 게이트웨이가 일부 레코드만 거절하면 다시 보내지 않고 거절 수만 기록한다.
 다시 보내면 이미 받아들인 레코드가 중복되기 때문이다.
+
+파일은 통째로 메모리에 풀지 않고 1MiB 씩 풀어 줄 단위로 처리하고, 레코드는 BATCH 줄씩 보낸다. 부하 시험 때는 ALB 노드 하나의
+5분 파일이 수십만 줄(풀면 100MB 이상)이 되어 통째로 들면 메모리가 넘친다. 그러면 같은 파일의 실제 사용자 로그까지 잃는다.
+압축된 원본(수십 MB 이하)은 먼저 다 받고 끝까지 풀어 본 뒤에 보내기 시작한다. 읽다가 실패하면 이미 보낸 묶음이 재시도 때 중복되기 때문이다.
+
+부하 시험(Grandis-2/nova-loadtest) 요청 줄은 보내지 않는다. k6 는 User-Agent 를 nova-loadtest/<시험 ID> 로 고정하고, 그 정보는 k6 결과와
+겹친다. 시험 중에는 이 줄이 대부분이라 Loki 수집 한도를 넘기지 않게 파싱 전에 버리고 버린 줄 수만 기록한다.
 """
 
 import gzip
+import io
 import ipaddress
 import json
 import os
@@ -29,6 +37,8 @@ BATCH = int(os.environ.get("BATCH_SIZE", "500"))
 TIMEOUT = 10
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024  # OTLP 명세가 권하는 응답 크기 한도
 RETRIES = 3
+CHUNK = 1024 * 1024
+LOADTEST_UA = "nova-loadtest/"  # CloudFront 로그는 User-Agent 를 URL 인코딩하지만 이 문자열에는 인코딩되는 글자가 없다
 
 s3 = boto3.client("s3")
 
@@ -42,15 +52,54 @@ def handler(event, _context):
         if source is None:
             print(json.dumps({"skip": key}))
             continue
-        body = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
-        text = gzip.decompress(body).decode("utf-8", errors="replace") if key.endswith(".gz") else body.decode("utf-8", errors="replace")
+        data = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        gz = key.endswith(".gz")
+        if gz:
+            check_gzip(data)
         parse = parse_alb if source == "alb" else parse_cloudfront
-        records = list(parse(text.splitlines()))
-        dropped = sum(post(source, records[i : i + BATCH]) for i in range(0, len(records), BATCH))
-        sent += len(records) - dropped
+        skipped = Skipped()
+        count = dropped = 0
+        batch = []
+        for r in parse(lines_of(io.BytesIO(data), gz), skipped):
+            batch.append(r)
+            if len(batch) >= BATCH:
+                dropped += post(source, batch)
+                count += len(batch)
+                batch = []
+        if batch:
+            dropped += post(source, batch)
+            count += len(batch)
+        sent += count - dropped
         rejected += dropped
-        print(json.dumps({"key": key, "source": source, "records": len(records), "rejected": dropped}))
+        print(json.dumps({"key": key, "source": source, "records": count, "rejected": dropped, "loadtest_skipped": skipped.loadtest}))
     return {"records": sent, "rejected": rejected}
+
+
+class Skipped:
+    """parse_* 가 버린 부하 시험 줄 수"""
+
+    def __init__(self):
+        self.loadtest = 0
+
+
+def check_gzip(data):
+    """끝까지 풀어 본다(CRC · 길이 검사). 깨진 파일이면 아무것도 보내기 전에 실패한다. 풀린 내용은 들지 않는다"""
+    with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+        while f.read(CHUNK):
+            pass
+
+
+def lines_of(body, gz):
+    """S3 객체를 CHUNK 씩 읽어 줄로 내놓는다. 메모리는 CHUNK 와 한 줄 크기로 묶인다"""
+    stream = gzip.GzipFile(fileobj=body) if gz else body
+    pending = b""
+    while chunk := stream.read(CHUNK):
+        pending += chunk
+        *complete, pending = pending.split(b"\n")
+        for raw in complete:
+            yield raw.decode("utf-8", errors="replace").rstrip("\r")
+    if pending:
+        yield pending.decode("utf-8", errors="replace").rstrip("\r")
 
 
 def source_of(key):
@@ -73,9 +122,14 @@ ALB_FIELDS = [
 ]
 
 
-def parse_alb(lines):
+def parse_alb(lines, skipped=None):
+    skipped = skipped or Skipped()
     for line in lines:
         if not line.strip():
+            continue
+        # User-Agent 는 요청 줄 다음의 따옴표 필드다. shlex 가 무거워서 그 전에 문자열로 거른다(URL 의 따옴표 · 공백은 인코딩되어 있다)
+        if f' "{LOADTEST_UA}' in line:
+            skipped.loadtest += 1
             continue
         try:
             values = shlex.split(line)
@@ -134,7 +188,8 @@ def root_trace_id(value):
 
 # ── CloudFront (표준 로그, 탭 구분) ──────────────────────────
 # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/standard-logs-reference.html
-def parse_cloudfront(lines):
+def parse_cloudfront(lines, skipped=None):
+    skipped = skipped or Skipped()
     fields = None
     for line in lines:
         if line.startswith("#Fields:"):
@@ -143,6 +198,9 @@ def parse_cloudfront(lines):
         if line.startswith("#") or not line.strip() or fields is None:
             continue
         f = dict(zip(fields, line.split("\t")))
+        if f.get("cs(User-Agent)", "").startswith(LOADTEST_UA):
+            skipped.loadtest += 1
+            continue
         method = f.get("cs-method", "-")
         path = unquote(f.get("cs-uri-stem", "-"))
         status = to_int(f.get("sc-status"))
