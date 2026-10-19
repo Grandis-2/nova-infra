@@ -9,14 +9,16 @@
 보내다 실패하면 예외를 던져 Lambda 재시도에 맡긴다. 게이트웨이가 일부 레코드만 거절하면 다시 보내지 않고 거절 수만 기록한다.
 다시 보내면 이미 받아들인 레코드가 중복되기 때문이다.
 
-파일은 통째로 메모리에 풀지 않고 1MiB 씩 읽어 줄 단위로 처리하고, 레코드는 BATCH 줄씩 보낸다. 부하 시험 때는 ALB 노드 하나의
+파일은 통째로 메모리에 풀지 않고 1MiB 씩 풀어 줄 단위로 처리하고, 레코드는 BATCH 줄씩 보낸다. 부하 시험 때는 ALB 노드 하나의
 5분 파일이 수십만 줄(풀면 100MB 이상)이 되어 통째로 들면 메모리가 넘친다. 그러면 같은 파일의 실제 사용자 로그까지 잃는다.
+압축된 원본(수십 MB 이하)은 먼저 다 받고 끝까지 풀어 본 뒤에 보내기 시작한다. 읽다가 실패하면 이미 보낸 묶음이 재시도 때 중복되기 때문이다.
 
 부하 시험(Grandis-2/nova-loadtest) 요청 줄은 보내지 않는다. k6 는 User-Agent 를 nova-loadtest/<시험 ID> 로 고정하고, 그 정보는 k6 결과와
 겹친다. 시험 중에는 이 줄이 대부분이라 Loki 수집 한도를 넘기지 않게 파싱 전에 버리고 버린 줄 수만 기록한다.
 """
 
 import gzip
+import io
 import ipaddress
 import json
 import os
@@ -50,12 +52,15 @@ def handler(event, _context):
         if source is None:
             print(json.dumps({"skip": key}))
             continue
-        body = s3.get_object(Bucket=bucket, Key=key)["Body"]
+        data = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
+        gz = key.endswith(".gz")
+        if gz:
+            check_gzip(data)
         parse = parse_alb if source == "alb" else parse_cloudfront
         skipped = Skipped()
         count = dropped = 0
         batch = []
-        for r in parse(lines_of(body, key.endswith(".gz")), skipped):
+        for r in parse(lines_of(io.BytesIO(data), gz), skipped):
             batch.append(r)
             if len(batch) >= BATCH:
                 dropped += post(source, batch)
@@ -75,6 +80,13 @@ class Skipped:
 
     def __init__(self):
         self.loadtest = 0
+
+
+def check_gzip(data):
+    """끝까지 풀어 본다(CRC · 길이 검사). 깨진 파일이면 아무것도 보내기 전에 실패한다. 풀린 내용은 들지 않는다"""
+    with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+        while f.read(CHUNK):
+            pass
 
 
 def lines_of(body, gz):

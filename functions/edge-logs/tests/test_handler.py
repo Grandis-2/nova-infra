@@ -177,6 +177,14 @@ class StreamTest(unittest.TestCase):
         result = self.run_file("cloudfront/E1.2026-10-19-00.x", lines, gz=False)
         self.assertEqual(result["records"], 3)
 
+    def test_broken_gzip_sends_nothing(self):
+        data = gzip.compress("\n".join([ALB_LINE] * 1200).encode())
+        handler.s3 = types.SimpleNamespace(get_object=lambda **_: {"Body": io.BytesIO(data[:-8])})  # CRC · 길이 꼬리를 자른다
+        event = {"Records": [{"s3": {"bucket": {"name": "b"}, "object": {"key": "alb/x.log.gz"}}}]}
+        with self.assertRaises(EOFError):
+            handler.handler(event, None)
+        self.assertEqual(self.batches, [])  # 앞부분 묶음도 보내지 않았다
+
     def test_lines_split_across_chunks(self):
         body = io.BytesIO(gzip.compress(("x" * 5000 + "\n" + "y" * 10 + "\r\n" + "z").encode()))
         self.assertEqual([len(l) for l in handler.lines_of(body, True)], [5000, 10, 1])
