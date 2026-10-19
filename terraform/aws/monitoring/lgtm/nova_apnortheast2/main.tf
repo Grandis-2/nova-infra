@@ -70,16 +70,19 @@ locals {
   obs_log_group = "/ecs/${local.obs_name}"
 
   # 모든 컨테이너 공통: 리눅스 권한을 모두 버리고(1024 위 포트만 쓴다), 죽으면 태스크를 내리지 않고 그 컨테이너만 다시 띄운다
-  # 컨테이너 메모리 한도(MiB). 인스턴스 t4g.medium 이 ECS 에 등록하는 메모리(약 3.7 GiB) 안에서 나눈다.
-  # 7일 최대 RSS(2026-10-16) 의 1.4~2.5배: tempo 770 · mimir 405 · grafana 328 · loki 204 · pyroscope 165 · mysqld 19
+  # 컨테이너 메모리 한도(MiB). obs 인스턴스가 ECS 에 등록하는 메모리 안에서 나눈다.
+  # 평소(t4g.medium, 약 3.7 GiB)는 7일 최대 RSS(2026-10-16) 의 1.4~2.5배: tempo 770 · mimir 405 · grafana 328 · loki 204 · pyroscope 165 · mysqld 19
+  #   loki 512 · tempo 1152 · mimir 640 · grafana 448 (합 3,376)
+  # 부하 시험 기간(2026-10-19부터 2~3일)에는 t4g.large(약 7.6 GiB)로 키워 둔다. 부하에 따라 느는 Tempo(오류 · 느린 트레이스는 모두 남는다) ·
+  # Loki · Mimir 에 더 준다(합 6,256). 시험이 끝나면 위 평소 값으로 되돌린다
   # Go 프로세스는 한도의 90% 를 GOMEMLIMIT 로 줘서 한도에 다가가면 GC 를 더 돌려 OOM 종료 대신 버티게 한다
   obs_memory = {
     config-init      = 96
     otel-collector   = 192
-    loki             = 512
-    tempo            = 1152
-    mimir            = 640
-    grafana          = 448
+    loki             = 1536
+    tempo            = 2048
+    mimir            = 1536
+    grafana          = 512
     mysqld-exporter  = 48
     pyroscope        = 256
     pyroscope-ingest = 32

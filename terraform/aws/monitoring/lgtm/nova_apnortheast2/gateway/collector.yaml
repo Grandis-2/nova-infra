@@ -26,11 +26,12 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 processors:
-  # 컨테이너 메모리 한도(2 GiB) 안에서 GC 여유를 남긴다. 전송 큐도 이 안에 든다. tail_sampling 이 결정 전 트레이스를, servicegraph 가 짝을 찾는 스팬을 메모리에 든다.
+  # 컨테이너 메모리 한도(gateway.tf, 지금 4 GiB)의 75% 를 한도로, 그 4분의 1 을 순간 여유로 둔다. 전송 큐도 이 안에 든다.
+  # tail_sampling 이 결정 전 트레이스를, servicegraph 가 짝을 찾는 스팬을 메모리에 든다. 평소(2 GiB)는 1536 · 384 다
   memory_limiter:
     check_interval: 1s
-    limit_mib: 1536
-    spike_limit_mib: 384
+    limit_mib: 3072
+    spike_limit_mib: 768
   batch:
     timeout: 1s
   # APM 지표(spanmetrics · servicegraph)에 넣지 않는 스팬. 내부(INTERNAL) 스팬은 서비스 경계가 아니고 수가 많다.
