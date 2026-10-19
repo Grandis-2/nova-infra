@@ -65,7 +65,7 @@ flowchart LR
 
 - span metrics(`traces_spanmetrics_*`)는 서버 · 클라이언트 · 메시지 스팬을 `span_name` · `span_kind` · `status_code` 와 HTTP 상태 · DB · 메시징 종류로 나눠 센다. 사용자 ID 같은 값은 차원에서 빼고, 조합이 2000개를 넘으면 넘친 몫을 overflow 시계열 하나로 합친다.
 - 서비스 그래프(`traces_service_graph_*`)는 클라이언트 스팬과 서버 스팬을 짝지어 간선을 만든다. DB · SQS · 외부 API 처럼 계측되지 않은 상대는 `db.name` · `server.address` 같은 속성으로 가상 노드를 만든다. Grafana 서비스 맵(Tempo 데이터소스의 `serviceMap`)이 이 지표를 읽는다.
-- 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 메모리에 두므로 게이트웨이에 2 GiB 를 준다.
+- 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 메모리에 두므로 게이트웨이에 2 GiB 를 준다(부하 시험 기간에는 4 GiB).
 - 샘플링된 트레이스로도 TraceQL 지표(`{...} | rate() by (span.http.route)`, `quantile_over_time`)를 볼 수 있다. Tempo 의 `local-blocks` 프로세서가 최근 블록에서 바로 계산하고 결과는 저장하지 않는다. Traces Drilldown 이 이 지표를 쓴다. 표본으로 계산한 값이므로 비율과 분포만 보고, 정확한 수는 span metrics 로 확인한다.
 
 </details>
@@ -137,7 +137,7 @@ flowchart LR
 
 **데이터 손실은 허용하되 드러낸다.**
 
-게이트웨이에는 디스크 큐가 없다(Fargate 디스크는 태스크와 함께 사라진다). 메모리 사용량이 `memory_limiter`(1536 MiB)를 넘으면 수신을 거부하고, 15분 넘게 보내지 못한 데이터는 버린다. 이 데이터를 감사 기록이나 정본(outbox 등)의 근거로 쓰면 안 된다.
+게이트웨이에는 디스크 큐가 없다(Fargate 디스크는 태스크와 함께 사라진다). 메모리 사용량이 `memory_limiter`(평소 1536 MiB, 부하 시험 기간 3072 MiB)를 넘으면 수신을 거부하고, 15분 넘게 보내지 못한 데이터는 버린다. 이 데이터를 감사 기록이나 정본(outbox 등)의 근거로 쓰면 안 된다.
 빠진 데이터는 지표(`otelcol_receiver_refused_*`, `*_discarded_*`)와 경보로 드러낸다.
 
 **카디널리티는 설정으로 제한한다.**
@@ -450,7 +450,7 @@ sum by (server) (rate(traces_service_graph_request_failed_total{client="preorder
 앱이 보내는 OTLP 를 obs 태스크 밖에서 받는 Collector 다. obs 는 호스트 디렉터리를 쓰므로 재배포할 때 몇 분 동안 비지만, 게이트웨이는 별도 서비스라 그동안에도 데이터를 받는다.
 
 - 관측 클러스터(`nova-prod-observability`)에서 실행된다. 앱 클러스터와 Service Connect 네임스페이스가 같아서 앱은 그대로 `otel-gateway` 이름으로 보낸다.
-- Fargate(온디맨드, 0.5 vCPU · 2 GiB)로 실행하고 롤링 배포한다. Spot 은 회수되면 다음 태스크가 뜰 때까지 수집이 멈추므로 쓰지 않는다.
+- Fargate(온디맨드, 0.5 vCPU · 2 GiB. 부하 시험 기간에는 1 vCPU · 4 GiB)로 실행하고 롤링 배포한다. Spot 은 회수되면 다음 태스크가 뜰 때까지 수집이 멈추므로 쓰지 않는다.
 - 설정은 `terraform/aws/monitoring/lgtm/nova_apnortheast2/gateway/collector.yaml` 내용을 환경 변수로 넘긴다(`--config=env:COLLECTOR_CONFIG`). S3 에서 내려받지 않으므로 태스크 역할이 필요 없고, 설정이 바뀌면 다시 배포된다.
 - obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기별 메모리 전송 큐(바이트 기준 128 MiB, 셋 합 384 MiB)에 모아 두고 15분까지 다시 보낸다. 큐가 차면 새로 들어오는 데이터를 버린다(`otelcol_exporter_enqueue_failed_*`).
   디스크 큐는 쓰지 않는다. Fargate 디스크는 태스크와 함께 사라지므로 게이트웨이가 교체되면 디스크 큐도 잃는다. 대비할 상황은 obs 가 재배포되는 동안이라 메모리 큐로 충분하다.
@@ -491,7 +491,7 @@ sum by (server) (rate(traces_service_graph_request_failed_total{client="preorder
 - 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`, pyroscope `/data`(넷 다 UID 10001), grafana `/var/lib/grafana`(UID 472). 디렉터리 목록은 ecs 스택의 `obs_data_dirs` 에 있고, obs 인스턴스가 부팅할 때 만든다. 디렉터리를 추가하면 인스턴스가 한 번 교체된다.
 - Pyroscope 는 ecs 스택에 `pyroscope` 디렉터리가 있을 때만 실행한다. 압축용 임시 디렉터리를 `TMPDIR=/data` 로 옮겨 루트 파일시스템을 읽기 전용으로 둔다.
 - 컨테이너 메모리 한도는 `terraform/aws/monitoring/lgtm/nova_apnortheast2/main.tf` 의 `obs_memory` 한 곳에서 정한다. 컨테이너 한도의 합은 태스크 메모리(`obs_task_memory`)를, 태스크 메모리는 인스턴스가 ECS 에 등록한 메모리를 넘으면 안 된다. 한도는 7일간 최대 RSS 의 1.4~2.5배로 정한다. Go 프로세스는 한도의 90% 를 `GOMEMLIMIT` 로 지정해 한도에 가까워지면 GC 를 더 자주 돌린다. 한 컨테이너가 한도를 넘으면 그 컨테이너만 재시작된다(`restartPolicy`). 재시작이 잦으면 LGTM 대시보드의 메모리(RSS)를 보고 `obs_memory` 를 다시 나눈다.
-- obs Collector 는 긁기만 하므로 192 MiB 만 준다(`memory_limiter` 160 MiB). tail sampling 과 servicegraph 는 게이트웨이(2 GiB, `memory_limiter` 1536 MiB)에서 처리한다.
+- obs Collector 는 긁기만 하므로 192 MiB 만 준다(`memory_limiter` 160 MiB). tail sampling 과 servicegraph 는 게이트웨이(2 GiB, `memory_limiter` 1536 MiB. 부하 시험 기간에는 4 GiB · 3072 MiB)에서 처리한다.
 - Grafana 는 기동할 때 Drilldown 앱(Traces · Logs · Metrics · Profiles)을 grafana.com 에서 받는다. `GF_PLUGINS_PREINSTALL` 로 버전을 고정해 재배포할 때마다 화면이 바뀌지 않게 했다. 버전을 올릴 때는 이 값을 바꾼다.
 
 </details>

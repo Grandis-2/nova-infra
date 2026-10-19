@@ -42,9 +42,11 @@ resource "aws_ecs_task_definition" "gateway" {
   family                   = local.gateway_name
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = "512"
-  memory                   = "2048"
-  execution_role_arn       = data.terraform_remote_state.iam.outputs.task_execution_role_arn
+  # 평소 0.5 vCPU · 2 GiB. 부하 시험 기간(2026-10-19부터 2~3일)에는 앱 스팬이 수천 배로 늘어 키워 둔다.
+  # tail sampling 때문에 대수로 늘릴 수 없다(한 트레이스의 스팬이 갈라진다). 메모리를 바꾸면 collector.yaml 의 memory_limiter 도 같은 비율로 바꾼다
+  cpu                = "1024"
+  memory             = "4096"
+  execution_role_arn = data.terraform_remote_state.iam.outputs.task_execution_role_arn
 
   runtime_platform {
     operating_system_family = "LINUX"
