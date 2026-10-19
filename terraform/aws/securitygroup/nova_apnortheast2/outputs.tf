@@ -60,3 +60,8 @@ output "rum_collector_security_group_id" {
   description = "브라우저 수집기 태스크 SG. ALB 에서 12347 · 13133 을 받고 게이트웨이 4318 로 보낸다"
   value       = aws_security_group.rum_collector.id
 }
+
+output "loadtest_security_group_ids" {
+  description = "부하 시험 태스크 SG (k6 · controller · minter). 인바운드 없음. k6 는 게이트웨이 4318, 컨트롤러는 obs 9009 로도 나간다"
+  value       = { for k, sg in aws_security_group.loadtest : k => sg.id }
+}
