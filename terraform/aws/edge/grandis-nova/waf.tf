@@ -817,7 +817,7 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         limit              = var.api_rate_limit_per_5min
         aggregate_key_type = "IP"
 
-        # /api/ 아래에서 대기열 경로만 뺀다
+        # /api/ 아래에서 대기열 경로와 부하 시험 요청을 뺀다
         scope_down_statement {
           and_statement {
             statement {
@@ -845,6 +845,29 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
                     field_to_match {
                       uri_path {}
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
+                }
+              }
+            }
+
+            # 부하 시험 헤더가 맞으면 세지 않는다
+            statement {
+              not_statement {
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "EXACTLY"
+                    search_string         = local.loadtest_header
+
+                    field_to_match {
+                      single_header {
+                        name = "x-nova-loadtest"
+                      }
                     }
 
                     text_transformation {
@@ -905,18 +928,45 @@ resource "aws_wafv2_web_acl" "cloudfront" {
         limit              = var.queue_rate_limit_per_5min
         aggregate_key_type = "IP"
 
+        # 대기열 경로이고 부하 시험 헤더가 없는 요청만 센다
         scope_down_statement {
-          byte_match_statement {
-            positional_constraint = "STARTS_WITH"
-            search_string         = local.queue_path
+          and_statement {
+            statement {
+              byte_match_statement {
+                positional_constraint = "STARTS_WITH"
+                search_string         = local.queue_path
 
-            field_to_match {
-              uri_path {}
+                field_to_match {
+                  uri_path {}
+                }
+
+                text_transformation {
+                  priority = 0
+                  type     = "NONE"
+                }
+              }
             }
 
-            text_transformation {
-              priority = 0
-              type     = "NONE"
+            statement {
+              not_statement {
+                statement {
+                  byte_match_statement {
+                    positional_constraint = "EXACTLY"
+                    search_string         = local.loadtest_header
+
+                    field_to_match {
+                      single_header {
+                        name = "x-nova-loadtest"
+                      }
+                    }
+
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
+                    }
+                  }
+                }
+              }
             }
           }
         }
