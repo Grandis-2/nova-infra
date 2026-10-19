@@ -7,7 +7,7 @@
 # Service Connect 가 프록시 컨테이너 포트(4041)로 넘긴다.
 # Grafana(3000) 는 ALB 에서만 연다(NV-517). ALB 리스너 규칙이 Cognito 로그인을 거친 요청만 넘긴다.
 # Loki 3100 · Tempo OTLP 14317 · Mimir 9009 는 OTel 게이트웨이(otel_gateway.tf, NV-543)에서만 연다.
-# 예외로 Mimir 9009 는 부하 시험 컨트롤러(loadtest.tf)에도 연다(조회용).
+# 예외로 Mimir 9009 는 부하 시험 컨트롤러에도 연다(조회용. 그 규칙은 terraform/aws/loadtest 스택이 이 SG 에 더한다).
 # (SG 설명 문자열은 바꾸면 SG 가 다시 만들어지므로 처음 값 그대로 둔다. "OTLP from service tasks" 는 옛 구성의 설명이다)
 resource "aws_security_group" "obs" {
   name        = "${local.name_prefix}-obs-sg"

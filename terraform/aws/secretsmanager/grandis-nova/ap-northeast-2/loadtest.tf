@@ -1,5 +1,5 @@
 # 부하 시험 헤더(x-nova-loadtest) 값. 이 값을 보낸 요청은 WAF 요청 제한(ApiRateLimit · QueueRateLimit)만 건너뛴다.
-# edge 스택이 읽어 WAF 규칙에 넣고, 부하 시험 실행 역할이 읽어 k6 · 컨트롤러에 넣는다.
+# edge 스택이 읽어 WAF 규칙에 넣고, 부하 시험 실행 역할(terraform/aws/loadtest 스택)이 읽어 k6 에 넣는다.
 # ops/* 라 서비스(공용 실행 역할)는 읽지 못한다.
 #
 # generated.tf 와 같이 ephemeral 로 만들어 쓰기 전용으로 넣는다(이 스택 상태에는 값이 남지 않는다).
