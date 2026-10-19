@@ -69,6 +69,31 @@ processors:
           # 타이머의 최댓값 게이지(.max)는 더하지 않고 큰 쪽을 남긴다
           - 'aggregate_on_attributes("max") where IsMatch(metric.name, "^http\\.(server|client)\\.requests\\.max$$")'
           - 'aggregate_on_attributes("sum") where IsMatch(metric.name, "^http\\.(server|client)\\.requests") and not IsMatch(metric.name, "\\.max$$")'
+  # 부하 시험 k6 지표(service.name = k6, terraform/aws/loadtest). 운영과 같은 Mimir 테넌트의 시계열 한도를 나눠 쓴다.
+  # 시계열 수를 지키는 것은 k6 스크립트(tags.name 을 경로 템플릿으로, systemTags 를 줄인다)이고 이것은 실수했을 때의 안전망이다.
+  # k6 내장 지표 중 판정에 쓰지 않는 것을 버린다. Trend(히스토그램)는 지표 하나가 시계열 18개라 남기면 그만큼 는다.
+  # 스크립트가 직접 만드는 지표(entry_to_accept · 오류 코드 카운터 등)는 이름이 정해지지 않아 통과시키고, 속성은 아래에서 고른다
+  filter/k6:
+    error_mode: ignore
+    metrics:
+      metric:
+        - 'resource.attributes["service.name"] == "k6" and IsMatch(metric.name, "^k6_(iteration_duration|group_duration|data_sent|data_received|http_req_(blocked|connecting|tls_handshaking|sending|waiting|receiving))$$")'
+  # k6 데이터 포인트 속성은 남길 것만 고른다. url · group 같은 태그가 다시 켜져도 여기서 버린다.
+  #   test_id 시험 ID · instance 태스크 번호(리소스 속성이 안 먹을 때의 대안) · error_code 오류 코드 카운터 · check 검사 이름
+  #   condition  Rate 지표(http_req_failed · checks)를 k6 가 카운터 하나에 zero · nonzero 로 나눠 낸다. 빠지면 비율을 못 구한다
+  # name 이 http(s):// 로 시작하면 스크립트가 tags.name 을 빠뜨린 것이다(k6 는 URL 원문을 넣는다). ID 마다 시계열이 생기지 않게 하나로 모은다.
+  # 속성을 버리거나 바꾸면 서로 다른 스트림이 같은 라벨이 되므로 같은 라벨끼리 합친다. 카운터 · 히스토그램은 더하고 게이지는 큰 쪽을 남긴다
+  transform/k6:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - 'keep_keys(datapoint.attributes, ["status", "method", "name", "scenario", "expected_response", "test_id", "instance", "error_code", "check", "condition"]) where resource.attributes["service.name"] == "k6"'
+          - 'set(datapoint.attributes["name"], "(unnamed)") where resource.attributes["service.name"] == "k6" and IsMatch(datapoint.attributes["name"], "^https?://")'
+      - context: metric
+        statements:
+          - 'aggregate_on_attributes("max") where resource.attributes["service.name"] == "k6" and metric.type == METRIC_DATA_TYPE_GAUGE'
+          - 'aggregate_on_attributes("sum") where resource.attributes["service.name"] == "k6" and metric.type != METRIC_DATA_TYPE_GAUGE'
   # 카디널리티 예산. 리소스 속성은 남길 것만 고른다(빼는 방식이 아니라 남기는 방식).
   # 여기를 통과한 리소스 속성은 Loki 에서 인덱스 라벨(loki.yaml 의 index_label)이거나
   # structured metadata 가 된다. 목록에 없는 속성은 저장되지 않는다.
@@ -315,7 +340,7 @@ service:
       exporters: [otlp/tempo]
     metrics:
       receivers: [otlp, spanmetrics, servicegraph]
-      processors: [memory_limiter, filter/unused-metrics, transform/metric-uri, transform/resource-allowlist, batch]
+      processors: [memory_limiter, filter/unused-metrics, filter/k6, transform/metric-uri, transform/k6, transform/resource-allowlist, batch]
       exporters: [otlphttp/mimir]
   telemetry:
     logs:

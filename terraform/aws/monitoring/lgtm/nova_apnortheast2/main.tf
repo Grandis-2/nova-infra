@@ -482,6 +482,7 @@ resource "aws_ecs_service" "obs" {
     namespace = data.terraform_remote_state.ecs.outputs.service_discovery_namespace_arn
 
     # 게이트웨이(gateway.tf)가 보내는 곳. obs SG 는 이 포트들을 게이트웨이 SG 에만 연다(앱은 별칭이 풀려도 닿지 못한다)
+    # 예외로 Mimir 9009 는 부하 시험 컨트롤러 SG 에도 연다. 컨트롤러는 별칭이 아니라 obs 태스크 IP 로 직접 조회한다(terraform/aws/loadtest)
     dynamic "service" {
       for_each = local.gateway_enabled ? {
         loki         = { port_name = "loki-http", port = local.obs_ports.loki_http }
