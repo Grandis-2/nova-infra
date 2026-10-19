@@ -13,7 +13,7 @@
 | DB | AWS RDS for MySQL Multi-AZ, db 서브넷 | NCP Cloud DB for MySQL 단일, NAT 고정 IP 로 접속 | 약 110달러 | RDS 스택을 만들고 이관 |
 | Container Insights | 켬 (태스크 단위 지표) | 끔. 무료 `AWS/ECS` 지표와 ECS 이벤트 경보로 대신 | 약 75달러 | ecs `container_insights = "enhanced"` |
 | NAT | NAT Gateway, AZ마다 하나 | NAT 인스턴스(fck-nat t4g.micro) AZ마다 하나 | 약 70달러 + 처리 요금 | vpc `nat_mode = "gateway"` |
-| obs 호스트 크기 | t4g.large (2 vCPU · 8 GiB) | t4g.medium (2 vCPU · 4 GiB), 컨테이너 메모리 한도를 실측으로 다시 나눔 | 약 30달러 | ecs `obs_instance_type`, lgtm `obs_memory` |
+| obs 호스트 크기 | t4g.large (2 vCPU · 8 GiB) | t4g.medium (2 vCPU · 4 GiB), 컨테이너 메모리 한도를 실측으로 다시 나눔. 부하 시험 기간(2026-10-19부터 2~3일)에는 large 로 잠시 되돌린다 | 약 30달러 | ecs `obs_instance_type`, lgtm `obs_memory` |
 | mock 최소 대수 | 2대 | 1대 | 약 30달러 | `application/mock/service.yml` 의 `scaling.min` |
 | waitingroom · preorder 크기 | 2 vCPU · 4 GiB | 1 vCPU · 2 GiB, 몰리면 오토스케일링 | 약 20달러 | 각 `service.yml` 의 `cpu` · `memory` |
 | Atlantis 진입로 | 전용 ALB | 메인 ALB를 같이 쓰고 CloudFront 뒤에 둠 | 약 20달러 | atlantis-deploy 저장소 |

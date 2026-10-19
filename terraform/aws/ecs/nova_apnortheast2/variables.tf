@@ -77,9 +77,10 @@ variable "db_ssl_mode" {
 }
 
 variable "obs_instance_type" {
-  description = "관측 스택(obs)을 올리는 EC2. ARM(Graviton) 이어야 한다 (ECS 최적화 AL2023 arm64 AMI). 메모리를 바꾸면 monitoring 스택의 obs_task_memory · 컨테이너 한도(obs_memory)도 맞춘다"
+  description = "관측 스택(obs)을 올리는 EC2. ARM(Graviton) 이어야 한다 (ECS 최적화 AL2023 arm64 AMI). 메모리를 바꾸면 monitoring 스택의 obs_task_memory · 컨테이너 한도(obs_memory)도 맞춘다. 키울 때는 이 스택을 먼저, 줄일 때는 monitoring 을 먼저 적용한다(태스크 메모리가 인스턴스보다 크면 obs 가 뜨지 못한다)"
   type        = string
-  default     = "t4g.medium"
+  # 부하 시험 기간(2026-10-19부터 2~3일)에만 large. 평소는 t4g.medium 이다(시험이 끝나면 되돌린다)
+  default = "t4g.large"
 }
 
 variable "obs_data_volume_size" {
