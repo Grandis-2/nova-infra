@@ -27,9 +27,10 @@ routes:
     paths: ["/api/v1/promotions*", "/api/v1/admin/promotions*", "/api/v1/admin/images*", "/api/v1/*banners*"]
 
 jwt: verify
-calls:                          # 리뷰 작성 때만 부른다
-  spring.http.serviceclient.order.base-url: order     # 내 주문상품 확인
-  spring.http.serviceclient.member.base-url: member   # 작성자 표시명
+calls:
+  spring.http.serviceclient.order.base-url: order        # 내 주문상품 확인(리뷰) · 재고(목록 · 상세)
+  spring.http.serviceclient.member.base-url: member      # 작성자 표시명(리뷰)
+  spring.http.serviceclient.preorder.base-url: preorder  # 사전예약 회차 일정(목록 · 상세 · 관리자 수정 판정)
 db: shop
 redis: main                     # 상품 · 가격 · 홍보 캐시
 
