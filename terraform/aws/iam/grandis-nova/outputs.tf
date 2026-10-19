@@ -63,3 +63,12 @@ output "service_permissions" {
     }
   }
 }
+
+output "loadtest_role_arns" {
+  description = "부하 시험 역할 (loadtest.tf). github-run · github-build 는 nova-loadtest 워크플로가, 나머지는 ecs 스택의 작업 정의가 쓴다"
+  value = merge(
+    { for k, r in aws_iam_role.loadtest_github : "github-${k}" => r.arn },
+    { for k, r in aws_iam_role.loadtest_task : k => r.arn },
+    { for k, r in aws_iam_role.loadtest_execution : k => r.arn },
+  )
+}
