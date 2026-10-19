@@ -3,7 +3,9 @@
 로그 줄은 형식만 실제와 같고 값은 지어낸 것이다.
 """
 
+import gzip
 import importlib.util
+import io
 import os
 import sys
 import types
@@ -50,6 +52,10 @@ CF_LINES = [
                "/", "504", "-", "-", "-", "-", "Error", "REQ2", "api.example.com", "https", "0", "30.001", "-", "-",
                "-", "Error", "HTTP/1.1", "-", "-", "1", "-", "OriginCommError", "-", "-", "-", "-"]),
 ]
+
+
+LOADTEST_ALB = ALB_LINE.replace('"Mozilla/5.0"', '"nova-loadtest/lt-20261019t0630-1"')
+LOADTEST_CF = CF_LINES[2].replace("Mozilla/5.0%20(X11)", "nova-loadtest/lt-20261019t0630-1")
 
 
 def attrs(record):
@@ -120,6 +126,60 @@ class OtlpTest(unittest.TestCase):
         for body in (b"", b"not json", b"[]", b"null"):
             with self.assertRaises(RuntimeError):
                 handler.rejected_count(body)
+
+
+class LoadtestFilterTest(unittest.TestCase):
+    def test_alb_skips_loadtest_user_agent(self):
+        skipped = handler.Skipped()
+        records = list(handler.parse_alb([LOADTEST_ALB, ALB_LINE], skipped))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(skipped.loadtest, 1)
+
+    def test_cloudfront_skips_loadtest_user_agent(self):
+        skipped = handler.Skipped()
+        records = list(handler.parse_cloudfront(CF_LINES[:2] + [LOADTEST_CF, CF_LINES[2]], skipped))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(skipped.loadtest, 1)
+
+    def test_path_with_loadtest_text_is_kept(self):
+        # 경로에 같은 글자가 있어도 User-Agent 가 아니면 남긴다
+        line = ALB_LINE.replace("/api/v1/items/42", "/api/v1/nova-loadtest/42")
+        self.assertEqual(len(list(handler.parse_alb([line]))), 1)
+
+
+class StreamTest(unittest.TestCase):
+    """큰 파일을 통째로 들지 않고 줄 단위로 읽어 BATCH 씩 보내는지"""
+
+    def setUp(self):
+        self.batches = []
+        self._post, self._s3, self._chunk = handler.post, handler.s3, handler.CHUNK
+        handler.post = lambda source, records: self.batches.append(len(records)) or 0
+        handler.CHUNK = 4096  # 줄이 청크 경계에 걸치는 경우를 만든다
+
+    def tearDown(self):
+        handler.post, handler.s3, handler.CHUNK = self._post, self._s3, self._chunk
+
+    def run_file(self, key, lines, gz=True):
+        data = "\n".join(lines).encode()
+        body = io.BytesIO(gzip.compress(data) if gz else data)
+        handler.s3 = types.SimpleNamespace(get_object=lambda **_: {"Body": body})
+        event = {"Records": [{"s3": {"bucket": {"name": "b"}, "object": {"key": key}}}]}
+        return handler.handler(event, None)
+
+    def test_large_alb_file(self):
+        lines = [LOADTEST_ALB] * 3000 + [ALB_LINE] * 1200
+        result = self.run_file("alb/AWSLogs/x.log.gz", lines)
+        self.assertEqual(result, {"records": 1200, "rejected": 0})
+        self.assertEqual(self.batches, [500, 500, 200])
+
+    def test_cloudfront_plain_file(self):
+        lines = CF_LINES[:2] + [LOADTEST_CF] * 10 + [CF_LINES[2]] * 3
+        result = self.run_file("cloudfront/E1.2026-10-19-00.x", lines, gz=False)
+        self.assertEqual(result["records"], 3)
+
+    def test_lines_split_across_chunks(self):
+        body = io.BytesIO(gzip.compress(("x" * 5000 + "\n" + "y" * 10 + "\r\n" + "z").encode()))
+        self.assertEqual([len(l) for l in handler.lines_of(body, True)], [5000, 10, 1])
 
 
 if __name__ == "__main__":

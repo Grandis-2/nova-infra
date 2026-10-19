@@ -4,7 +4,7 @@ S3 이벤트처럼 가끔 생기는 일을 처리하는 함수들이다.
 
 | 함수 | 언제 도는가 | 하는 일 |
 |---|---|---|
-| `nova-prod-edge-logs` | 로그 버킷 `alb/` · `cloudfront/` 에 파일이 생길 때 | ALB · CloudFront 접근 로그를 OTel 게이트웨이로 보내 Loki 에 쌓는다 |
+| `nova-prod-edge-logs` | 로그 버킷 `alb/` · `cloudfront/` 에 파일이 생길 때 | ALB · CloudFront 접근 로그를 OTel 게이트웨이로 보내 Loki 에 쌓는다. 부하 시험 요청 줄(User-Agent `nova-loadtest/`)은 버린다 |
 
 ## 구조
 
