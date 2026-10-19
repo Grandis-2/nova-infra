@@ -5,7 +5,8 @@
 # 폴더 구조
 #   <서비스>/grandis-nova                     계정 단위 (init, iam, s3, edge, cdn)
 #   <서비스>/grandis-nova/ap-northeast-2      리전 단위 (kms, ecr, sqs, acm, cognito, secretsmanager)
-#   <서비스>/nova_apnortheast2                VPC 단위 (vpc, securitygroup, elasticache, ecs, bastion, scheduler, monitoring, lambda)
+#   <서비스>/nova_apnortheast2                VPC 단위 (vpc, securitygroup, elasticache, ecs, bastion, scheduler, monitoring, lambda, loadtest)
+#   loadtest 만 종류별이 아니라 부하 시험 리소스를 한 스택에 모은다(운영과 섞지 않고 한 번에 걷어내려고)
 #   monitoring/<cloudwatch|lgtm>/nova_apnortheast2   관측은 도구별로 한 단계 더 나눈다
 #
 # 적용 순서: execution_order_group 이 낮은 층부터 적용한다.
@@ -16,7 +17,7 @@
 #   4 iam
 #   5 ecs, bastion
 #   6 edge, scheduler, monitoring
-#   7 lambda          게이트웨이 수집 주소(lgtm 출력)를 읽는다
+#   7 lambda, loadtest  게이트웨이 수집 주소(lgtm 출력)를 읽는다
 #
 # 한 PR 이 여러 층을 바꾸면 위층 plan 은 아래층 apply 전의 값으로 만들어진다.
 # 아래층을 apply 한 뒤 `atlantis plan -p <위층>` 으로 다시 plan 하고 apply 한다.
@@ -265,5 +266,17 @@ projects:
     terraform_version: v1.16.0
     autoplan:
       when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../_modules/**", "../../../../functions/**"]
+      enabled: true # 이 스택을 올리는 PR 에서 true
+    apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
+
+  # 부하 시험(Grandis-2/nova-loadtest) — ECR · 버킷 · SG · IAM · 클러스터 · 작업 정의 · 실행 파라미터.
+  # 발급기의 JWT 값을 member 설정에서 읽어 그 파일도 본다
+  - name: loadtest
+    dir: terraform/aws/loadtest/nova_apnortheast2
+    execution_order_group: 7
+    workspace: default
+    terraform_version: v1.16.0
+    autoplan:
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "../../../application/member/application.yml"]
       enabled: true # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
