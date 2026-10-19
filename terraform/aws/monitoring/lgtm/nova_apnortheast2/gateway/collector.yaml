@@ -77,7 +77,7 @@ processors:
     error_mode: ignore
     metrics:
       metric:
-        - 'resource.attributes["service.name"] == "k6" and IsMatch(metric.name, "^k6_(iteration_duration|group_duration|data_sent|data_received|http_req_(blocked|connecting|tls_handshaking|sending|waiting|receiving))")'
+        - 'resource.attributes["service.name"] == "k6" and IsMatch(metric.name, "^k6_(iteration_duration|group_duration|data_sent|data_received|http_req_(blocked|connecting|tls_handshaking|sending|waiting|receiving))$$")'
   # k6 데이터 포인트 속성은 남길 것만 고른다. url · group 같은 태그가 다시 켜져도 여기서 버린다.
   #   test_id 시험 ID · instance 태스크 번호(리소스 속성이 안 먹을 때의 대안) · error_code 오류 코드 카운터 · check 검사 이름
   #   condition  Rate 지표(http_req_failed · checks)를 k6 가 카운터 하나에 zero · nonzero 로 나눠 낸다. 빠지면 비율을 못 구한다
