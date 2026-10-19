@@ -398,6 +398,15 @@ resource "aws_cloudwatch_log_group" "obs" {
   retention_in_days = var.obs_log_retention_days
 }
 
+# obs 인스턴스 종류 (ecs 스택 obs.tf 의 시작 템플릿). 태스크 메모리가 들어가는지 아래 precondition 에서 본다
+data "aws_launch_template" "obs" {
+  name = local.obs_name
+}
+
+data "aws_ec2_instance_type" "obs" {
+  instance_type = data.aws_launch_template.obs.instance_type
+}
+
 resource "aws_ecs_task_definition" "obs" {
   family                   = local.obs_name
   requires_compatibilities = ["EC2"]
@@ -437,6 +446,15 @@ resource "aws_ecs_task_definition" "obs" {
     content {
       name      = "${volume.key}-data"
       host_path = "${local.obs_mount_path}/${volume.key}"
+    }
+  }
+
+  lifecycle {
+    # 태스크 메모리가 obs 인스턴스보다 크면 새 태스크를 놓을 곳이 없어 obs 가 멈춘다. 인스턴스 종류는 ecs 스택(obs_instance_type)이
+    # 정한다. 키울 때 ecs 를 먼저 적용하지 않았으면 여기서 멈춘다. ECS 에이전트 · OS 몫으로 512 MiB 를 뺀다
+    precondition {
+      condition     = var.obs_task_memory <= data.aws_ec2_instance_type.obs.memory_size - 512
+      error_message = "obs_task_memory(${var.obs_task_memory})가 obs 인스턴스(${data.aws_launch_template.obs.instance_type}, ${data.aws_ec2_instance_type.obs.memory_size} MiB)에 들어가지 않습니다. ecs 스택의 obs_instance_type 을 먼저 키워 적용하세요."
     }
   }
 }
