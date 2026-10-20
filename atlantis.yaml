@@ -13,8 +13,8 @@
 #   0 init, sops      최초 적용은 관리자가 직접 한다
 #   1 vpc             최초 적용은 관리자가 직접 한다
 #   2 securitygroup, s3, sqs, ecr, acm, cognito, secretsmanager
-#   3 ncp-database, elasticache, cdn
-#   4 iam, rds        rds 는 ncp-database(층 3) 출력을 읽는다
+#   3 elasticache, cdn
+#   4 iam, rds
 #   5 ecs, bastion
 #   6 edge, scheduler, monitoring
 #   7 lambda, loadtest  게이트웨이 수집 주소(lgtm 출력)를 읽는다
@@ -144,17 +144,6 @@ projects:
       enabled: true # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
-  # MySQL (NCP Cloud DB). AWS NAT 고정 IP 에서만 접속할 수 있다
-  - name: ncp-database
-    dir: terraform/ncp/database/grandis-nova/kr
-    execution_order_group: 3
-    workspace: default
-    terraform_version: v1.16.0
-    autoplan:
-      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../../variables/*.tf", "../../../../variables/*.tfvars", "../../../*.tf", "../../../../aws/provider.tf", "../../../../application/*/*.yml"]
-      enabled: true # 이 스택을 올리는 PR 에서 true
-    apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
-
   # 업로드 이미지 CDN (cdn.grandis-nova.link → S3 업로드 버킷)
   - name: cdn
     dir: terraform/aws/cdn/grandis-nova
@@ -206,8 +195,7 @@ projects:
     workspace: default
     terraform_version: v1.16.0
     autoplan:
-      # 런북 스크립트가 바뀌면 SSM 문서도 바뀐다(db_migration.tf)
-      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf", "templates/*", "../../../../scripts/db-migration/*.sh"]
+      when_modified: ["*.tf", "*.tfvars", ".terraform.lock.hcl", "../../../variables/*.tf", "../../../variables/*.tfvars", "../../*.tf"]
       enabled: true # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 

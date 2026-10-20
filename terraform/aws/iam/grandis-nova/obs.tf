@@ -125,7 +125,7 @@ resource "aws_iam_role_policy" "obs_execution_secret" {
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = [data.terraform_remote_state.secretsmanager.outputs.grafana_admin_secret_arn]
       },
-      # mysqld_exporter 계정 (ncp-database 스택 exporter.tf). 이름 규칙으로 준다 — ARN 끝 6자리는 Secrets Manager 가 붙인다
+      # mysqld_exporter 계정 (rds 스택 secrets.tf). 이름 규칙으로 준다 — ARN 끝 6자리는 Secrets Manager 가 붙인다
       {
         Sid      = "MysqldExporterPassword"
         Effect   = "Allow"

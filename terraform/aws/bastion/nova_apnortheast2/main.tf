@@ -26,14 +26,6 @@ locals {
     dnf install -y mariadb105
   EOT
 
-  # RDS 이전 기간: 런북(db_migration.tf)이 쓰는 MySQL 8.4 클라이언트 · MySQL Shell · jq.
-  # MariaDB 클라이언트는 --ssl-mode 를 몰라 런북을 돌릴 수 없다. MySQL 공식 저장소(EL9 용)를 쓴다
-  user_data_db_migration = <<-EOT
-    #!/bin/bash
-    set -euo pipefail
-    dnf install -y jq https://dev.mysql.com/get/mysql84-community-release-el9-1.noarch.rpm
-    dnf install -y mysql-community-client mysql-shell
-  EOT
 }
 
 resource "aws_instance" "this" {
@@ -62,7 +54,7 @@ resource "aws_instance" "this" {
   }
 
   # user_data 는 처음 부팅 때만 돌므로 바뀌면 인스턴스를 새로 만든다(상태가 없어 잃는 것이 없다. 인스턴스 ID 는 바뀐다)
-  user_data                   = var.db_migration_tools ? local.user_data_db_migration : local.user_data_default
+  user_data                   = local.user_data_default
   user_data_replace_on_change = true
 
   tags = { Name = "${local.name_prefix}-bastion" }

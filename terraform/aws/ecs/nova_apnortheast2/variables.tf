@@ -132,20 +132,5 @@ variable "db_state" {
   }
 }
 
-variable "proxysql_enabled" {
-  description = "ProxySQL 2대와 내부 NLB 를 만든다 (proxysql.tf). 앱은 db_via_proxysql 을 켜야 붙는다"
-  type        = bool
-  default     = false
-}
 
-variable "db_via_proxysql" {
-  description = "앱(service.yml 의 db)의 DB 주소를 ProxySQL NLB 로 바꾼다. 바꾸면 DB 를 쓰는 서비스가 모두 다시 배포된다"
-  type        = bool
-  default     = false
-}
 
-variable "proxysql_image" {
-  description = "ProxySQL 이미지. 로컬 시험(scripts/db-migration/local)과 같은 버전 · 다이제스트"
-  type        = string
-  default     = "proxysql/proxysql:3.0.11@sha256:0e95d1b7cc32f1de7923ffbf6cc4ba658874a6f6a6b7c2cdfdc6444304c13caf"
-}
