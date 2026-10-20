@@ -77,8 +77,11 @@ case $cmd in
     if [[ $mode == rds ]]; then
       # UNTIL 위치가 지금 위치라 SQL 스레드는 시작하자마자 멈춘다. RDS 프로시저는 끝날 때 SQL 스레드가 멈춰 있으면
       # 오류(1644)를 낸다(운영 G2 에서 확인). 그래서 여기서 멈추지 않고 아래 복제 상태로 판정한다
-      rds_ctl <<<"CALL mysql.rds_start_replication_until('$file', $pos)" ||
-        log "rds_start_replication_until 이 오류를 냈다(UNTIL 위치에 바로 닿은 SQL 스레드 정지일 수 있다). 복제 상태로 판정한다"
+      # 1644(프로시저가 낸 오류)만 넘긴다. 접속 · 인증 · 시간 초과 같은 다른 실패는 그 오류를 보이고 멈춘다(정리는 ON_EXIT 가 한다)
+      if ! out=$(rds_ctl <<<"CALL mysql.rds_start_replication_until('$file', $pos)" 2>&1); then
+        [[ "$out" == *"ERROR 1644"* ]] || die "rds_start_replication_until 실패: $out"
+        log "rds_start_replication_until 이 1644 를 냈다(UNTIL 위치에 바로 닿은 SQL 스레드 정지일 수 있다). 복제 상태로 판정한다"
+      fi
     else
       rds_ctl <<<"START REPLICA UNTIL SOURCE_LOG_FILE='$file', SOURCE_LOG_POS=$pos"
     fi
