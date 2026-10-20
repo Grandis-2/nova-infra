@@ -6,15 +6,14 @@
 #   3. 전환 30분 전 read_only=0, 전환(런북 60-cutover) 뒤 primary = "rds"
 # 단계와 순서는 scripts/db-migration/README.md 와 이전 계획을 따른다.
 #
-# 소비자(ecs · lgtm)는 NCP 스택과 같은 이름의 출력(outputs.tf)을 읽는다. 그래서 database 원격 상태의 key 만
-# 이 스택으로 바꾸면 되고, 쓰기 DB 가 어디인지는 primary 하나로 정한다.
+# 소비자(ecs · lgtm)는 NCP 스택과 같은 이름의 출력(outputs.tf)을 읽는다(db_state = "rds"). 전환(2026-10-20) 뒤
+# NCP 를 해체하며 DB 계정 비밀도 이 스택으로 옮겼다(secrets.tf).
 #
 # 복제를 받으려면 db 서브넷이 NAT 로 나가야 한다(vpc 스택 db_subnet_nat_egress, securitygroup 스택 rds_replication_egress).
 
 locals {
   db_subnet_ids = data.terraform_remote_state.vpc.outputs.db_subnet_ids
   rds_sg_id     = data.terraform_remote_state.security.outputs.rds_security_group_id
-  ncp           = data.terraform_remote_state.database.outputs
 
   # 8.4.11 -> mysql8.4
   family = "mysql${join(".", slice(split(".", var.engine_version), 0, 2))}"

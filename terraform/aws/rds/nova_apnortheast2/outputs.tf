@@ -1,32 +1,30 @@
-# ── NCP 스택(ncp-database)과 같은 이름의 출력 ─────────────────
-# 소비자는 database 원격 상태의 key 만 이 스택(prod/rds)으로 바꾸면 된다.
-# 시크릿은 아직 NCP 스택이 만든 것이다(앱 계정은 RDS 에도 같은 이름 · 비밀번호로 만든다). 이전이 끝나면 이 스택으로 소유권을 옮긴다
+# ── 소비자(ecs · lgtm)가 읽는 출력. NCP 스택(ncp-database)과 같은 이름이다 ─────────
 
 output "db_address" {
-  description = "쓰기 DB 주소. primary 가 ncp 면 NCP Public 도메인, rds 면 RDS 엔드포인트"
-  value       = var.primary == "rds" ? aws_db_instance.this.address : local.ncp.db_address
+  description = "DB 주소(RDS 엔드포인트)"
+  value       = aws_db_instance.this.address
 }
 
 output "db_port" {
-  value = var.primary == "rds" ? aws_db_instance.this.port : local.ncp.db_port
+  value = aws_db_instance.this.port
 }
 
 output "app_secret_arns" {
-  description = "서비스 키 -> DB 계정 시크릿 ARN (NCP 스택 출력 그대로)"
-  value       = local.ncp.app_secret_arns
+  description = "서비스 키 -> DB 계정 시크릿 ARN (secrets.tf)"
+  value       = { for k, s in aws_secretsmanager_secret.app : k => s.arn }
 }
 
 output "ops_secret_arns" {
-  description = "migrator, admin 시크릿 ARN (NCP 스택 출력 그대로)"
-  value       = local.ncp.ops_secret_arns
+  description = "migrator, admin 시크릿 ARN (secrets.tf)"
+  value       = { for k, s in aws_secretsmanager_secret.ops : k => s.arn }
 }
 
 output "exporter_username" {
-  value = local.ncp.exporter_username
+  value = "nova_exporter"
 }
 
 output "exporter_secret_arn" {
-  value = local.ncp.exporter_secret_arn
+  value = aws_secretsmanager_secret.exporter.arn
 }
 
 # ── 이전 기간에만 쓰는 출력 ──────────────────────────────────
@@ -39,10 +37,6 @@ output "primary" {
   value = var.primary
 }
 
-output "ncp_address" {
-  description = "NCP Public 도메인. ProxySQL 의 ncp 서버 · 런북의 복제 소스"
-  value       = local.ncp.db_address
-}
 
 output "rds_address" {
   description = "RDS 엔드포인트. ProxySQL 의 rds 서버 · 런북의 대상"
