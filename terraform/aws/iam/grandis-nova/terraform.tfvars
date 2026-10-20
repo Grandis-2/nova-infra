@@ -9,3 +9,6 @@ github_mock_repositories = ["Grandis-2@336932992/mock@1365107413"]
 
 # 계정에 GitHub OIDC 공급자가 이미 있다 (token.actions.githubusercontent.com). 새로 만들지 않고 조회해서 쓴다
 create_github_oidc_provider = false
+
+# RDS 이전 기간에만 켠다 (db_migration.tf). NCP 를 내리고 ProxySQL 을 지운 뒤 false
+db_migration = true

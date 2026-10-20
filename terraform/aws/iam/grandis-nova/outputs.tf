@@ -63,3 +63,8 @@ output "service_permissions" {
     }
   }
 }
+
+output "proxysql_execution_role_arn" {
+  description = "ProxySQL 태스크(ecs 스택 proxysql.tf) 실행 역할. db_migration 이 꺼져 있으면 빈 값"
+  value       = try(aws_iam_role.proxysql_execution[0].arn, "")
+}
