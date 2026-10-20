@@ -95,7 +95,7 @@ resource "terraform_data" "db_ready" {
   lifecycle {
     precondition {
       condition     = local.db_address != ""
-      error_message = "DB 주소가 비어 있습니다. NCP 콘솔에서 Cloud DB for MySQL 의 Public 도메인을 켜고 ncp-database 를 다시 apply 하세요."
+      error_message = "DB 주소가 비어 있습니다. rds 스택 출력(db_address)을 확인하세요."
     }
   }
 }

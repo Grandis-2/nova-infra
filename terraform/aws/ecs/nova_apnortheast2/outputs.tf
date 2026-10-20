@@ -118,12 +118,3 @@ output "alb_https_listener_arn" {
   value       = try(aws_lb_listener.https[0].arn, "")
 }
 
-output "proxysql" {
-  description = "RDS 이전 기간의 ProxySQL (proxysql_enabled 일 때만). 런북은 같은 값을 SSM /<접두사>/db-migration/proxysql 에서 읽는다"
-  value = var.proxysql_enabled ? {
-    nlb_address      = aws_lb.proxysql[0].dns_name
-    service_name     = aws_ecs_service.proxysql[0].name
-    target_group_arn = aws_lb_target_group.proxysql[0].arn
-    parameter_name   = aws_ssm_parameter.proxysql[0].name
-  } : null
-}

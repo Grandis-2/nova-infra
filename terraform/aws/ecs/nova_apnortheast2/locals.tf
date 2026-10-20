@@ -16,11 +16,11 @@ locals {
   repository_urls     = data.terraform_remote_state.ecr.outputs.repository_urls
   repository_names    = data.terraform_remote_state.ecr.outputs.repository_names # nova/<서비스>
 
-  # 쓰기 DB 에 바로 붙는 주소(마이그레이션 태스크). 앱은 RDS 이전 기간에 ProxySQL NLB 로 붙는다(db_via_proxysql, proxysql.tf)
+  # 앱 · 마이그레이션 태스크가 붙는 DB 주소
   db_address            = data.terraform_remote_state.database.outputs.db_address
   db_port               = data.terraform_remote_state.database.outputs.db_port
-  app_db_address        = var.db_via_proxysql ? one(aws_lb.proxysql[*].dns_name) : local.db_address
-  app_db_port           = var.db_via_proxysql ? local.proxysql_port : local.db_port
+  app_db_address        = local.db_address
+  app_db_port           = local.db_port
   db_secret_arns        = data.terraform_remote_state.database.outputs.app_secret_arns
   app_secret_arns       = data.terraform_remote_state.secrets.outputs.app_secret_arns
   generated_secret_arns = data.terraform_remote_state.secrets.outputs.generated_secret_arns
@@ -58,7 +58,7 @@ locals {
 
   # ── 시크릿 ─────────────────────────────────────────────────
   # 값 대신 "시크릿 ARN:json 키::" 를 넘겨 태스크 정의에 비밀 값이 남지 않게 한다.
-  #   db              → ncp-database 가 만든 서비스 계정 (nova-prod/db/app/<서비스>)
+  #   db              → rds 스택이 관리하는 서비스 계정 비밀 (nova-prod/db/app/<서비스>)
   #   extra_databases → 같은 계정으로 접속하는 다른 DB
   #   secrets.sops.yml  → 그 서비스의 시크릿(nova-prod/app/<서비스>). 키 이름이 곧 환경변수 이름
   #   generated_secrets → Terraform 이 만든 시크릿 (값 전체가 환경변수 값). shared/<이름> 은 공유 시크릿

@@ -7,13 +7,13 @@
 #   scripts/tf.sh aws/vpc/nova_apnortheast2 init
 #   scripts/tf.sh aws/vpc/nova_apnortheast2 plan
 #   scripts/tf.sh aws/vpc/nova_apnortheast2 apply      (관리자 세션 + TF_ALLOW_LOCAL_WRITE=1 일 때만)
-#   scripts/tf.sh ncp/database/grandis-nova/kr plan
+#   scripts/tf.sh aws/rds/nova_apnortheast2 plan
 #
 # backend 블록에는 변수를 쓸 수 없어 bucket/region 을 .env 의 TF_BACKEND_* 에서 -backend-config 로 넘긴다.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-stack="${1:?스택 경로를 지정하세요 (예: aws/vpc/nova_apnortheast2, ncp/database/grandis-nova/kr)}"
+stack="${1:?스택 경로를 지정하세요 (예: aws/vpc/nova_apnortheast2, aws/rds/nova_apnortheast2)}"
 shift
 
 # aws/ 를 생략하면 terraform/aws 아래에서 찾는다 (vpc/nova_apnortheast2 → terraform/aws/vpc/nova_apnortheast2)
