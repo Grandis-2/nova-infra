@@ -48,7 +48,7 @@ locals {
     time_zone                       = { value = "Asia/Seoul", static = false }                                 # NCP 는 +09:00. RDS 는 지역 이름만 받는다
     event_scheduler                 = { value = "OFF", static = false }                                        # MySQL 8 기본값은 ON
     sql_require_primary_key         = { value = "1", static = false }
-    explicit_defaults_for_timestamp = { value = "1", static = false }
+    explicit_defaults_for_timestamp = { value = "1", static = true } # RDS 에서는 정적이다(immediate 를 주면 그룹 변경 apply 가 거절된다)
     transaction_isolation           = { value = "READ-COMMITTED", static = false }
     innodb_lock_wait_timeout        = { value = "61", static = false }
     lock_wait_timeout               = { value = "61", static = false }
