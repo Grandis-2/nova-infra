@@ -53,6 +53,20 @@ resource "aws_vpc_security_group_ingress_rule" "to_cache" {
   to_port                      = 6379
 }
 
+# ── 서비스 → DB ─────────────────────────────────────────────
+# RDS 이전 기간에는 ProxySQL NLB 로, 전환 뒤에는 RDS 로 바로 붙는다. NCP 는 VPC 밖이라 아웃바운드(all)로 나간다
+resource "aws_vpc_security_group_ingress_rule" "to_db" {
+  # 키(proxysql_nlb · rds)는 plan 때 알고 있다. 값(SG ID)은 아직 없어도 된다
+  for_each = var.use_db ? var.db_security_group_ids : {}
+
+  security_group_id            = each.value
+  description                  = "from ${var.name} tasks"
+  referenced_security_group_id = aws_security_group.this.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
+}
+
 # ── 서비스 → VPC 인터페이스 엔드포인트 ──────────────────────
 resource "aws_vpc_security_group_ingress_rule" "to_vpce" {
   security_group_id            = var.vpce_security_group_id

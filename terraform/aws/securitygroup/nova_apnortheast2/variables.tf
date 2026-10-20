@@ -18,3 +18,9 @@ variable "cloudfront_prefix_list_id" {
   type        = string
   default     = ""
 }
+
+variable "rds_replication_egress" {
+  description = "RDS 가 NCP 로 3306 을 내보낸다(NCP → RDS 복제). 복제 기간에만 켜고 전환 뒤 끈다 (rds.tf)"
+  type        = bool
+  default     = false
+}

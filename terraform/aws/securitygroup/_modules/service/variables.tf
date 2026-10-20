@@ -38,3 +38,15 @@ variable "vpce_security_group_id" {
   description = "VPC 인터페이스 엔드포인트 보안 그룹"
   type        = string
 }
+
+variable "use_db" {
+  description = "이 서비스가 DB 를 쓰는지 (service.yml 의 db)"
+  type        = bool
+  default     = false
+}
+
+variable "db_security_group_ids" {
+  description = "use_db 면 3306 을 열어 줄 SG (이름 -> ID). RDS 이전 기간의 ProxySQL NLB 와 RDS"
+  type        = map(string)
+  default     = {}
+}

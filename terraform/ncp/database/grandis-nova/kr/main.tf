@@ -46,6 +46,11 @@ resource "random_password" "user" {
   min_upper        = 1
 
   keepers = { version = var.password_version }
+
+  # password_version 을 올리면 비밀번호가 바뀌는데, RDS 로 옮긴 계정은 따라가지 않는다. 이전 기간에는 막는다
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # ── DB ───────────────────────────────────────────────────────
@@ -86,6 +91,9 @@ resource "ncloud_mysql" "this" {
   database_name = "shop"
 
   lifecycle {
+    # RDS 이전이 끝날 때까지 지우거나 교체하지 못하게 막는다. 해체하는 PR 에서 함께 푼다(아래 리소스들도 같다)
+    prevent_destroy = true
+
     # 사양을 바꿀 때는 변수와 함께 이 목록을 의도적으로 고친다 (바꾸면 DB 교체)
     ignore_changes = [image_product_code, product_code, engine_version_code]
 
@@ -110,6 +118,10 @@ resource "ncloud_mysql_databases" "extra" {
   mysql_database_list = [
     { name = "external_mock" }, # mock 소유, batch 는 읽기만
   ]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "ncloud_mysql_users" "this" {
@@ -130,6 +142,11 @@ resource "ncloud_mysql_users" "this" {
       authority = "DDL"
     }],
   )
+
+  # 목록이 RequiresReplace 라 서비스 하나만 더해도 모든 계정을 지웠다 다시 만든다. 이전 기간에는 막는다
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # ── 접근 제어 (ACG) ──────────────────────────────────────────
@@ -145,6 +162,10 @@ resource "ncloud_access_control_group_rule" "db" {
     description                    = "AWS NAT ${ip}"
     source_access_control_group_no = null
   }]
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # ── Secrets Manager ──────────────────────────────────────────
@@ -161,6 +182,11 @@ resource "aws_secretsmanager_secret" "service" {
   recovery_window_in_days = 7
 
   tags = { Service = each.value.name }
+
+  # 앱 · ProxySQL · 런북이 이 이름으로 읽는다. 해체 때는 rds 스택으로 소유권을 옮긴 뒤 removed 로 뗀다
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "service" {
@@ -185,6 +211,10 @@ resource "aws_secretsmanager_secret" "ops" {
   name                    = "${local.name_prefix}/db/${each.key}"
   description             = "NCP MySQL ${each.key} account (operators and migrations only)"
   recovery_window_in_days = 7
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "ops" {

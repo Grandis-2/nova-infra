@@ -60,3 +60,18 @@ output "rum_collector_security_group_id" {
   description = "브라우저 수집기 태스크 SG. ALB 에서 12347 · 13133 을 받고 게이트웨이 4318 로 보낸다"
   value       = aws_security_group.rum_collector.id
 }
+
+output "rds_security_group_id" {
+  description = "RDS SG. ProxySQL · 서비스(db) · 마이그레이션 · obs · bastion 에서 3306 을 받는다"
+  value       = aws_security_group.rds.id
+}
+
+output "proxysql_security_group_id" {
+  description = "ProxySQL 태스크 SG. NLB 에서 3306, bastion 에서 6032 를 받는다"
+  value       = aws_security_group.proxysql.id
+}
+
+output "proxysql_nlb_security_group_id" {
+  description = "ProxySQL 앞 내부 NLB 의 SG. 서비스(db) · bastion 에서 3306 을 받는다"
+  value       = aws_security_group.proxysql_nlb.id
+}

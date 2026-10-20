@@ -44,6 +44,15 @@ variable "single_nat_gateway" {
   default     = false
 }
 
+variable "db_subnet_nat_egress" {
+  description = <<-EOT
+    db 서브넷의 0.0.0.0/0 을 첫 NAT(2a)로 보낸다. RDS 가 NCP 를 복제하는 이전 기간에만 켠다.
+    RDS 가 내보내는 포트는 RDS SG(securitygroup 스택 rds_replication_egress)가 3306 으로 좁힌다.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "enable_interface_endpoints" {
   description = "Interface VPC Endpoint 생성 여부. NAT 로도 나갈 수 있어 선택 사항이고 시간당 요금이 붙는다"
   type        = bool

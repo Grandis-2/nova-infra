@@ -1,7 +1,7 @@
 # 3-tier VPC. AZ 2개에 public/app/db 서브넷을 하나씩 둔다.
 #   public : ALB, NAT 만 둔다
 #   app    : ECS 태스크. 아웃바운드는 같은 AZ 의 NAT 로 나간다
-#   db     : ElastiCache. 기본 경로(0.0.0.0/0)가 없다
+#   db     : ElastiCache · RDS. 기본 경로(0.0.0.0/0)가 없다. RDS 가 NCP 를 복제하는 동안만 NAT-2a 로 나간다(db_subnet_nat_egress)
 
 locals {
   azs = var.availability_zones
@@ -108,13 +108,16 @@ module "nat_instance" {
   ha_mode            = true # ASG 1대. 교체되면 ENI, EIP 를 다시 붙인다
   eip_allocation_ids = [aws_eip.nat[count.index].id]
 
-  # 이 NAT 를 쓰는 app 라우팅 테이블에 0.0.0.0/0 → NAT ENI 경로를 넣는다
+  # 이 NAT 를 쓰는 라우팅 테이블에 0.0.0.0/0 → NAT ENI 경로를 넣는다. db 표는 첫 NAT(2a)만 쓴다
   update_route_tables = true
-  route_tables_ids = var.single_nat_gateway ? {
-    for i, rt in aws_route_table.app : "app-${local.az_suffix[i]}" => rt.id
-    } : {
-    "app-${local.az_suffix[count.index]}" = aws_route_table.app[count.index].id
-  }
+  route_tables_ids = merge(
+    var.single_nat_gateway ? {
+      for i, rt in aws_route_table.app : "app-${local.az_suffix[i]}" => rt.id
+      } : {
+      "app-${local.az_suffix[count.index]}" = aws_route_table.app[count.index].id
+    },
+    var.db_subnet_nat_egress && count.index == 0 ? { db = aws_route_table.db.id } : {},
+  )
 
   tags = { Name = "${local.name_prefix}-nat-${local.az_suffix[count.index]}" }
 
@@ -166,11 +169,22 @@ resource "aws_route_table_association" "app" {
   route_table_id = aws_route_table.app[count.index].id
 }
 
-# db 는 기본 경로가 없어 인터넷으로 나갈 수 없다
+# db 는 기본 경로가 없어 인터넷으로 나갈 수 없다.
+# 예외: RDS 가 NCP 의 binlog 를 받는 이전 기간(db_subnet_nat_egress). NCP ACG 가 NAT 고정 IP 만 받으므로 NAT 로 나가야 한다.
+# 이때도 SG 가 3306 만 내보낸다(securitygroup 스택 rds.tf). 전환이 끝나면 끈다
 resource "aws_route_table" "db" {
   vpc_id = aws_vpc.this.id
 
   tags = { Name = "${local.name_prefix}-db-rt" }
+}
+
+# 게이트웨이 모드. 인스턴스 모드는 fck-nat 모듈이 같은 경로를 넣는다(위 route_tables_ids)
+resource "aws_route" "db_nat" {
+  count = var.db_subnet_nat_egress && var.nat_mode == "gateway" ? 1 : 0
+
+  route_table_id         = aws_route_table.db.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.this[0].id
 }
 
 resource "aws_route_table_association" "db" {

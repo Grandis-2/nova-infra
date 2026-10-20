@@ -35,3 +35,8 @@ output "loadtest_header_secret" {
     arn  = aws_secretsmanager_secret.loadtest_header.arn
   }
 }
+
+output "db_migration_secret_arns" {
+  description = "RDS 이전 계정 비밀 (replication · dump · rehearsal · proxysql-admin · proxysql-monitor) -> ARN. JSON: username · password"
+  value       = { for k, s in aws_secretsmanager_secret.db_migration : k => s.arn }
+}
