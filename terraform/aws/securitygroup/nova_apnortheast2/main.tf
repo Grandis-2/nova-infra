@@ -23,8 +23,7 @@ module "service" {
 
   use_db = each.value.db != null
   db_security_group_ids = {
-    proxysql_nlb = aws_security_group.proxysql_nlb.id
-    rds          = aws_security_group.rds.id
+    rds = aws_security_group.rds.id
   }
 }
 

@@ -21,8 +21,3 @@ variable "create_github_oidc_provider" {
   default     = true
 }
 
-variable "db_migration" {
-  description = "RDS 이전 기간의 역할 · 권한(ProxySQL 실행 역할, bastion 런북 권한)을 만든다 (db_migration.tf)"
-  type        = bool
-  default     = false
-}
