@@ -60,7 +60,8 @@ resource "terraform_data" "proxysql_check" {
     precondition {
       # 앱이 ProxySQL 없이 DB 에 바로 붙을 때의 주소는 rds 스택의 primary 다. 런북이 쓴 실제 쓰기 대상과 다르면 두 DB 에
       # 쓰기가 갈린다(전환 뒤 rds 의 primary 를 바꾸기 전에 db_via_proxysql 을 끌 때)
-      condition     = var.db_state != "rds" || var.db_via_proxysql || local.db_migration.primary == data.aws_ssm_parameter.writer[0].insecure_value
+      # db_state = "ncp" 이면 rds 출력 · writer 가 없으므로 조건식으로 아예 읽지 않는다(|| 는 Terraform 1.12 전에는 끊어 읽지 않는다)
+      condition     = var.db_state != "rds" ? true : (var.db_via_proxysql || local.db_migration.primary == data.aws_ssm_parameter.writer[0].insecure_value)
       error_message = "앱이 DB 에 바로 붙는데 rds 스택의 primary 가 런북의 쓰기 대상과 다르다. rds 스택의 primary 를 먼저 맞춰 apply 한다."
     }
     precondition {
