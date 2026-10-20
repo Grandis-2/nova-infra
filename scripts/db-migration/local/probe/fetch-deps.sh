@@ -15,7 +15,12 @@ for entry in \
   want=${entry#*=}
   IFS=: read -r g a v <<<"$coord"
   jar="$a-$v.jar"
-  [[ -s "$lib/$jar" ]] && continue
+  # 이미 받은 jar 도 해시를 본다. 다르면 지우고 다시 받는다
+  if [[ -s "$lib/$jar" ]]; then
+    [[ "$(shasum -a 256 "$lib/$jar" | cut -c1-64)" == "$want" ]] && continue
+    echo "SHA-256 불일치: $jar (이미 받은 파일). 다시 받는다" >&2
+    rm -f "$lib/$jar"
+  fi
   url="$base/${g//.//}/$a/$v/$jar"
   curl -fsSL "$url" -o "$lib/$jar.tmp"
   got=$(shasum -a 256 "$lib/$jar.tmp" | cut -c1-64)

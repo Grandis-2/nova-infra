@@ -43,9 +43,10 @@ for i in "${!PX[@]}"; do
   [[ "$SQ" == 0 ]] || die "${PX_NODE[$i]}: $REHEARSAL_USER 는 다른 그룹을 쓰는 계정이다(운영 앱 계정을 쓰지 않는다)"
 done
 
-# 리허설 그룹 · 그 감시 그룹에 리허설 서버가 아닌 것이 있으면 멈춘다(다른 용도로 쓰는 그룹을 비우지 않게)
+# 리허설 그룹 · 그 감시 그룹에 리허설 서버가 아닌 것이 있으면 멈춘다(다른 용도로 쓰는 그룹을 비우지 않게).
+# ProxySQL 은 서버를 (그룹, 호스트, 포트)로 가리므로 포트까지 본다. 리허설 서버는 아래 setup 처럼 3306 이다
 for i in "${!PX[@]}"; do
-  sess_must "${PX[$i]}" "SELECT COUNT(*) FROM mysql_servers WHERE hostgroup_id IN ($hg, $((hg + 1))) AND hostname NOT IN ('$REHEARSAL_NCP_HOST', '$REHEARSAL_RDS_HOST')"
+  sess_must "${PX[$i]}" "SELECT COUNT(*) FROM mysql_servers WHERE hostgroup_id IN ($hg, $((hg + 1))) AND NOT (port = 3306 AND hostname IN ('$REHEARSAL_NCP_HOST', '$REHEARSAL_RDS_HOST'))"
   [[ "$SQ" == 0 ]] || die "${PX_NODE[$i]}: 그룹 $hg · $((hg + 1)) 에 리허설이 아닌 서버가 있다. 다른 그룹 번호를 쓴다"
 done
 
@@ -90,10 +91,12 @@ LOAD MYSQL USERS TO RUNTIME"
       rds_ctl <<<"CALL mysql.rds_stop_replication" >/dev/null 2>&1 || true
       rds_ctl <<<"CALL mysql.rds_reset_external_source"
     fi
-    sql="DROP USER IF EXISTS '$REHEARSAL_USER'@'%'; DROP DATABASE \`$REHEARSAL_MARKER_DB\`;"
+    sql="DROP USER IF EXISTS '$REHEARSAL_USER'@'%';"
     for d in "${schemas[@]}"; do
       sql+="DROP DATABASE IF EXISTS \`$d\`; CREATE DATABASE \`$d\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
     done
+    # 표식은 맨 끝에 지운다. 중간에 끊기면 표식이 남아 clean-rds 를 다시 돌릴 수 있다
+    sql+="DROP DATABASE \`$REHEARSAL_MARKER_DB\`;"
     rds <<<"$sql"
     log "clean-rds 끝. 표 수: $(rds_val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema IN ($(printf "'%s'," "${schemas[@]}" | sed 's/,$//'))")"
     exit 0

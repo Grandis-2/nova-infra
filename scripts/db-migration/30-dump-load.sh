@@ -3,7 +3,7 @@
 #
 #   NCP_HOST NCP_PORT DUMP_USER(기본 dump_rds) DUMP_PASSWORD   덤프 계정 (10-ncp-users.sh 가 만든다)
 #   RDS_* (마스터)   COORDS_FILE · COORDS_SSM_PARAM (lib.sh)
-#   DUMP_DIR          덤프를 둘 빈 디렉터리 (기본: $WORK_DIR/dump-<시각>). 어떻게 끝나든 지운다(KEEP_DUMP=1 이면 남긴다)
+#   DUMP_DIR          덤프를 둘 경로(없거나 빈 디렉터리) (기본: $WORK_DIR/dump-<시각>). 어떻게 끝나든 지운다(KEEP_DUMP=1 이면 남긴다)
 #   APP_SCHEMAS       옮길 DB (기본: shop external_mock)
 #   LONG_STMT_SECONDS 덤프 직전 NCP 에 이보다 오래 도는 문장이 있으면 시작하지 않는다 (기본 1)
 #   LOCK_WAIT_MAX_MS  덤프 시작 잠금 때문에 다른 세션이 이보다 오래 기다리면 덤프를 끊는다 (기본 200. 감시 주기와 끊는 데
@@ -91,6 +91,8 @@ watch_lock() {
   done
 }
 
+# 아래 정리가 지우는 것은 이 실행이 채운 디렉터리뿐이어야 하므로, 이미 무언가 든 경로는 받지 않는다
+[[ ! -e "$dump_dir" ]] || [[ -d "$dump_dir" && -z "$(ls -A "$dump_dir")" ]] || die "DUMP_DIR($dump_dir)이 비어 있지 않다. 없는 경로나 빈 디렉터리를 준다"
 # 어떻게 끝나든(실패 포함) 운영 데이터 전체가 든 덤프를 지운다. KEEP_DUMP=1 이면 남긴다
 cleanup_dump() {
   rm -f "$dump_dir.done" "$dump_dir.killed" "$dump_dir.ready"

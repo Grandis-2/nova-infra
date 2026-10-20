@@ -23,7 +23,7 @@ sleep 15
 log "전환"
 ./tools.sh 60-cutover.sh 2>&1 | tee "$LOGS/60-cutover.log"
 sleep 15
-[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-*.log)"; exit 1; }
+[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-$run1.log)"; ./probe.sh stop "$run1" || true; exit 1; }
 ./probe.sh stop "$run1"
 ./verify.sh rds "$run1" 2>&1 | tee "$LOGS/verify-$run1.log"
 { grep -E '^[0-9:.]+ [567]\.' "$LOGS/60-cutover.log"; cat "$LOGS/verify-$run1.log"; cat "work/$run1/http-summary.txt" 2>/dev/null || true; } >>"$LOGS/summary.txt"
@@ -37,7 +37,7 @@ sleep 10
 log "되돌리기"
 ./tools.sh 70-rollback.sh 2>&1 | tee "$LOGS/70-rollback.log"
 sleep 10
-[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-*.log)"; exit 1; }
+[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-$run2.log)"; ./probe.sh stop "$run2" || true; exit 1; }
 ./probe.sh stop "$run2"
 ./verify.sh ncp "$run2" 2>&1 | tee "$LOGS/verify-$run2.log"
 { grep -E '되돌리기 끝|^[0-9:.]+ [3456]\.' "$LOGS/70-rollback.log"; cat "$LOGS/verify-$run2.log"; cat "work/$run2/http-summary.txt" 2>/dev/null || true; } >>"$LOGS/summary.txt"
