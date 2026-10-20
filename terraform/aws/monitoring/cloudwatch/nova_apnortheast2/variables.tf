@@ -34,6 +34,8 @@ variable "queue_age_threshold_overrides" {
   default = {
     # worker 는 취소가 한 세대(4차례) 내내 실패하면 15분 지연을 두고 다시 보낸다
     "preorder-cancel" = 1200
+    # worker 가 지우지 않고 가시성 시간을 늘려 다시 받는다(대기 1m+5m+15m+30m+1h, 합계 약 1시간 51분 뒤 5회 수신으로 DLQ)
+    "draw-register" = 7200
   }
 
   validation {
