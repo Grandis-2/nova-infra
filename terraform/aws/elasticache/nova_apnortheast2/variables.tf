@@ -7,7 +7,7 @@ variable "engine_version" {
 variable "node_type" {
   description = "노드 타입"
   type        = string
-  default     = "cache.t4g.micro"
+  default     = "cache.t4g.small"
 }
 
 variable "multi_az" {
