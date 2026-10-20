@@ -16,8 +16,11 @@ locals {
   repository_urls     = data.terraform_remote_state.ecr.outputs.repository_urls
   repository_names    = data.terraform_remote_state.ecr.outputs.repository_names # nova/<서비스>
 
+  # 쓰기 DB 에 바로 붙는 주소(마이그레이션 태스크). 앱은 RDS 이전 기간에 ProxySQL NLB 로 붙는다(db_via_proxysql, proxysql.tf)
   db_address            = data.terraform_remote_state.database.outputs.db_address
   db_port               = data.terraform_remote_state.database.outputs.db_port
+  app_db_address        = var.db_via_proxysql ? one(aws_lb.proxysql[*].dns_name) : local.db_address
+  app_db_port           = var.db_via_proxysql ? local.proxysql_port : local.db_port
   db_secret_arns        = data.terraform_remote_state.database.outputs.app_secret_arns
   app_secret_arns       = data.terraform_remote_state.secrets.outputs.app_secret_arns
   generated_secret_arns = data.terraform_remote_state.secrets.outputs.generated_secret_arns
