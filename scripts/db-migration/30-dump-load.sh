@@ -92,6 +92,7 @@ watch_lock() {
 }
 
 # 아래 정리가 지우는 것은 이 실행이 채운 디렉터리뿐이어야 하므로, 이미 무언가 든 경로는 받지 않는다
+[[ ! -L "$dump_dir" ]] || die "DUMP_DIR($dump_dir)이 심볼릭 링크다. 정리가 링크만 지우고 덤프는 남으므로 실제 경로를 준다"
 [[ ! -e "$dump_dir" ]] || [[ -d "$dump_dir" && -z "$(ls -A "$dump_dir")" ]] || die "DUMP_DIR($dump_dir)이 비어 있지 않다. 없는 경로나 빈 디렉터리를 준다"
 # 어떻게 끝나든(실패 포함) 운영 데이터 전체가 든 덤프를 지운다. KEEP_DUMP=1 이면 남긴다
 cleanup_dump() {
