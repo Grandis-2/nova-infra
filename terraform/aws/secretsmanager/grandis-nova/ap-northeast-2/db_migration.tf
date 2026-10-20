@@ -25,7 +25,7 @@ locals {
 ephemeral "random_password" "db_migration" {
   for_each = local.db_migration_secrets
 
-  length           = 32
+  length           = 20 # NCP 계정 비밀번호 규칙(8 ~ 20자)에 맞춘다. 런북은 SQL 로 만들지만 콘솔에서도 같은 값을 쓸 수 있게
   special          = true
   override_special = "-_.~"
   min_special      = 1
