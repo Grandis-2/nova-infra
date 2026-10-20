@@ -6,4 +6,4 @@
 #   5. ProxySQL 지우기            proxysql_enabled = false
 db_state         = "rds"
 proxysql_enabled = true
-db_via_proxysql  = true
+db_via_proxysql  = false
