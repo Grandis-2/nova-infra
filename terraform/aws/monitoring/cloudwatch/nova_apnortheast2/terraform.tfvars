@@ -3,6 +3,3 @@
 #   채널 ID        : Slack 채널 정보 하단 (C 로 시작)
 slack_team_id    = "T0AMY30KZ4Z"
 slack_channel_id = "C0C8H6WJTB6"
-
-# RDS 이전 복제 기간(NCP → RDS). 복제 지연 · 정지 경보(main.tf rds_replication). 전환 뒤 이 줄을 지운다
-rds_replication_alarm_instance = "nova-prod-mysql"
