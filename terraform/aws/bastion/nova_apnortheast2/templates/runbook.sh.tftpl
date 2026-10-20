@@ -1,0 +1,105 @@
+#!/bin/bash
+# RDS 이전 런북 한 단계를 bastion 에서 돌린다 (db_migration.tf 의 SSM 문서가 Run Command 로 부른다).
+# 접속 정보는 여기서 Secrets Manager · SSM 으로 읽어 이 프로세스의 환경변수로만 넘긴다. 화면 · 파일 · 명령 인자에 남기지 않는다.
+# 값의 이름은 scripts/db-migration/lib.sh 머리말을 따른다.
+set -euo pipefail
+umask 077
+export HOME=/root AWS_REGION=${region} AWS_DEFAULT_REGION=${region}
+
+work=/var/lib/db-migration
+mkdir -p "$work"
+# 실행마다 새 디렉터리에 푼다. 같은 파일을 덮으면 그 파일을 읽으며 돌고 있는 다른 실행(bash 는 스크립트를 나눠 읽는다)이 깨진다.
+# 잠금 · 기록 파일은 실행 디렉터리가 아니라 $work(WORK_DIR)에 둔다
+find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null || true
+run=$(mktemp -d "$work/run.XXXXXX")
+base64 -d >"$run/lib.sh" <<'B64'
+${lib_b64}
+B64
+base64 -d >"$run/${script}" <<'B64'
+${script_b64}
+B64
+
+secret() { timeout 20 aws secretsmanager get-secret-value --secret-id "$1" --query SecretString --output text; }
+field() { jq -er --arg k "$2" '.[$k]' <<<"$1"; }
+
+# NCP (소스)
+export NCP_HOST='${ncp_address}' NCP_PORT=${ncp_port} SOURCE_HOST='${ncp_address}' SOURCE_PORT=${ncp_port}
+s=$(secret '${name_prefix}/db/admin');    export NCP_USER=$(field "$s" username) NCP_PASSWORD=$(field "$s" password)
+s=$(secret '${name_prefix}/db/migrator'); export NCP_MIGRATOR_USER=$(field "$s" username) NCP_MIGRATOR_PASSWORD=$(field "$s" password)
+
+# RDS (대상, 마스터는 RDS 가 관리하는 비밀)
+export RDS_HOST='${rds_address}' RDS_PORT=${rds_port} RDS_MODE=rds
+s=$(secret '${rds_master_secret_arn}');   export RDS_USER=$(field "$s" username) RDS_PASSWORD=$(field "$s" password)
+
+# 복제 · ProxySQL 계정 (secretsmanager 스택 db_migration.tf)
+s=$(secret '${name_prefix}/db/replication');      export REPL_PASSWORD=$(field "$s" password)
+s=$(secret '${name_prefix}/db/proxysql-admin');   export PROXYSQL_USER=$(field "$s" username) PROXYSQL_PASSWORD=$(field "$s" password)
+s=$(secret '${name_prefix}/db/proxysql-monitor'); export PROXYSQL_MON_PASSWORD=$(field "$s" password) PW_PROXYSQL_MON=$(field "$s" password)
+s=$(secret '${name_prefix}/db/dump');             export DUMP_USER=$(field "$s" username) DUMP_PASSWORD=$(field "$s" password)
+
+# RDS 에 NCP 와 같은 이름 · 비밀번호로 만들 계정 (20-rds-accounts). 이름은 비밀의 username 을 쓴다
+accounts=""
+for arn in ${app_secret_arns}; do
+  s=$(secret "$arn"); u=$(field "$s" username)
+  export "PW_$${u^^}=$(field "$s" password)"; accounts+="$u:CRUD "
+done
+s=$(secret '${name_prefix}/db/migrator'); export PW_NOVA_MIGRATOR=$(field "$s" password)
+s=$(secret '${name_prefix}/db/exporter'); export PW_NOVA_EXPORTER=$(field "$s" password)
+export ACCOUNTS="$${accounts}nova_migrator:DDL nova_exporter:READ proxysql_mon:MONITOR"
+unset s
+
+# 쓰기 대상 · 덤프 위치 (rds 스택 db_migration.tf)
+export WRITER_SSM_PARAM='${writer_param}' COORDS_SSM_PARAM='${coords_param}' WORK_DIR="$work"
+
+# ProxySQL 노드: ECS 태스크 IP 와 NLB 의 정상 대상을 따로 구해 런북이 대조한다 (ecs 스택 proxysql.tf 가 이 파라미터를 만든다)
+if px=$(timeout 20 aws ssm get-parameter --name '${proxysql_param}' --query Parameter.Value --output text 2>/dev/null); then
+  cluster=$(jq -r .cluster <<<"$px"); service=$(jq -r .service <<<"$px"); port=$(jq -r .adminPort <<<"$px")
+  tasks=$(timeout 20 aws ecs list-tasks --cluster "$cluster" --service-name "$service" --desired-status RUNNING --query 'taskArns' --output text)
+  export PROXYSQL_NODES=$(timeout 20 aws ecs describe-tasks --cluster "$cluster" --tasks $tasks \
+    --query 'tasks[].attachments[].details[?name==`privateIPv4Address`].value[]' --output text | tr '\t' '\n' | sed "s/\$/:$port/" | tr '\n' ' ')
+  # 대조할 실제 목록: 서비스의 모든 태스크(PENDING 포함)와 NLB 에 등록된 모든 대상(initial · draining 포함)을 합친다.
+  # 아직 healthy 가 아닌 태스크도 곧 트래픽을 받으므로 빠지면 안 된다
+  export PROXYSQL_NODES_CMD="{ tasks=\$(timeout 20 aws ecs list-tasks --cluster $cluster --service-name $service --query 'taskArns' --output text) || exit 1; timeout 20 aws ecs describe-tasks --cluster $cluster --tasks \$tasks --query 'tasks[].attachments[].details[?name==\`privateIPv4Address\`].value[]' --output text || exit 1; timeout 20 aws elbv2 describe-target-health --target-group-arn $(jq -r .targetGroupArn <<<"$px") --query 'TargetHealthDescriptions[].Target.Id' --output text || exit 1; } | tr '\t' '\n' | grep . | sort -u | sed 's/\$/:$port/'"
+  export PROXYSQL_HOSTGROUP=$(jq -r .hostgroup <<<"$px") PROXYSQL_EXPECTED_NODES=$(jq -r .nodes <<<"$px")
+  # ProxySQL 에 등록한 서버 이름은 실제 주소다. 60 은 ncp → rds, 70 은 rds → ncp, 45 는 지금 쓰기 대상
+  ncp_server=$(jq -r .servers.ncp <<<"$px"); rds_server=$(jq -r .servers.rds <<<"$px")
+  case '${script}' in
+    60-*) export PROXYSQL_FROM=$ncp_server PROXYSQL_TO=$rds_server ;;
+    70-*) export PROXYSQL_FROM=$rds_server PROXYSQL_TO=$ncp_server ;;
+    45-*) [[ "$(timeout 20 aws ssm get-parameter --name '${writer_param}' --query Parameter.Value --output text)" == rds ]] \
+            && export PROXYSQL_FROM=$rds_server || export PROXYSQL_FROM=$ncp_server ;;
+  esac
+else
+  # 00 · 10 · 20 · 30 · 40 은 ProxySQL 없이 돈다. 45 · 50 · 60 · 70 은 ProxySQL(ecs 스택)을 띄운 뒤에 돌린다
+  case '${script}' in
+    45-* | 50-* | 60-* | 70-*)
+      echo "ProxySQL 노드 정보(SSM ${proxysql_param})를 읽지 못했다. ecs 스택의 ProxySQL 을 먼저 apply 한다" >&2
+      exit 1 ;;
+  esac
+fi
+
+# 리허설 모드: Args 가 "rehearsal <리허설 NCP 도메인> ..." 이면 리허설 NCP(운영 백업으로 만든 것)와 아직 비어 있는 운영 RDS 를
+# 리허설 그룹(20)으로 잇는다(결정 ⑩ B). 운영의 쓰기 대상 · 복제 시작점 SSM 은 쓰지 않고 파일로 둔다(lib.sh guard_rehearsal 도
+# 막는다). NCP 계정은 운영 비밀을 그대로 쓴다(리허설 NCP 는 운영 백업으로 만들어 계정 · 비밀번호가 같다고 본다).
+# 운영 RDS 가 이미 운영 그룹에 들어가 있거나 운영 NCP 를 복제 중이면 50 · 60 이 멈춘다. 끝나면 50 clean-rds 로 운영 RDS 를 비운다
+set -- ${args}
+if [[ "$${1:-}" == rehearsal ]]; then
+  [[ "$${2:-}" =~ ^[a-z0-9.-]+$ ]] || { echo "리허설 NCP 도메인을 Args 둘째 값으로 준다" >&2; exit 1; }
+  [[ "$2" != '${ncp_address}' ]] || { echo "리허설 NCP 가 운영 NCP 와 같다" >&2; exit 1; }
+  export NCP_HOST="$2" SOURCE_HOST="$2"
+  s=$(secret '${name_prefix}/db/rehearsal'); export REHEARSAL_USER=$(field "$s" username) REHEARSAL_PASSWORD=$(field "$s" password)
+  unset s WRITER_SSM_PARAM COORDS_SSM_PARAM
+  mkdir -p "$work/rehearsal"
+  [[ -s "$work/rehearsal/writer" ]] || echo ncp >"$work/rehearsal/writer"
+  export WORK_DIR="$work/rehearsal" WRITER_FILE="$work/rehearsal/writer" COORDS_FILE="$work/rehearsal/dump-coords.env"
+  export PROXYSQL_HOSTGROUP=20 REHEARSAL_NCP_HOST="$2" REHEARSAL_RDS_HOST='${rds_address}'
+  case '${script}' in
+    60-*) export PROXYSQL_FROM="$2" PROXYSQL_TO='${rds_address}' ;;
+    70-*) export PROXYSQL_FROM='${rds_address}' PROXYSQL_TO="$2" ;;
+    45-*) [[ "$(cat "$WRITER_FILE")" == rds ]] && export PROXYSQL_FROM='${rds_address}' || export PROXYSQL_FROM="$2" ;;
+  esac
+  shift 2
+fi
+
+cd "$work"
+exec bash "$run/${script}" "$@"

@@ -5,7 +5,7 @@ variable "enabled" {
 }
 
 variable "instance_type" {
-  description = "인스턴스 타입. 포트포워딩만 하므로 가장 작은 타입이면 된다"
+  description = "인스턴스 타입. 평소에는 포트포워딩만 하므로 가장 작은 타입이면 된다. RDS 이전 기간에는 런북(MySQL Shell 덤프 · 세션)을 돌려 micro 로 키운다"
   type        = string
   default     = "t4g.nano"
 }
@@ -14,4 +14,16 @@ variable "ami_id" {
   description = "AMI 를 고정하고 싶을 때 지정한다. 비우면 최신 Amazon Linux 2023(ARM)을 쓴다"
   type        = string
   default     = ""
+}
+
+variable "db_migration_tools" {
+  description = "RDS 이전 런북 도구(MySQL 8.4 클라이언트 · MySQL Shell · jq)를 깐다. 바꾸면 인스턴스를 새로 만든다(상태 없음)"
+  type        = bool
+  default     = false
+}
+
+variable "db_migration_runbook" {
+  description = "scripts/db-migration 단계를 SSM 문서로 등록한다 (db_migration.tf). rds 스택과 런북 스크립트가 있어야 한다"
+  type        = bool
+  default     = false
 }
