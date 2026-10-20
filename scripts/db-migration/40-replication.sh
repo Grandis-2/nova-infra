@@ -75,7 +75,13 @@ case $cmd in
     log "G2: $SOURCE_HOST:$SOURCE_PORT $file:$pos 에서 연결만 시험 ($mode)"
     set_source "$file" "$pos"
     if [[ $mode == rds ]]; then
-      rds_ctl <<<"CALL mysql.rds_start_replication_until('$file', $pos)"
+      # UNTIL 위치가 지금 위치라 SQL 스레드는 시작하자마자 멈춘다. RDS 프로시저는 끝날 때 SQL 스레드가 멈춰 있으면
+      # 오류(1644)를 낸다(운영 G2 에서 확인). 그래서 여기서 멈추지 않고 아래 복제 상태로 판정한다
+      # 1644(프로시저가 낸 오류)만 넘긴다. 접속 · 인증 · 시간 초과 같은 다른 실패는 그 오류를 보이고 멈춘다(정리는 ON_EXIT 가 한다)
+      if ! out=$(rds_ctl <<<"CALL mysql.rds_start_replication_until('$file', $pos)" 2>&1); then
+        [[ "$out" == *"ERROR 1644"* ]] || die "rds_start_replication_until 실패: $out"
+        log "rds_start_replication_until 이 1644 를 냈다(UNTIL 위치에 바로 닿은 SQL 스레드 정지일 수 있다). 복제 상태로 판정한다"
+      fi
     else
       rds_ctl <<<"START REPLICA UNTIL SOURCE_LOG_FILE='$file', SOURCE_LOG_POS=$pos"
     fi
@@ -87,6 +93,7 @@ case $cmd in
     done
     status
     err=$(field Last_IO_Error)
+    sql_err=$(field Last_SQL_Error)
     exec_pos=$(field Exec_Source_Log_Pos)
     reset_source >/dev/null
     # shellcheck disable=SC2034 # lib.sh 의 끝날 때 처리가 읽는다
@@ -95,6 +102,7 @@ case $cmd in
     [[ "$before" == "$after" ]] || die "G2: RDS 의 표 수가 바뀌었다 ($before → $after)"
     [[ "$exec_pos" == "$pos" ]] || die "G2: SQL 스레드가 시작 위치($pos)를 지나 적용했다(Exec_Source_Log_Pos=$exec_pos)"
     [[ "$io" == Yes && -z "$err" ]] || die "G2 실패: IO 스레드 $io, 오류 ${err:-없음}"
+    [[ -z "$sql_err" ]] || die "G2 실패: SQL 스레드 오류 $sql_err"
     log "G2 통과: IO 스레드가 NCP 에 붙었고, RDS 는 그대로다. 복제 설정은 지웠다"
     ;;
   start)
