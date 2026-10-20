@@ -71,9 +71,21 @@ data "aws_iam_policy_document" "bastion_db_migration" {
       [for n in ["admin", "migrator", "exporter", "replication", "dump", "rehearsal", "proxysql-admin", "proxysql-monitor"] : "${local._secret_prefix}${local.name_prefix}/db/${n}-??????"],
       [
         "${local._secret_prefix}${local.name_prefix}/db/app/*", # 20-rds-accounts 가 NCP 와 같은 비밀번호로 RDS 계정을 만든다
-        "${local._secret_prefix}rds!db-*",                      # RDS 마스터(nova_master). 이 계정의 RDS 는 이 스택의 것뿐이다
       ],
     )
+  }
+
+  # RDS 마스터(nova_master) 비밀. 이름(rds!db-<리소스 ID>)은 RDS 를 만들어야 정해지므로, RDS 가 비밀에 붙이는 태그로 이 인스턴스의 것만 준다.
+  # rds apply 뒤 `aws secretsmanager describe-secret` 로 태그를 확인한다. 태그가 다르면 런북이 마스터 비밀을 읽지 못하고 멈춘다(20 · 40)
+  statement {
+    sid       = "RdsMasterSecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["${local._secret_prefix}rds!db-*"]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/aws:rds:primaryDBInstanceArn"
+      values   = ["arn:${local.partition}:rds:${var.aws_region}:${local.account_id}:db:${local.name_prefix}-mysql"]
+    }
   }
 
   statement {
