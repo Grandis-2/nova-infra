@@ -28,7 +28,8 @@ upper() { tr '[:lower:]' '[:upper:]' <<<"$1"; }
 # NCP 규칙(20자, 대 · 소문자 · 숫자 · 특수문자)을 따른다. env 파일에서 해석되는 $ 는 뺐다.
 if [[ ! -s "$work/local.env" ]]; then
   log "비밀번호 생성 → work/local.env"
-  python3 -I - "$APP_USERS" >"$work/local.env" <<'PY'
+  # 비밀번호 파일은 처음부터 600 으로 임시 파일에 쓰고, 다 쓴 뒤에 옮긴다(덜 쓴 파일이 남아 다음 실행이 빈 비밀번호를 읽지 않게)
+  (umask 077 && python3 -I - "$APP_USERS" >"$work/local.env.tmp") <<'PY'
 import secrets, string, sys
 special = "!#%*-_=?@^~"
 alphabet = string.ascii_letters + string.digits + special
@@ -45,7 +46,7 @@ print(f"APP_USERS='{' '.join(users)}'")
 for n in names:
     print(f"{n}='{pw()}'")
 PY
-  chmod 600 "$work/local.env"
+  mv "$work/local.env.tmp" "$work/local.env"
 fi
 # 나중에 더한 계정의 비밀번호(이전에 만든 local.env 에 없을 때)
 grep -q '^PW_DUMP_RDS=' "$work/local.env" || python3 -I -c 'import secrets, string; print("PW_DUMP_RDS=\x27" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(20)) + "\x27")' >>"$work/local.env"
@@ -58,7 +59,7 @@ set +a
 # 운영에서는 config-init 컨테이너가 SSM 의 현재 쓰기 대상을 읽어 같은 파일을 만든다
 writer="${WRITER:-$(cat "$work/writer" 2>/dev/null || echo ncp)}"
 status_of() { if [[ "$1" == "$writer" ]]; then echo ONLINE; else echo OFFLINE_HARD; fi; }
-{
+(umask 077 && {
   cat <<EOF
 datadir="/var/lib/proxysql"
 admin_variables=
@@ -113,8 +114,7 @@ EOF
     sep=$',\n'
   done
   printf '\n)\n'
-} >"$work/proxysql.cnf"
-chmod 600 "$work/proxysql.cnf"
+} >"$work/proxysql.cnf.tmp") && mv "$work/proxysql.cnf.tmp" "$work/proxysql.cnf"
 
 # ── be 스키마 ───────────────────────────────────────────────
 log "be 스키마 가져오기 ($BE_REF)"

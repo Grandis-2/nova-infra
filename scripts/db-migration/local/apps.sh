@@ -84,7 +84,7 @@ case "${1:?up · load · pinned · down}" in
       end=$((SECONDS + $0)); : >"$1/http.tsv"
       while ((SECONDS < end)); do
         for p in "/api/v1/categories" "/api/v1/products?size=20"; do
-          curl -s -o /dev/null --max-time 10 -w "%{http_code}\t%{time_total}\t$p\n" "http://catalog:8080$p" >>"$1/http.tsv" || echo "000	10	$p" >>"$1/http.tsv"
+          curl -s -o /dev/null --max-time 10 -w "%{http_code}\t%{time_total}\t$p\n" "http://catalog:8080$p" >>"$1/http.tsv" || true # 실패해도 curl 이 -w 줄(000)을 남긴다
         done
         sleep 0.2
       done

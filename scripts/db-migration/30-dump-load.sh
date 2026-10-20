@@ -3,7 +3,7 @@
 #
 #   NCP_HOST NCP_PORT DUMP_USER(기본 dump_rds) DUMP_PASSWORD   덤프 계정 (10-ncp-users.sh 가 만든다)
 #   RDS_* (마스터)   COORDS_FILE · COORDS_SSM_PARAM (lib.sh)
-#   DUMP_DIR          덤프를 둘 빈 디렉터리 (기본: $WORK_DIR/dump-<시각>). 적재가 끝나면 지운다(KEEP_DUMP=1 이면 남긴다)
+#   DUMP_DIR          덤프를 둘 빈 디렉터리 (기본: $WORK_DIR/dump-<시각>). 어떻게 끝나든 지운다(KEEP_DUMP=1 이면 남긴다)
 #   APP_SCHEMAS       옮길 DB (기본: shop external_mock)
 #   LONG_STMT_SECONDS 덤프 직전 NCP 에 이보다 오래 도는 문장이 있으면 시작하지 않는다 (기본 1)
 #   LOCK_WAIT_MAX_MS  덤프 시작 잠금 때문에 다른 세션이 이보다 오래 기다리면 덤프를 끊는다 (기본 200. 감시 주기와 끊는 데
@@ -91,6 +91,15 @@ watch_lock() {
   done
 }
 
+# 어떻게 끝나든(실패 포함) 운영 데이터 전체가 든 덤프를 지운다. KEEP_DUMP=1 이면 남긴다
+cleanup_dump() {
+  rm -f "$dump_dir.done" "$dump_dir.killed" "$dump_dir.ready"
+  [[ "${KEEP_DUMP:-}" == 1 || ! -d "$dump_dir" ]] || { rm -rf "$dump_dir"; log "덤프 디렉터리를 지웠다(운영 데이터 전체가 들어 있다)"; }
+  return "$1"
+}
+# shellcheck disable=SC2034 # lib.sh 의 끝 처리가 부른다
+ON_EXIT=cleanup_dump
+
 log "덤프 $js_list → $dump_dir"
 rm -f "$dump_dir.done" "$dump_dir.killed" "$dump_dir.ready"
 main_pid=$$
@@ -115,7 +124,6 @@ dump_out=$(shell "$NCP_USER" "$NCP_HOST" "$NCP_PORT" "$NCP_PASSWORD" "$dump_js" 
 : >"$dump_dir.done"
 wait "$watcher" || true
 if [[ -e "$dump_dir.killed" ]]; then
-  rm -rf "$dump_dir" "$dump_dir.done" "$dump_dir.killed"
   die "덤프 시작 잠금이 쓰기를 ${lock_wait_max} ms 넘게 막아 덤프를 끊었다. 부하가 적을 때 다시 한다"
 fi
 rm -f "$dump_dir.done"
@@ -134,4 +142,3 @@ start=$(date +%s)
 shell "$RDS_USER" "$RDS_HOST" "$RDS_PORT" "$RDS_PASSWORD" \
   "util.loadDump('$dump_dir', {threads: 4, loadUsers: false, updateGtidSet: 'off', checksum: true, resetProgress: true})"
 log "적재 끝 ($(($(date +%s) - start))초)"
-[[ "${KEEP_DUMP:-}" == 1 ]] || { rm -rf "$dump_dir"; log "덤프 디렉터리를 지웠다(운영 데이터 전체가 들어 있다)"; }

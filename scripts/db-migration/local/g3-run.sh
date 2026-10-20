@@ -26,7 +26,7 @@ sleep 15
 [[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-*.log)"; exit 1; }
 ./probe.sh stop "$run1"
 ./verify.sh rds "$run1" 2>&1 | tee "$LOGS/verify-$run1.log"
-{ grep -E '^[0-9:.]+ [567]\.' "$LOGS/60-cutover.log"; cat "$LOGS/verify-$run1.log"; cat "work/$run1/http-summary.txt" 2>/dev/null; } >>"$LOGS/summary.txt"
+{ grep -E '^[0-9:.]+ [567]\.' "$LOGS/60-cutover.log"; cat "$LOGS/verify-$run1.log"; cat "work/$run1/http-summary.txt" 2>/dev/null || true; } >>"$LOGS/summary.txt"
 
 run2="g3-rollback-$(date -u +%H%M%S)"
 log "2) 프로브 다시 시작 → $run2"
@@ -40,4 +40,4 @@ sleep 10
 [[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-*.log)"; exit 1; }
 ./probe.sh stop "$run2"
 ./verify.sh ncp "$run2" 2>&1 | tee "$LOGS/verify-$run2.log"
-{ grep -E '되돌리기 끝|^[0-9:.]+ [3456]\.' "$LOGS/70-rollback.log"; cat "$LOGS/verify-$run2.log"; cat "work/$run2/http-summary.txt" 2>/dev/null; } >>"$LOGS/summary.txt"
+{ grep -E '되돌리기 끝|^[0-9:.]+ [3456]\.' "$LOGS/70-rollback.log"; cat "$LOGS/verify-$run2.log"; cat "work/$run2/http-summary.txt" 2>/dev/null || true; } >>"$LOGS/summary.txt"
