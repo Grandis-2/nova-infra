@@ -32,7 +32,7 @@ redis: main
 queues:
   send: [preorder-register, preorder-cancel, order-events, waitingroom-events, notification]
   consume: [preorder-events]
-  dlq: [preorder-events]          # DLQ 메시지를 DB 로 옮긴다
+  dlq: [preorder-events, preorder-register, preorder-cancel]   # preorder-events 는 DLQ 메시지를 DB 로 옮기고, 작업 DLQ 는 해당 작업을 DEAD_LETTER 로 바꾼다
 
 # waitingroom 과 같은 값을 쓴다 (공유 시크릿 nova-prod/shared/waiting-token)
 generated_secrets:

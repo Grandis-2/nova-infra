@@ -320,6 +320,7 @@ flowchart LR
 | HTTP P99 응답 시간 | 서비스별 P99 > 2초 | 10분 | warning |
 | JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
 | 메시지 처리 오류율 | 큐별 처리 스팬 중 오류 비율 > 5% (10분에 6건 넘게 처리한 큐만) | 10분 | warning |
+| 포기한 예약 동기화 작업 | 작업 종류(`jobType`)별 DEAD_LETTER 작업 수 `preorder_sync_dead_letter` > 0 | 1분 | warning |
 | 프런트 JS 오류 급증 | 브라우저 오류 15분 > 30건 그리고 지난주 같은 시각의 3배 초과 (Loki) | 5분 | warning |
 | 프런트 LCP 악화 | LCP p75 30분 > 4초 (측정 30건 이상일 때만, Loki) | 15분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
@@ -633,6 +634,15 @@ grafana cli admin reset-admin-password --password-from-stdin
 1. SQS · 비동기 흐름 대시보드에서 어느 큐인지, 보내는 양이 갑자기 늘었는지 본다.
 2. "처리 실패 트레이스"에서 트레이스를 열어 처리 스팬의 예외를 본다. 보낸 서비스의 요청부터 처리까지 한 트레이스로 이어진다.
 3. DLQ 에 쌓였으면 원인을 고친 뒤 원래 큐로 옮긴다(redrive).
+
+### 포기한 예약 동기화 작업
+
+worker 가 외부 예약 등록(`REGISTER`) · 취소(`CANCEL`)를 재시도 끝에 포기하면 메시지가 그 큐의 DLQ 로 간다.
+preorder 가 그 메시지를 바로 가져가 작업을 DEAD_LETTER 로 바꾸므로 SQS DLQ 경보에는 보이지 않고 이 경보로 알 수 있다. 작업을 처리하면 0 으로 내려가 풀린다.
+
+1. 관리자 API `GET /api/v1/admin/preorders/sync-jobs?status=DEAD_LETTER&groupByError=true` 로 어떤 작업이 어떤 오류로 멈췄는지 본다.
+2. 외부 쪽 원인(Mock 장애 · 계약 오류)을 고친 뒤 `POST /api/v1/admin/preorders/sync-jobs/{id}/reprocess` 로 다시 보낸다. 외부에서 이미 처리됐으면 취소 작업은 `POST /api/v1/admin/preorders/sync-jobs/{id}/resolve` 로 수동 완료한다.
+3. 취소(`CANCEL`)는 외부에 예약이 남아 있을 수 있으니 외부 상태를 먼저 확인한다.
 
 ### JVM 힙 사용률
 
