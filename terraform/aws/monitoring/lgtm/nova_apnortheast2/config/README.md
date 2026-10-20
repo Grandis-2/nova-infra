@@ -641,7 +641,7 @@ worker 가 외부 예약 등록(`REGISTER`) · 취소(`CANCEL`)를 재시도 끝
 preorder 가 그 메시지를 바로 가져가 작업을 DEAD_LETTER 로 바꾸므로 SQS DLQ 경보에는 보이지 않고 이 경보로 알 수 있다. 작업을 처리하면 0 으로 내려가 풀린다.
 
 1. 관리자 API `GET /api/v1/admin/preorders/sync-jobs?status=DEAD_LETTER&groupByError=true` 로 어떤 작업이 어떤 오류로 멈췄는지 본다.
-2. 외부 쪽 원인(Mock 장애 · 계약 오류)을 고친 뒤 `POST /api/v1/admin/preorders/sync-jobs/{id}/reprocess` 로 다시 보낸다. 외부에서 이미 처리됐으면 취소 작업은 `POST /api/v1/admin/preorders/sync-jobs/{id}/resolve` 로 수동 완료한다.
+2. 외부 쪽 원인(Mock 장애 · 계약 오류)을 고친 뒤 `POST /api/v1/admin/preorders/sync-jobs/{id}/reprocess` 로 다시 보낸다. 외부에서 이미 처리됐으면 취소 작업은 `POST /api/v1/admin/preorders/sync-jobs/{id}/resolve` 로 수동 완료한다. 본문에 이유(5~500자)를 넣는다: `{"reason": "..."}`.
 3. 취소(`CANCEL`)는 외부에 예약이 남아 있을 수 있으니 외부 상태를 먼저 확인한다.
 
 ### JVM 힙 사용률

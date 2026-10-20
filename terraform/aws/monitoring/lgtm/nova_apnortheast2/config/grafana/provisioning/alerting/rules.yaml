@@ -158,7 +158,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "외부 예약 {{ .Labels.jobType }} 을 포기한 작업이 {{ .Values.B }} 건 있다 — 관리자 재처리나 수동 완료가 필요하다. 취소면 외부에 예약이 남아 있을 수 있다"
+          summary: "외부 예약 {{ .Labels.jobType }} 을 포기한 작업이 {{ with .Values.B }}{{ .Value }}{{ end }} 건 있다 — 관리자 재처리나 수동 완료가 필요하다. 취소면 외부에 예약이 남아 있을 수 있다"
           runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#포기한-예약-동기화-작업"
         data:
           - refId: A
