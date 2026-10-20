@@ -3,6 +3,6 @@
 instance_type      = "t4g.micro"
 db_migration_tools = true
 
-# rds 스택을 apply 하고 런북 스크립트(scripts/db-migration)가 main 에 들어간 뒤 true 로 바꾼다.
-# 그 전에 켜면 rds 원격 상태가 없어 plan 이 실패한다
-db_migration_runbook = false
+# 런북 단계를 SSM 문서로 둔다(db_migration.tf). rds 스택 원격 상태와 scripts/db-migration 이 있어야 한다.
+# 이전이 끝나면 false 로 먼저 apply 한 뒤 scripts/db-migration 을 지운다(반대로 하면 이 스택 plan 이 실패한다)
+db_migration_runbook = true
