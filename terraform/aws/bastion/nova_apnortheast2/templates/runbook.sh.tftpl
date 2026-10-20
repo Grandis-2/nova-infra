@@ -12,10 +12,10 @@ mkdir -p "$work"
 # 잠금 · 기록 파일은 실행 디렉터리가 아니라 $work(WORK_DIR)에 둔다
 find "$work" -maxdepth 1 -name 'run.*' -mtime +1 -exec rm -rf {} + 2>/dev/null || true
 run=$(mktemp -d "$work/run.XXXXXX")
-base64 -d >"$run/lib.sh" <<'B64'
+base64 -d <<'B64' | gzip -d >"$run/lib.sh"
 ${lib_b64}
 B64
-base64 -d >"$run/${script}" <<'B64'
+base64 -d <<'B64' | gzip -d >"$run/${script}"
 ${script_b64}
 B64
 

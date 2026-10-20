@@ -6,7 +6,7 @@
 #
 # 문서는 lib.sh 와 그 단계 스크립트를 함께 싣고, 접속 정보는 실행할 때 인스턴스 역할(iam 스택 db_migration.tf)로 읽는다.
 # 비밀은 문서 매개변수로 넘기지 않는다(명령 기록에 남는다). 스크립트를 고치면 이 스택을 다시 apply 해야 문서가 바뀐다.
-# 문서 하나는 64KB 까지라 lib.sh 가 크게 늘면 나눠야 한다.
+# 문서 하나는 64KB 까지다. base64 로만 실으면 60 · 70 · 00 이 넘으므로 gzip 으로 줄여 싣는다(모두 32KB 아래).
 
 locals {
   runbook_dir = "${path.module}/../../../../scripts/db-migration"
@@ -50,8 +50,8 @@ resource "aws_ssm_document" "runbook" {
           region                = var.aws_region
           name_prefix           = local.name_prefix
           script                = each.value
-          lib_b64               = filebase64("${local.runbook_dir}/lib.sh")
-          script_b64            = filebase64("${local.runbook_dir}/${each.value}")
+          lib_b64               = base64gzip(file("${local.runbook_dir}/lib.sh"))
+          script_b64            = base64gzip(file("${local.runbook_dir}/${each.value}"))
           ncp_address           = data.terraform_remote_state.rds[0].outputs.ncp_address
           ncp_port              = 3306
           rds_address           = data.terraform_remote_state.rds[0].outputs.rds_address
