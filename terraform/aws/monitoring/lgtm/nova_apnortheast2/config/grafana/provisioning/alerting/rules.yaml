@@ -149,6 +149,42 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.05]}
+      - uid: nova-preorder-dead-letter
+        title: 포기한 예약 동기화 작업
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "외부 예약 {{ .Labels.jobType }} 을 포기한 작업이 {{ with .Values.B }}{{ .Value }}{{ end }} 건 있다 — 관리자 재처리나 수동 완료가 필요하다. 취소면 외부에 예약이 남아 있을 수 있다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#포기한-예약-동기화-작업"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # preorder 가 작업 DLQ 메시지를 바로 가져가 DEAD_LETTER 로 바꾸므로 SQS DLQ 경보(쌓인 수)로는 보이지 않는다.
+              # 게이지는 태스크마다 DB 에서 30초마다 다시 센 같은 값이라 max 로 묶는다. 처리하면 0 으로 내려가 풀린다
+              expr: "max by (jobType) (preorder_sync_dead_letter)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
       - uid: nova-frontend-errors
         title: 프런트 JS 오류 급증
         condition: C
