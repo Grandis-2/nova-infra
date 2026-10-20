@@ -252,6 +252,10 @@ run H1-clean-guard "${rh[@]}" -- 50-rehearsal-proxysql.sh clean-rds
 if [[ $RC != 0 ]] && grep -q '복제하고 있다\|read_only=1' "$LOGS/H1-clean-guard.log"; then pass=$((pass + 1)); log "  통과: 운영 NCP 를 복제 중인 RDS 는 clean-rds 가 비우지 않는다"; else fail=$((fail + 1)); log "  실패: clean-rds 가드"; fi
 ./tools.sh 40-replication.sh reset >/dev/null 2>&1
 ./read-only.sh off >/dev/null
+# 실제 덤프를 적재한 뒤 복제를 걸기 전과 같은 상태(복제 설정 없음 · read_only=0). 리허설 표식이 없으면 지우지 않아야 한다
+run H1-clean-nomark "${rh[@]}" -- 50-rehearsal-proxysql.sh clean-rds
+if [[ $RC != 0 ]] && grep -q '리허설 표식' "$LOGS/H1-clean-nomark.log"; then pass=$((pass + 1)); log "  통과: 리허설 표식이 없는 RDS(실제 적재일 수 있음)는 clean-rds 가 비우지 않는다"; else fail=$((fail + 1)); log "  실패: 표식 없는 clean-rds"; fi
+root rds <<<"CREATE DATABASE db_migration_rehearsal" # 리허설 30 이 남기는 표식
 run H1-clean "${rh[@]}" -- 50-rehearsal-proxysql.sh clean-rds
 if [[ $RC == 0 && "$(root rds <<<"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema IN ('shop', 'external_mock')")" == 0 ]]; then pass=$((pass + 1)); log "  통과: 리허설 뒤 clean-rds 가 운영 RDS 를 비운다"; else fail=$((fail + 1)); log "  실패: clean-rds"; fi
 run H1-teardown "${rh[@]}" -- 50-rehearsal-proxysql.sh teardown
@@ -290,6 +294,11 @@ if [[ $RC != 0 ]] && grep -q 'shop.g3_probe_outbox' "$LOGS/C1-diff.log"; then pa
 
 log "D1 덤프 직전에 오래 도는 문장 → 덤프하지 않는다"
 LOAD=0 ./reseed.sh >>"$LOGS/reseed.log" 2>&1
+log "D0 리허설 표식이 남은 RDS 에 실제 30 → 멈춘다(clean-rds 를 먼저)"
+root rds <<<"CREATE DATABASE IF NOT EXISTS db_migration_rehearsal"
+run D0 -- 30-dump-load.sh
+root rds <<<"DROP DATABASE IF EXISTS db_migration_rehearsal"
+if [[ $RC != 0 ]] && grep -q '리허설 표식' "$LOGS/D0.log"; then pass=$((pass + 1)); log "  통과: D0"; else fail=$((fail + 1)); log "  실패: D0"; fi
 root ncp <<<"SELECT SLEEP(4)" >/dev/null &
 sleep 2
 run D1 -- 30-dump-load.sh

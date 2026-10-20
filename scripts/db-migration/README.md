@@ -94,7 +94,11 @@ scripts/db-migration/local/faults.sh             # 실패 주입 (g3-all 뒤에)
 docker compose -f scripts/db-migration/local/compose.yaml --profile apps down -v   # 정리
 ```
 
-결과는 `local/work/logs/<시각>/summary.txt` 에 남는다. `local/work/` (비밀번호 · 덤프 · 결과)와 `local/probe/lib/` 는 git 에 올리지 않는다.
+결과는 `local/work/logs/<시각>/summary.txt` 에 남는다.
+
+시험의 한계: `external_mock` 스키마는 be 의 사본(`docs/external-mock-schema.sql`)으로 만들고 mock 저장소의 Flyway 는 돌리지 않는다.
+프로브의 mock 풀은 mock 의 드라이버 옵션만 흉내 내고 `shop` 에 쓴다. `external_mock` 데이터는 덤프 · 되돌리기 체크섬과 `compare` 로 본다.
+RDS 프로시저 · NAT 경로 · SSM · ECS 는 로컬에 없어 G2 와 리허설에서 처음 확인한다. `local/work/` (비밀번호 · 덤프 · 결과)와 `local/probe/lib/` 는 git 에 올리지 않는다.
 
 ## ProxySQL 에 꼭 필요한 설정
 

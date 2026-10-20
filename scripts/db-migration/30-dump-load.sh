@@ -36,6 +36,13 @@ guard_rehearsal
 [[ "$(rds_val 'SELECT @@global.local_infile')" == 1 ]] || die "RDS local_infile 이 꺼져 있다(파라미터 그룹)"
 [[ "$(rds_val "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema IN ($(printf "'%s'," "${schemas[@]}" | sed 's/,$//'))")" == 0 ]] ||
   die "RDS 의 옮길 DB 에 표가 있다. 빈 DB 에만 적재한다"
+# 리허설 적재는 RDS 에 표식 DB 를 남긴다(50 clean-rds 는 이 표식이 있을 때만 지운다). 실제 적재는 표식이 남아 있으면 멈춘다
+marker=$(rds_val "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = '$REHEARSAL_MARKER_DB'")
+if is_rehearsal; then
+  rds <<<"CREATE DATABASE IF NOT EXISTS \`$REHEARSAL_MARKER_DB\`"
+else
+  [[ "$marker" == 0 ]] || die "RDS 에 리허설 표식($REHEARSAL_MARKER_DB)이 남아 있다. 50-rehearsal-proxysql.sh clean-rds 를 먼저 한다"
+fi
 
 # 비밀번호는 표준 입력으로 넘긴다(--passwords-from-stdin)
 shell() { # shell <계정> <호스트> <포트> <비밀번호> <JS>

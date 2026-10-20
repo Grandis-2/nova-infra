@@ -16,6 +16,7 @@ need NCP_HOST NCP_PORT NCP_USER NCP_PASSWORD
 
 read -r -a schemas <<<"${APP_SCHEMAS:-shop external_mock}"
 read -r -a grant_users <<<"${GRANT_CHECK_USERS:-nova_migrator nova_exporter batch catalog member mock order payment preorder worker}"
+ident_ok APP_SCHEMAS GRANT_CHECK_USERS # SQL 에 그대로 넣는 값이다
 in_list=$(printf "'%s'," "${schemas[@]}")
 in_list=${in_list%,}
 

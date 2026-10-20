@@ -235,7 +235,9 @@ while :; do
 
   phase=switching
   fault_point switching
-  px_set 2000 "$to=ONLINE $from=OFFLINE_HARD" || log "5. 일부 노드에 싣지 못했다: $PX_FAILED (정리에서 다시 맞춘다)"
+  # 전환도 남은 예산 안에서 싣는다(마감은 이 몫을 margin 으로 남겨 두었다). 늦은 노드는 바로 다음 정리가 다시 싣는다
+  _now
+  px_set $((t0 + budget - NOW > 20 ? t0 + budget - NOW : 20)) "$to=ONLINE $from=OFFLINE_HARD" || log "5. 일부 노드에 싣지 못했다: $PX_FAILED (정리에서 다시 맞춘다)"
   _now
   t4=$NOW
   break

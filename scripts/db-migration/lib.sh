@@ -171,7 +171,7 @@ _sess_send() { # _sess_send <이름> <SQL>
 
 # 보낸 문장의 결과를 마감 시각(ms)까지 읽는다. 결과는 SQ. 0 성공 · 1 SQL 오류 · 2 시간 초과나 끊김(세션을 닫는다)
 _sess_recv() { # _sess_recv <이름> <마감 시각 ms>
-  local name=$1 end=$2 line rem tmo out="" err=""
+  local name=$1 end=$2 line rem tmo out="" err="" late=0
   if [[ -z "${_S_MARK[$name]:-}" ]]; then
     SQ="연결 끊김"
     return 2
@@ -179,13 +179,15 @@ _sess_recv() { # _sess_recv <이름> <마감 시각 ms>
   while :; do
     _now
     rem=$((end - NOW))
-    if ((rem <= 0)); then
-      _sess_kill "$name"
-      SQ="시간 초과${err:+: $err}"
-      return 2
-    fi
+    # 마감이 지나도 이미 와 있는 응답은 읽는다(앞 노드가 마감을 다 써도 뒤 노드의 응답을 실패로 보지 않게)
+    if ((rem <= 0)); then late=1; rem=1; fi
     printf -v tmo '%d.%03d' $((rem / 1000)) $((rem % 1000))
     if ! IFS= read -r -t "$tmo" -u "${_S_R[$name]}" line; then
+      if ((late)); then
+        _sess_kill "$name"
+        SQ="시간 초과${err:+: $err}"
+        return 2
+      fi
       _sess_kill "$name"
       SQ="응답 없음 또는 연결 끊김${err:+: $err}${out:+ ($out)}"
       return 2
@@ -479,6 +481,8 @@ _LOCKED=""
 
 # 리허설은 운영과 다른 호스트그룹(PROXYSQL_HOSTGROUP)에서 돌고, 운영의 쓰기 대상 · 복제 시작점 기록(SSM)을 건드리면 안 된다.
 # 운영 호스트그룹(PROXYSQL_PROD_HOSTGROUP, 기본 10)이 아니면 SSM 기록을 받지 않는다(파일만 쓴다)
+# shellcheck disable=SC2034 # 30 · 50 이 쓴다
+REHEARSAL_MARKER_DB=db_migration_rehearsal # 리허설 적재가 RDS 에 남기는 표식(30 이 만들고 50 clean-rds 가 지운다)
 is_rehearsal() { [[ "$PX_HG" != "${PROXYSQL_PROD_HOSTGROUP:-10}" ]]; }
 guard_rehearsal() {
   is_rehearsal || return 0

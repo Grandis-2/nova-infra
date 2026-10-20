@@ -4,7 +4,8 @@
 #
 #   scripts/db-migration/50-rehearsal-proxysql.sh setup      리허설 그룹에 리허설 NCP(ONLINE) · 운영 RDS(빠짐)와 시험 계정을 런타임에 넣는다
 #   scripts/db-migration/50-rehearsal-proxysql.sh teardown   넣은 것을 모두 뺀다
-#   scripts/db-migration/50-rehearsal-proxysql.sh clean-rds  리허설이 운영 RDS 에 남긴 것(복제 설정 · 두 DB · 시험 계정)을 지운다
+#   scripts/db-migration/50-rehearsal-proxysql.sh clean-rds  리허설이 운영 RDS 에 남긴 것(복제 설정 · 두 DB · 시험 계정 · 표식)을 지운다.
+#                                                            30 이 리허설 적재 때 남긴 표식 DB 가 있어야 지운다
 #
 #   PROXYSQL_NODES PROXYSQL_USER PROXYSQL_PASSWORD (lib.sh)   RDS_* RDS_MODE (clean-rds)
 #   PROXYSQL_HOSTGROUP             리허설 그룹 (운영 그룹 PROXYSQL_PROD_HOSTGROUP, 기본 10 · 그 감시 그룹 11 과 겹치면 안 된다)
@@ -42,6 +43,12 @@ for i in "${!PX[@]}"; do
   [[ "$SQ" == 0 ]] || die "${PX_NODE[$i]}: $REHEARSAL_USER 는 다른 그룹을 쓰는 계정이다(운영 앱 계정을 쓰지 않는다)"
 done
 
+# 리허설 그룹 · 그 감시 그룹에 리허설 서버가 아닌 것이 있으면 멈춘다(다른 용도로 쓰는 그룹을 비우지 않게)
+for i in "${!PX[@]}"; do
+  sess_must "${PX[$i]}" "SELECT COUNT(*) FROM mysql_servers WHERE hostgroup_id IN ($hg, $((hg + 1))) AND hostname NOT IN ('$REHEARSAL_NCP_HOST', '$REHEARSAL_RDS_HOST')"
+  [[ "$SQ" == 0 ]] || die "${PX_NODE[$i]}: 그룹 $hg · $((hg + 1)) 에 리허설이 아닌 서버가 있다. 다른 그룹 번호를 쓴다"
+done
+
 case $cmd in
   setup)
     need REHEARSAL_PASSWORD
@@ -73,6 +80,9 @@ LOAD MYSQL USERS TO RUNTIME"
     src=$(rds_ctl -E --column-names <<<"SHOW REPLICA STATUS" | sed -n 's/^ *Source_Host: //p')
     [[ -z "$src" || "$src" == "$REHEARSAL_NCP_HOST" ]] || die "RDS 가 리허설 NCP 가 아닌 $src 를 복제하고 있다. 실제 이전이 시작된 RDS 는 비우지 않는다"
     [[ "$(rds_val 'SELECT @@global.read_only')" == 0 ]] || die "RDS 가 read_only=1 이다. 실제 이전 단계로 보고 비우지 않는다"
+    # 리허설 적재의 표식이 있어야 지운다(실제 덤프를 적재한 뒤 복제를 걸기 전에도 위 두 조건은 맞으므로 그것만으로는 모자란다)
+    [[ "$(rds_val "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = '$REHEARSAL_MARKER_DB'")" == 1 ]] ||
+      die "RDS 에 리허설 표식($REHEARSAL_MARKER_DB)이 없다. 리허설이 적재한 RDS 가 아닐 수 있어 지우지 않는다"
     log "운영 RDS 에서 리허설 흔적을 지운다: 복제 설정, ${schemas[*]}, $REHEARSAL_USER"
     if [[ "${RDS_MODE:-rds}" == native ]]; then
       rds_ctl <<<"STOP REPLICA; RESET REPLICA ALL"
@@ -80,7 +90,7 @@ LOAD MYSQL USERS TO RUNTIME"
       rds_ctl <<<"CALL mysql.rds_stop_replication" >/dev/null 2>&1 || true
       rds_ctl <<<"CALL mysql.rds_reset_external_source"
     fi
-    sql="DROP USER IF EXISTS '$REHEARSAL_USER'@'%';"
+    sql="DROP USER IF EXISTS '$REHEARSAL_USER'@'%'; DROP DATABASE \`$REHEARSAL_MARKER_DB\`;"
     for d in "${schemas[@]}"; do
       sql+="DROP DATABASE IF EXISTS \`$d\`; CREATE DATABASE \`$d\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
     done
