@@ -7,5 +7,4 @@ resource "aws_security_group" "redis" {
   tags = { Name = "${local.name_prefix}-redis-sg" }
 }
 
-# DB 는 지금 VPC 밖(NCP)에 있다. 서비스는 아웃바운드로 NAT 를 거쳐 나가고,
-# 접근 제한은 NCP ACG(NAT 고정 IP 만 허용)가 맡는다. RDS 로 옮기는 동안의 SG 는 rds.tf · proxysql.tf 다.
+# DB(RDS)의 SG 는 rds.tf 다.

@@ -46,7 +46,7 @@ variable "use_db" {
 }
 
 variable "db_security_group_ids" {
-  description = "use_db 면 3306 을 열어 줄 SG (이름 -> ID). RDS 이전 기간의 ProxySQL NLB 와 RDS"
+  description = "use_db 면 3306 을 열어 줄 SG (이름 -> ID). 지금은 RDS"
   type        = map(string)
   default     = {}
 }

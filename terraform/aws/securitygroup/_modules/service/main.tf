@@ -54,9 +54,9 @@ resource "aws_vpc_security_group_ingress_rule" "to_cache" {
 }
 
 # ── 서비스 → DB ─────────────────────────────────────────────
-# RDS 이전 기간에는 ProxySQL NLB 로, 전환 뒤에는 RDS 로 바로 붙는다. NCP 는 VPC 밖이라 아웃바운드(all)로 나간다
+# DB(RDS) SG 에 이 서비스의 3306 을 연다
 resource "aws_vpc_security_group_ingress_rule" "to_db" {
-  # 키(proxysql_nlb · rds)는 plan 때 알고 있다. 값(SG ID)은 아직 없어도 된다
+  # 키(rds)는 plan 때 알고 있다. 값(SG ID)은 아직 없어도 된다
   for_each = var.use_db ? var.db_security_group_ids : {}
 
   security_group_id            = each.value
