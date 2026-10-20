@@ -9,8 +9,8 @@ db_subnet_cidrs     = ["10.0.20.0/24", "10.0.21.0/24"] # ElastiCache · RDS
 nat_mode           = "instance"
 single_nat_gateway = false
 
-# RDS 이전 기간(NCP → RDS 복제)에만 db 서브넷이 NAT-2a 로 나간다. 전환 뒤 반영 PR 에서 false 로 되돌린다
-db_subnet_nat_egress = true
+# db 서브넷은 NAT 로 나가지 않는다(RDS 이전의 NCP → RDS 복제 기간에만 true 였다)
+db_subnet_nat_egress = false
 
 # NAT 로 충분하므로 끈다. 비용보다 트래픽 격리가 중요해지면 켠다.
 enable_interface_endpoints = false

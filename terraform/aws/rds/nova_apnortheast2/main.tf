@@ -1,15 +1,5 @@
-# RDS for MySQL — NCP Cloud DB for MySQL 에서 옮겨 오는 운영 DB.
-#
-# 옮기는 동안(NCP → RDS 복제, ProxySQL 로 전환)과 옮긴 뒤를 이 스택 하나가 맡는다.
-#   1. RDS 를 read_only=0 · local_infile=1 로 만든다. 런북이 계정을 만들고 NCP 덤프를 적재한다
-#   2. read_only=1 · local_infile=0 으로 바꾸고 복제를 시작한다(런북 40-replication)
-#   3. 전환 30분 전 read_only=0, 전환(런북 60-cutover) 뒤 primary = "rds"
-# 단계와 순서는 scripts/db-migration/README.md 와 이전 계획을 따른다.
-#
-# 소비자(ecs · lgtm)는 NCP 스택과 같은 이름의 출력(outputs.tf)을 읽는다(db_state = "rds"). 전환(2026-10-20) 뒤
-# NCP 를 해체하며 DB 계정 비밀도 이 스택으로 옮겼다(secrets.tf).
-#
-# 복제를 받으려면 db 서브넷이 NAT 로 나가야 한다(vpc 스택 db_subnet_nat_egress, securitygroup 스택 rds_replication_egress).
+# RDS for MySQL — 운영 DB. 2026-10-20 NCP Cloud DB for MySQL 에서 옮겨 왔다(에픽 NV-678).
+# 소비자(ecs · lgtm)는 NCP 스택과 같은 이름의 출력(outputs.tf)을 읽는다(db_state = "rds"). DB 계정 비밀은 secrets.tf.
 
 locals {
   db_subnet_ids = data.terraform_remote_state.vpc.outputs.db_subnet_ids
@@ -61,10 +51,6 @@ locals {
     log_output      = { value = "FILE", static = false }
   }
 
-  # 복제를 받는 동안만 두 DB 만 받는다(NCP 의 mysql 계정 변경 등은 받지 않는다). 전환 뒤 반영 PR 에서 끈다(값을 빼면 기본값으로 돌아간다)
-  replication_parameters = var.replication_filter ? {
-    "replicate-wild-do-table" = { value = "shop.%,external_mock.%", static = false }
-  } : {}
 
   parameter_groups = {
     main = { read_only = var.read_only, local_infile = var.local_infile }
@@ -79,7 +65,7 @@ resource "aws_db_parameter_group" "this" {
   family = local.family
 
   dynamic "parameter" {
-    for_each = merge(local.base_parameters, local.replication_parameters)
+    for_each = local.base_parameters
 
     content {
       name  = parameter.key
@@ -165,8 +151,8 @@ resource "aws_db_instance" "this" {
     prevent_destroy = true
 
     precondition {
-      condition     = var.primary != "rds" || !var.read_only
-      error_message = "primary = \"rds\" 인데 read_only = true 다. 쓰기 DB 는 read_only 를 끈다."
+      condition     = !var.read_only
+      error_message = "운영 쓰기 DB 다. read_only 를 켜지 않는다."
     }
   }
 }

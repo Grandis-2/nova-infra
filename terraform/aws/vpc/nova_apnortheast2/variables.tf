@@ -46,8 +46,8 @@ variable "single_nat_gateway" {
 
 variable "db_subnet_nat_egress" {
   description = <<-EOT
-    db 서브넷의 0.0.0.0/0 을 첫 NAT(2a)로 보낸다. RDS 가 NCP 를 복제하는 이전 기간에만 켠다.
-    RDS 가 내보내는 포트는 RDS SG(securitygroup 스택 rds_replication_egress)가 3306 으로 좁힌다.
+    db 서브넷의 0.0.0.0/0 을 첫 NAT(2a)로 보낸다. 2026-10-20 NCP → RDS 복제 기간에만 켰다.
+    다시 켤 때는 RDS SG 에 필요한 아웃바운드 규칙도 함께 둔다.
   EOT
   type        = bool
   default     = false

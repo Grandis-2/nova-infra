@@ -64,32 +64,16 @@ variable "log_retention_days" {
   default     = 14
 }
 
-# ── 이전 단계 (terraform.tfvars 에서 단계마다 바꾼다) ──────
-variable "replication_filter" {
-  description = "replicate-wild-do-table(shop · external_mock 만 복제)을 둔다. 복제하는 동안 true, 전환 뒤 반영 PR 에서 false"
-  type        = bool
-  default     = true
-}
 
 variable "read_only" {
-  description = "read_only. 적재 · 계정 생성 때 false, 복제하는 동안 true, 전환 30분 전 false"
+  description = "read_only. 운영 쓰기 DB 라 false"
   type        = bool
   default     = false
 }
 
 variable "local_infile" {
-  description = "local_infile. 덤프 적재(MySQL Shell loadDump) 동안만 true"
+  description = "local_infile. 덤프 적재(MySQL Shell loadDump) 때만 true"
   type        = bool
-  default     = true
+  default     = false
 }
 
-variable "primary" {
-  description = "쓰기 DB. 소비자(ecs 의 마이그레이션 태스크 · 앱 직접 연결, lgtm 의 exporter)가 db_address 로 받는다. 전환 뒤 rds"
-  type        = string
-  default     = "ncp"
-
-  validation {
-    condition     = contains(["ncp", "rds"], var.primary)
-    error_message = "primary 는 ncp 또는 rds 다."
-  }
-}

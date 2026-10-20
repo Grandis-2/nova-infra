@@ -27,19 +27,16 @@ output "exporter_secret_arn" {
   value = aws_secretsmanager_secret.exporter.arn
 }
 
-# ── 이전 기간에만 쓰는 출력 ──────────────────────────────────
+# ── 그 밖의 출력 ──────────────────────────────────
 output "engine_version" {
-  description = "RDS 엔진 버전. ProxySQL 이 앱에 알리는 server_version 과 맞춘다"
+  description = "RDS 엔진 버전"
   value       = var.engine_version
 }
 
-output "primary" {
-  value = var.primary
-}
 
 
 output "rds_address" {
-  description = "RDS 엔드포인트. ProxySQL 의 rds 서버 · 런북의 대상"
+  description = "RDS 엔드포인트"
   value       = aws_db_instance.this.address
 }
 
@@ -53,22 +50,8 @@ output "rds_instance_id" {
 }
 
 output "rds_master_secret_arn" {
-  description = "RDS 가 관리하는 마스터 계정(nova_master) 시크릿. 런북만 읽는다"
+  description = "RDS 가 관리하는 마스터 계정(nova_master) 시크릿"
   value       = aws_db_instance.this.master_user_secret[0].secret_arn
 }
 
-output "writer_parameter" {
-  description = "현재 쓰기 대상(ncp | rds) SSM 파라미터. ProxySQL 이 시작할 때 읽고 런북이 쓴다"
-  value = {
-    name = aws_ssm_parameter.writer.name
-    arn  = aws_ssm_parameter.writer.arn
-  }
-}
 
-output "dump_coords_parameter" {
-  description = "덤프 위치 SSM 파라미터 (런북이 쓴다)"
-  value = {
-    name = aws_ssm_parameter.dump_coords.name
-    arn  = aws_ssm_parameter.dump_coords.arn
-  }
-}
