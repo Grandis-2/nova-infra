@@ -5,5 +5,5 @@
 #   4. 전환 뒤 앱을 RDS 직결로    db_via_proxysql = false  (rds 스택 primary = "rds" 를 먼저 apply)
 #   5. ProxySQL 지우기            proxysql_enabled = false
 db_state         = "rds"
-proxysql_enabled = true
+proxysql_enabled = false
 db_via_proxysql  = false
