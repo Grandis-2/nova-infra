@@ -23,10 +23,11 @@ data "terraform_remote_state" "secretsmanager" {
   config  = local.remote_state.secretsmanager
 }
 
-# mysqld_exporter 가 붙을 DB 의 주소 · 계정 · 비밀(db_address · db_port · exporter_username · exporter_secret_arn)
+# mysqld_exporter 가 붙을 DB 의 주소 · 계정 · 비밀(db_address · db_port · exporter_username · exporter_secret_arn).
+# RDS 이전 중에는 rds 스택(같은 이름의 출력, db_address 는 primary 의 주소)을 읽는다(db_state)
 data "terraform_remote_state" "database" {
   backend = "s3"
-  config  = local.remote_state.database
+  config  = var.db_state == "rds" ? merge(local.remote_state_defaults, { key = "${var.env}/rds/terraform.tfstate" }) : local.remote_state.database
 }
 
 # Grafana 공개 (NV-517) — 인증서 이름 · ARN

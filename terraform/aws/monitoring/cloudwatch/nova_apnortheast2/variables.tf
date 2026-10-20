@@ -66,6 +66,18 @@ variable "rds_instance_ids" {
   default     = []
 }
 
+variable "rds_replication_alarm_instance" {
+  description = "NCP → RDS 복제 경보를 걸 RDS 인스턴스(main.tf 의 rds_replication). 복제를 시작할 때 넣고 전환 뒤 비운다"
+  type        = string
+  default     = ""
+}
+
+variable "rds_replication_lag_threshold" {
+  description = "복제 지연 경보 문턱(초)"
+  type        = number
+  default     = 300
+}
+
 variable "rds_free_storage_threshold_gib" {
   description = "RDS 남은 스토리지 경보 문턱(GiB)"
   type        = number

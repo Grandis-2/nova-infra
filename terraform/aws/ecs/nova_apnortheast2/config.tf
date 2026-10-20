@@ -33,8 +33,8 @@ locals {
         "management.server.port"                    = tostring(v.mgmt_port)
         "management.endpoint.health.probes.enabled" = "true"
       } : {},
-      v.db != null ? { "spring.datasource.url" = "jdbc:mysql://${local.db_address}:${local.db_port}/${v.db}?${local.jdbc_params}" } : {},
-      { for db, prefix in v.extra_databases : "${prefix}.url" => "jdbc:mysql://${local.db_address}:${local.db_port}/${db}?${local.jdbc_params}" },
+      v.db != null ? { "spring.datasource.url" = "jdbc:mysql://${local.app_db_address}:${local.app_db_port}/${v.db}?${local.jdbc_params}" } : {},
+      { for db, prefix in v.extra_databases : "${prefix}.url" => "jdbc:mysql://${local.app_db_address}:${local.app_db_port}/${db}?${local.jdbc_params}" },
       v.redis != null ? {
         "spring.data.redis.host"        = local.redis_endpoints[v.redis]
         "spring.data.redis.port"        = tostring(local.redis_ports[v.redis])
