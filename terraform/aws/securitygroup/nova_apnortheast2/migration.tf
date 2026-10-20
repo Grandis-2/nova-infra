@@ -2,7 +2,8 @@
 # 서비스가 아니라 application/ 에 없으므로 SG 를 여기 따로 둔다.
 #
 # 인바운드는 없다. 나가는 것은 둘이다.
-#   3306 — NCP DB. NAT 고정 IP 로 나가야 ACG 를 지난다. Public 도메인의 IP 가 고정되지 않아 0.0.0.0/0 이다
+#   3306 — NCP DB. NAT 고정 IP 로 나가야 ACG 를 지난다. Public 도메인의 IP 가 고정되지 않아 0.0.0.0/0 이다.
+#          RDS 로 옮긴 뒤에도 이 규칙으로 나간다(RDS SG 가 이 SG 를 받는다, rds.tf)
 #   443  — 이미지 Pull(ECR · S3 게이트웨이 엔드포인트) · 시크릿 · 로그 (엔드포인트 또는 NAT)
 resource "aws_security_group" "migration" {
   name        = "${local.name_prefix}-migration-sg"

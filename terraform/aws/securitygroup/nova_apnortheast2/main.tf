@@ -3,6 +3,7 @@
 #
 #   routes 있음    → ALB 에서 앱 포트 · 헬스체크 포트       (모듈)
 #   redis 있음     → Valkey 6379                            (모듈)
+#   db 있음        → ProxySQL NLB · RDS 3306 (RDS 이전)     (모듈)
 #   모든 서비스    → VPC 엔드포인트 443, 아웃바운드 전부     (모듈)
 #   calls          → 부르는 서비스에서 불리는 서비스 포트    (아래 service_to_service)
 
@@ -19,6 +20,12 @@ module "service" {
   alb_ports               = length(each.value.routes) > 0 ? distinct([each.value.port, each.value.health.port]) : []
   use_cache               = each.value.redis != null
   cache_security_group_id = aws_security_group.redis.id
+
+  use_db = each.value.db != null
+  db_security_group_ids = {
+    proxysql_nlb = aws_security_group.proxysql_nlb.id
+    rds          = aws_security_group.rds.id
+  }
 }
 
 # 서비스끼리의 호출 (calls + JWT 검증 서비스 → member). 키: <부르는 쪽>-to-<불리는 쪽>
