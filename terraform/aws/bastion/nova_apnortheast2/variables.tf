@@ -5,7 +5,7 @@ variable "enabled" {
 }
 
 variable "instance_type" {
-  description = "인스턴스 타입. 평소에는 포트포워딩만 하므로 가장 작은 타입이면 된다. RDS 이전 기간에는 런북(MySQL Shell 덤프)을 돌려 키운다"
+  description = "인스턴스 타입. 평소에는 포트포워딩만 하므로 가장 작은 타입이면 된다. RDS 이전 기간에는 런북(MySQL Shell 덤프 · 세션)을 돌려 micro 로 키운다"
   type        = string
   default     = "t4g.nano"
 }
@@ -14,12 +14,6 @@ variable "ami_id" {
   description = "AMI 를 고정하고 싶을 때 지정한다. 비우면 최신 Amazon Linux 2023(ARM)을 쓴다"
   type        = string
   default     = ""
-}
-
-variable "root_volume_size" {
-  description = "루트 볼륨(GiB). RDS 이전 기간에는 덤프 파일을 여기 둔다"
-  type        = number
-  default     = 8
 }
 
 variable "db_migration_tools" {

@@ -69,6 +69,13 @@ if px=$(timeout 20 aws ssm get-parameter --name '${proxysql_param}' --query Para
     45-*) [[ "$(timeout 20 aws ssm get-parameter --name '${writer_param}' --query Parameter.Value --output text)" == rds ]] \
             && export PROXYSQL_FROM=$rds_server || export PROXYSQL_FROM=$ncp_server ;;
   esac
+else
+  # 00 · 10 · 20 · 30 · 40 은 ProxySQL 없이 돈다. 45 · 50 · 60 · 70 은 ProxySQL(ecs 스택)을 띄운 뒤에 돌린다
+  case '${script}' in
+    45-* | 50-* | 60-* | 70-*)
+      echo "ProxySQL 노드 정보(SSM ${proxysql_param})를 읽지 못했다. ecs 스택의 ProxySQL 을 먼저 apply 한다" >&2
+      exit 1 ;;
+  esac
 fi
 
 # 리허설 모드: Args 가 "rehearsal <리허설 NCP 도메인> ..." 이면 리허설 NCP(운영 백업으로 만든 것)와 아직 비어 있는 운영 RDS 를
