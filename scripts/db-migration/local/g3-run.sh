@@ -16,13 +16,14 @@ http() { [[ "$(docker ps -q --filter label=dbmig-app | wc -l | tr -d ' ')" -gt 0
 run1="g3-cutover-$(date -u +%H%M%S)"
 log "1) 프로브 시작 → $run1"
 ./probe.sh start "$run1"
-! http || ./apps.sh load 45 "$run1" >"$LOGS/http-$run1.log" 2>&1 &
+load_pid=""
+if http; then ./apps.sh load 45 "$run1" >"$LOGS/http-$run1.log" 2>&1 & load_pid=$!; fi
 sleep 15
 ./read-only.sh off
 log "전환"
 ./tools.sh 60-cutover.sh 2>&1 | tee "$LOGS/60-cutover.log"
 sleep 15
-wait
+[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-*.log)"; exit 1; }
 ./probe.sh stop "$run1"
 ./verify.sh rds "$run1" 2>&1 | tee "$LOGS/verify-$run1.log"
 { grep -E '^[0-9:.]+ [567]\.' "$LOGS/60-cutover.log"; cat "$LOGS/verify-$run1.log"; cat "work/$run1/http-summary.txt" 2>/dev/null; } >>"$LOGS/summary.txt"
@@ -30,12 +31,13 @@ wait
 run2="g3-rollback-$(date -u +%H%M%S)"
 log "2) 프로브 다시 시작 → $run2"
 ./probe.sh start "$run2"
-! http || ./apps.sh load 35 "$run2" >"$LOGS/http-$run2.log" 2>&1 &
+load_pid=""
+if http; then ./apps.sh load 35 "$run2" >"$LOGS/http-$run2.log" 2>&1 & load_pid=$!; fi
 sleep 10
 log "되돌리기"
 ./tools.sh 70-rollback.sh 2>&1 | tee "$LOGS/70-rollback.log"
 sleep 10
-wait
+[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-*.log)"; exit 1; }
 ./probe.sh stop "$run2"
 ./verify.sh ncp "$run2" 2>&1 | tee "$LOGS/verify-$run2.log"
 { grep -E '되돌리기 끝|^[0-9:.]+ [3456]\.' "$LOGS/70-rollback.log"; cat "$LOGS/verify-$run2.log"; cat "work/$run2/http-summary.txt" 2>/dev/null; } >>"$LOGS/summary.txt"

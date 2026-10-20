@@ -4,7 +4,8 @@
 # 전환 중 HTTP 요청이 실패하거나 늦어지지 않는지.
 #
 #   scripts/db-migration/local/apps.sh up              Redis · Floci(SQS) 와 두 서비스를 띄우고 준비될 때까지 기다린다
-#   scripts/db-migration/local/apps.sh load <초> <이름> catalog 공개 API 를 초당 약 10번 부르고 결과를 work/<이름>/http.tsv 에 남긴다
+#   scripts/db-migration/local/apps.sh load <초> <이름> catalog 공개 API 를 초당 약 10번 부르고 결과를 work/<이름>/http.tsv 에 남긴다.
+#                                                       200 이 아닌 응답이 있으면 1 로 끝난다
 #   scripts/db-migration/local/apps.sh pinned          ProxySQL 에서 트랜잭션 없이 뒷단 연결을 쥔 세션과 @ 가 든 쿼리를 보여 준다
 #   scripts/db-migration/local/apps.sh down
 #
@@ -88,7 +89,8 @@ case "${1:?up · load · pinned · down}" in
         sleep 0.2
       done
       awk -F"\t" '"'"'{n++; if ($1 != 200) bad++; if ($2 > max) max = $2; if ($2 > 0.3) slow++; if ($2 > 1) vslow++}
-        END {printf "HTTP %d건, 200 이 아닌 응답 %d, 최대 %.3f초, 0.3초 넘음 %d, 1초 넘음 %d\n", n, bad, max, slow, vslow}'"'"' "$1/http.tsv" | tee "$1/http-summary.txt"' "$secs" "$out"
+        END {printf "HTTP %d건, 200 이 아닌 응답 %d, 최대 %.3f초, 0.3초 넘음 %d, 1초 넘음 %d\n", n, bad, max, slow, vslow}'"'"' "$1/http.tsv" | tee "$1/http-summary.txt"
+      awk -F"\t" "\$1 != 200 {bad = 1} END {exit bad}" "$1/http.tsv"' "$secs" "$out" # 200 이 아닌 응답이 하나라도 있으면 실패로 끝난다
     ;;
   pinned)
     docker compose exec -T tools bash -c '

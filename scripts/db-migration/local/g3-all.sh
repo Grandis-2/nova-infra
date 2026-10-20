@@ -60,10 +60,11 @@ fi
 run1="g3-pause-$(date -u +%H%M%S)"
 log "45 대기 · 재개 (프로브 → $run1)"
 ./probe.sh start "$run1"
-[[ "${APPS:-1}" != 1 ]] || ./apps.sh load 60 "$run1" >"$LOGS/http-$run1.log" 2>&1 &
+load_pid=""
+if [[ "${APPS:-1}" == 1 ]]; then ./apps.sh load 60 "$run1" >"$LOGS/http-$run1.log" 2>&1 & load_pid=$!; fi
 sleep 5
 step 45-pause-drill ./tools.sh 45-pause-drill.sh
-wait
+[[ -z "$load_pid" ]] || wait "$load_pid" || { log "HTTP 요청이 실패했다($LOGS/http-$run1.log)"; exit 1; }
 ./probe.sh stop "$run1"
 step "verify-$run1" ./verify.sh ncp "$run1"
 { grep -E '끝\.' "$LOGS/45-pause-drill.log"; cat "$LOGS/verify-$run1.log"; cat "work/$run1/http-summary.txt" 2>/dev/null; } >>"$LOGS/summary.txt"
