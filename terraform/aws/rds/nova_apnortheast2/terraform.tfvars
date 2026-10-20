@@ -7,5 +7,5 @@
 #   primary 는 런북이 쓴 쓰기 대상(SSM writer)과 같아야 plan 이 통과한다(db_migration.tf)
 read_only          = false
 local_infile       = false
-primary            = "ncp"
-replication_filter = true
+primary            = "rds"
+replication_filter = false
