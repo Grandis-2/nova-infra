@@ -29,8 +29,10 @@ locals {
 
   # 요청 수 = 이 서비스의 모든 대상 그룹 요청 합. 대기 중인 쪽(blue 또는 green)은 데이터가 없어 0 으로 채운다
   burst_tg_keys = sort(keys(local.target_groups))
+  # 태스크 수가 0 이거나 지표가 끊기면 1 로 나눈다(main.tf 의 적체 대상 추적과 같다). 그래야 0대에서도 늘릴 수 있다
+  burst_tasks_expr = "IF(FILL(tasks, 1) < 1, 1, FILL(tasks, 1))"
   burst_requests_expr = format(
-    "(%s) / tasks",
+    "(%s) / ${local.burst_tasks_expr}",
     join(" + ", [for i, k in local.burst_tg_keys : "FILL(r${i}, 0)"]),
   )
 
@@ -203,7 +205,7 @@ resource "aws_cloudwatch_metric_alarm" "burst_backlog" {
 
   metric_query {
     id          = "per_task"
-    expression  = format("(%s) / tasks", join(" + ", [for i, q in var.queue_backlog.queue_names : "FILL(q${i}, 0)"]))
+    expression  = format("(%s) / %s", join(" + ", [for i, q in var.queue_backlog.queue_names : "FILL(q${i}, 0)"]), local.burst_tasks_expr)
     label       = "Backlog per task"
     return_data = true
   }
