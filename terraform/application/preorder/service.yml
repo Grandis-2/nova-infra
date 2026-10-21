@@ -33,7 +33,7 @@ db: shop
 redis: main
 
 queues:
-  send: [preorder-register, preorder-cancel, order-events, waitingroom-events, notification]
+  send: [preorder-register, preorder-cancel, order-events, waitingroom-events, notification, catalog-events]   # catalog-events 는 회차 일정 변경 알림. 마감 알림(close-notice)은 catalog 에 처리기가 생긴 뒤 켠다
   consume: [preorder-events]
   dlq: [preorder-events, preorder-register, preorder-cancel]   # preorder-events 는 DLQ 메시지를 DB 로 옮기고, 작업 DLQ 는 해당 작업을 DEAD_LETTER 로 바꾼다
 
