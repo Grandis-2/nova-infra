@@ -6,7 +6,7 @@
 #   배치 · 설정 실패 ECS Service Action · SERVICE_TASK_PLACEMENT_FAILURE · SERVICE_TASK_CONFIGURATION_FAILURE (자리 · 이미지 · 비밀 · 역할)
 #   태스크 죽음      ECS Task State Change · STOPPED 중 필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패
 #     배포 · 스케일 인으로 내린 태스크(ServiceSchedulerInitiated 중 헬스체크 실패가 아닌 것)와 Spot 회수는 뺀다.
-#     batch 는 위 batch_failure 가 따로 본다.
+#     배치 서비스(main.tf 의 batch_service_keys)는 batch_failure 가 따로 본다.
 # 태스크가 하나도 없는 상태는 서비스별 "태스크 0개" 경보(main.tf)가 본다.
 # EventBridge → SNS 는 무료다. Chatbot 이 그릴 수 있게 사용자 정의 알림 형식으로 바꿔 보낸다.
 # ─────────────────────────────────────────────────────────────
@@ -17,8 +17,8 @@ locals {
   ecs_watched_cluster_arns = [local.ecs_cluster_arn, data.terraform_remote_state.ecs.outputs.observability_cluster_arn]
   # arn:aws:ecs:<리전>:<계정>:cluster/<이름> → 서비스 ARN 접두사 arn:aws:ecs:<리전>:<계정>:service/<이름>/
   ecs_service_arn_prefixes = [for arn in local.ecs_watched_cluster_arns : { prefix = "${replace(arn, ":cluster/", ":service/")}/" }]
-  # 서비스 태스크만 본다. 단독 실행 태스크(group = family:<이름>)와 batch 는 batch_failure 가 본다
-  ecs_event_groups = [for key, name in local.service_names : "service:${name}" if key != "batch"]
+  # 서비스 태스크만 본다. 단독 실행 태스크(group = family:<이름>)는 빼고, 배치 서비스는 batch_failure 가 본다
+  ecs_event_groups = [for key, name in local.service_names : "service:${name}" if !contains(local.batch_service_keys, key)]
 
   ecs_event_rules = {
     deployment-failed = {

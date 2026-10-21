@@ -22,4 +22,7 @@ locals {
   mock_ecr_repo_keys = ["mock", "mock-migration"]
   ecr_repo_arns      = [for k, arn in data.terraform_remote_state.ecr.outputs.repository_arns : arn if !contains(local.mock_ecr_repo_keys, k)]
   mock_ecr_repo_arns = [for k in local.mock_ecr_repo_keys : data.terraform_remote_state.ecr.outputs.repository_arns[k] if contains(keys(data.terraform_remote_state.ecr.outputs.repository_arns), k)]
+
+  # ecr 출력에 아직 없는 서비스 · migration 저장소(github_deploy.tf 의 사전 조건)
+  ecr_repo_keys_missing = sort(tolist(setsubtract(concat(keys(local.services), ["migration"]), keys(data.terraform_remote_state.ecr.outputs.repository_arns))))
 }

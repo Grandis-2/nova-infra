@@ -88,6 +88,12 @@ locals {
 }
 
 locals {
+  # db · extra_databases 를 쓰는데 rds 스택에 DB 계정 비밀이 없는 서비스
+  _db_secret_missing = [
+    for k, v in local.deployed_services : k
+    if(v.db != null || length(v.extra_databases) > 0) && !contains(keys(local.db_secret_arns), k)
+  ]
+
   # 비밀 파일은 있는데 secretsmanager 스택이 아직 시크릿을 만들지 않은 서비스
   _secret_missing = concat(
     [for k in keys(local.deployed_services) : k if length(lookup(local.secret_keys, k, [])) > 0 && !contains(keys(local.app_secret_arns), k)],
@@ -117,6 +123,10 @@ resource "terraform_data" "config_check" {
     precondition {
       condition     = length(local._cfg_secret_literals) == 0
       error_message = "application.yml 에 비밀 값이 있다: ${join(", ", local._cfg_secret_literals)}. 같은 폴더의 secrets.sops.yml 로 옮기고, 값 자리에는 $${환경변수} 를 쓴다."
+    }
+    precondition {
+      condition     = length(local._db_secret_missing) == 0
+      error_message = "db · extra_databases 를 쓰는데 DB 계정 비밀이 아직 없다: ${join(", ", local._db_secret_missing)}. rds 스택 secrets.tf 의 created_app_secrets 에 더해 apply 하고, MySQL 계정과 비밀 값을 만든다."
     }
     precondition {
       condition     = length(local._secret_missing) == 0

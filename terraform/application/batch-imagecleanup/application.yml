@@ -1,0 +1,25 @@
+# batch-imagecleanup — 안 쓰는 사진 정리. 항상 1개만 띄운다(service.yml 의 deployment: singleton)
+# 인프라가 채우는 값(이름, DB 주소, 업로드 버킷 nova.upload.*)은 적지 않는다.
+spring:
+  main:
+    web-application-type: none                            # HTTP 를 받지 않는다. @Scheduled 작업만 돈다
+  datasource:
+    hikari:
+      transaction-isolation: TRANSACTION_READ_COMMITTED   # 행 삭제 트랜잭션은 코드에서도 READ COMMITTED 로 연다
+      maximum-pool-size: 10                               # DB 최대 연결 수가 (DB 쓰는 태스크 수 × 10) 이상이어야 한다
+      data-source-properties:
+        socketTimeout: 1800000                            # 네트워크가 응답 없이 끊겨도 정리가 무한정 서 있지 않게 30분을 둔다
+  jpa:
+    hibernate:
+      ddl-auto: validate                                  # 스키마는 Flyway 가 만든다
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+
+nova:
+  batch:
+    # 정기 05:00(Asia/Seoul) 등 나머지는 기본값을 그대로 쓴다(be batch/imagecleanup/application.yml.example)
+    image-cleanup:
+      dry-run: true                # 지울 대상을 세어 로그만 남긴다. 끄면 실제로 지운다 — catalog 와 확인한 뒤 끈다

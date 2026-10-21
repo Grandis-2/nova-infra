@@ -9,7 +9,7 @@
 | 항목 | 목표 구조 | 지금 운영 | 월 절감 (추정) | 되돌리는 방법 |
 | --- | --- | --- | --- | --- |
 | VPC 인터페이스 엔드포인트 | ECR · Logs · Secrets Manager · SSM 엔드포인트 | 꺼 둠. AWS API 호출이 NAT를 거침 | 약 130달러 | vpc `enable_interface_endpoints = true` |
-| Fargate 용량 | 서비스마다 온디맨드 1개, 늘어나는 태스크는 Spot | 전부 Spot (mock 만 온디맨드) | 약 160달러 | ecs `spot_on_demand_base = 1` |
+| Fargate 용량 | 서비스마다 온디맨드 1개, 늘어나는 태스크는 Spot | 전부 Spot (mock · 정합성 검사만 온디맨드) | 약 160달러 | ecs `spot_on_demand_base = 1` |
 | DB | AWS RDS for MySQL Multi-AZ, db 서브넷 | NCP Cloud DB for MySQL 단일, NAT 고정 IP 로 접속 | 약 110달러 | RDS 스택을 만들고 이관 |
 | Container Insights | 켬 (태스크 단위 지표) | 끔. 무료 `AWS/ECS` 지표와 ECS 이벤트 경보로 대신 | 약 75달러 | ecs `container_insights = "enhanced"` |
 | NAT | NAT Gateway, AZ마다 하나 | NAT 인스턴스(fck-nat t4g.micro) AZ마다 하나 | 약 70달러 + 처리 요금 | vpc `nat_mode = "gateway"` |
@@ -29,7 +29,7 @@
 
 **VPC 인터페이스 엔드포인트.** ECR 이미지 pull, 비밀 조회, 로그 전송이 NAT를 거쳐 인터넷 경로로 나갑니다. 그래서 NAT가 멈추면 새 태스크가 뜨지 못합니다. AWS API 호출만 따로 보안 그룹으로 통제할 수도 없습니다.
 
-**Fargate Spot.** 서비스마다 최소 대수가 1대라서, Spot이 회수되면 새 태스크가 뜰 때까지 그 서비스가 멈춥니다. mock은 판정용 부하를 받는 서비스라 대수가 바뀌면 안 되므로 온디맨드로 운영합니다.
+**Fargate Spot.** 서비스마다 최소 대수가 1대라서, Spot이 회수되면 새 태스크가 뜰 때까지 그 서비스가 멈춥니다. mock은 판정용 부하를 받는 서비스라 대수가 바뀌면 안 되므로 온디맨드로 운영합니다. 정합성 검사(batch-reconciliation)도 회수되면 도는 검사가 실패로 끝나고 그날 다시 돌지 않아 온디맨드로 둡니다.
 
 **NCP DB.** AWS와 NCP 사이에는 사설망이 없어서 DB 연결이 인터넷을 거칩니다. 그 결과 다음을 감수합니다.
 - NCP 방화벽(ACG)은 NAT 고정 IP 두 개에서 오는 연결만 허용하고, JDBC 연결에는 TLS를 강제합니다.

@@ -1,6 +1,7 @@
-# DB 계정 비밀. NCP 시절 ncp-database 스택이 만들었고, NCP 해체 전에 이 스택으로 소유권을 옮겼다(import).
-# 앱 · Flyway · exporter 는 username · password 만 읽는다. 값(비밀 버전)은 이 스택이 쓰지 않는다 — 비밀번호를 바꾸려면
-# RDS 계정과 함께 바꾸는 별도 작업으로 한다(값의 host 는 NCP 시절 그대로 남아 있고 쓰지 않는다).
+# DB 계정 비밀. 처음 것은 NCP 시절 ncp-database 스택이 만들었고 NCP 해체 전에 이 스택으로 소유권을 옮겼다(imported_*, import).
+# 그 뒤 생긴 서비스의 비밀은 이 스택이 만든다(created_app_secrets).
+# 앱 · Flyway · exporter 는 username · password 만 읽는다. 값(비밀 버전)은 이 스택이 쓰지 않는다 — MySQL 계정을 만들거나 비밀번호를
+# 바꿀 때 계정과 함께 손으로 넣는다(가져온 값의 host 는 NCP 시절 그대로 남아 있고 쓰지 않는다).
 locals {
   # 서비스 키 → 비밀 ARN (가져올 때의 대상. 이름 끝 6자리는 Secrets Manager 가 붙인 것)
   imported_app_secrets = {
@@ -18,10 +19,13 @@ locals {
     migrator = "arn:aws:secretsmanager:ap-northeast-2:316708313927:secret:nova-prod/db/migrator-CckHVI"
   }
   imported_exporter_secret = "arn:aws:secretsmanager:ap-northeast-2:316708313927:secret:nova-prod/db/exporter-Dg81Az"
+
+  # 이 스택이 만든 서비스 비밀 — 가져올 대상이 없어 import 하지 않는다
+  created_app_secrets = ["batch-imagecleanup", "batch-reconciliation"]
 }
 
 resource "aws_secretsmanager_secret" "app" {
-  for_each = local.imported_app_secrets
+  for_each = toset(concat(keys(local.imported_app_secrets), local.created_app_secrets))
 
   name                    = "${local.name_prefix}/db/app/${each.key}"
   description             = "DB account for the ${each.key} service (MySQL)"

@@ -150,12 +150,12 @@ resource "aws_iam_role_policy" "github_deploy" {
     ]
   })
 
-  # EcrPush 는 ecr 스택의 저장소 목록으로 건다. ecr 을 apply 하기 전에 만든 plan 을 적용하면 nova/migration 이 빠진 채
-  # 들어가고, release 는 마이그레이션 이미지를 올리지 못해 아무것도 배포하지 못한다. 그런 plan 은 여기서 막는다
+  # EcrPush 는 ecr 스택의 저장소 목록으로 건다. ecr 을 apply 하기 전에 만든 plan 을 적용하면 새 서비스 · migration 저장소가
+  # 빠진 채 들어가고, release 는 그 저장소를 읽지 못해(describe-images) 아무 서비스도 배포하지 못한다. 그런 plan 은 여기서 막는다
   lifecycle {
     precondition {
-      condition     = contains(keys(data.terraform_remote_state.ecr.outputs.repository_arns), "migration")
-      error_message = "ecr 스택에 migration 저장소가 아직 없습니다. ecr 을 apply 한 뒤 iam 을 다시 plan 하세요."
+      condition     = length(local.ecr_repo_keys_missing) == 0
+      error_message = "ecr 스택에 저장소가 아직 없습니다: ${join(", ", local.ecr_repo_keys_missing)}. ecr 을 apply 한 뒤 iam 을 다시 plan 하세요."
     }
   }
 }

@@ -1,6 +1,7 @@
 # application
 
-폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM, 보안 그룹, DB 계정, ECS 서비스가 함께 만들어집니다.
+폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM, 보안 그룹, ECS 서비스가 함께 만들어집니다.
+DB 계정은 만들어지지 않습니다 — `db` 를 쓰면 아래 '새 서비스 추가'의 계정 단계를 따릅니다.
 
 ```
 application/<서비스>/
@@ -16,7 +17,7 @@ application/<서비스>/
 | `cpu` · `memory` · `port` · `deployment` · `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
 | `routes` · `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
 | `calls` · `jwt` | 호출하는 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup · ecs) |
-| `db` · `extra_databases` | DB 계정과 비밀, DB 보안 그룹 규칙 (database · secretsmanager) |
+| `db` · `extra_databases` | DB 보안 그룹 규칙과 DB 비밀을 넣은 환경 변수 (securitygroup · ecs). 비밀은 rds 스택의 `secrets.tf` 에 서비스 키로 둔다 |
 | `redis` · `queues` · `uploads` · `upload_cleanup` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
 | `generated_secrets` · `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager · iam) |
 | `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs · securitygroup) |
@@ -27,7 +28,7 @@ application/<서비스>/
 # 필수
 cpu: 1024                 # 256 · 512 · 1024 · 2048 · 4096
 memory: 2048              # MiB, cpu에 맞는 값
-port: 8080                # 0 = 웹 서버 없음 (worker, batch)
+port: 8080                # 0 = 웹 서버 없음 (batch-reconciliation, batch-imagecleanup)
 
 # 선택 (오른쪽이 기본값)
 deploy: true              # false면 ECS 서비스를 띄우지 않음
@@ -125,5 +126,13 @@ scripts/app-secrets.sh decrypt member   # 다시 풀기
 ## 새 서비스 추가
 
 1. 폴더를 만들고 `service.yml`, `application.yml`을 작성합니다.
-2. 이미지가 아직 없으면 `deploy: false`로 PR을 올립니다.
-3. be가 이미지를 푸시하면 `deploy: true`로 바꿉니다.
+2. 이미지가 아직 없으면 `deploy: false`로 PR을 올립니다. `db` 를 쓰면 같은 PR 에서 rds 스택 `secrets.tf` 의 `created_app_secrets` 에 서비스 키를 더합니다.
+   - 첫 iam plan 은 일부러 실패합니다. 새 저장소가 아직 없을 때 만든 plan 은 be 배포 역할에 그 저장소 권한을 빠뜨리기 때문입니다. 순서: `atlantis plan -p ecr` → `atlantis apply -p ecr` → `atlantis plan -p iam` → `atlantis apply -p iam` → 나머지 `atlantis plan` · `atlantis apply`.
+   - be 가 새 서비스를 dev 에 머지하는 것은 이 apply 뒤입니다. 먼저 머지되면 release 가 새 저장소를 읽지 못해 모든 서비스 배포가 멈춥니다.
+3. `db` 를 쓰면 MySQL 계정과 비밀 값을 손으로 만듭니다(terraform 에는 MySQL provider 가 없습니다).
+   - 계정: bastion 에 SSM 으로 들어가 마스터 계정(rds 출력 `rds_master_secret_arn`)으로 `CREATE USER` · `GRANT` 를 실행합니다.
+   - 값: bastion 역할에는 Secrets Manager 권한이 없어 작업자 자격 증명으로 넣습니다 — `aws secretsmanager put-secret-value --secret-id nova-prod/db/app/<서비스> --secret-string '{"username":"<계정>","password":"<비밀번호>"}'`
+   - 값이 없는 채로 `deploy: true` 로 바꾸면 태스크가 비밀을 읽지 못해 뜨지 않습니다.
+4. be가 이미지를 푸시하면 `deploy: true`로 바꿉니다.
+
+폴더 이름이 `batch` 거나 `batch-` 로 시작하면 배치 서비스로 봅니다. 비정상 종료 경보는 배치 전용 규칙(monitoring 의 `batch_failure`, 필수 컨테이너 종료 · 기동 실패로 판정)이 받고, 일반 태스크 죽음 경보에서는 빠집니다.

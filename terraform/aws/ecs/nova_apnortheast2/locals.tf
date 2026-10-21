@@ -57,7 +57,8 @@ locals {
   }
 
   # ── 시크릿 ─────────────────────────────────────────────────
-  # 값 대신 "시크릿 ARN:json 키::" 를 넘겨 태스크 정의에 비밀 값이 남지 않게 한다.
+  # 값 대신 "시크릿 ARN:json 키::" 를 넘겨 태스크 정의에 비밀 값이 남지 않게 한다. 시크릿이 아직 없으면 빈 ARN 으로 두고
+  # config.tf 의 precondition 이 원인을 알려 준다.
   #   db              → rds 스택이 관리하는 서비스 계정 비밀 (nova-prod/db/app/<서비스>)
   #   extra_databases → 같은 계정으로 접속하는 다른 DB
   #   secrets.sops.yml  → 그 서비스의 시크릿(nova-prod/app/<서비스>). 키 이름이 곧 환경변수 이름
@@ -65,18 +66,17 @@ locals {
   service_secrets = {
     for k, v in local.deployed_services : k => merge(
       v.db != null ? {
-        SPRING_DATASOURCE_USERNAME = "${local.db_secret_arns[k]}:username::"
-        SPRING_DATASOURCE_PASSWORD = "${local.db_secret_arns[k]}:password::"
+        SPRING_DATASOURCE_USERNAME = "${lookup(local.db_secret_arns, k, "")}:username::"
+        SPRING_DATASOURCE_PASSWORD = "${lookup(local.db_secret_arns, k, "")}:password::"
       } : {},
       {
         for pair in flatten([
           for db, prefix in v.extra_databases : [
-            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_USERNAME", ref = "${local.db_secret_arns[k]}:username::" },
-            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_PASSWORD", ref = "${local.db_secret_arns[k]}:password::" },
+            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_USERNAME", ref = "${lookup(local.db_secret_arns, k, "")}:username::" },
+            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_PASSWORD", ref = "${lookup(local.db_secret_arns, k, "")}:password::" },
           ]
         ]) : pair.env => pair.ref
       },
-      # 시크릿이 아직 없으면 빈 ARN 으로 두고 config.tf 의 precondition 이 원인을 알려 준다
       { for key in lookup(local.secret_keys, k, []) : key => "${lookup(local.app_secret_arns, k, "")}:${key}::" },
       {
         for e, t in v.generated_secrets : e => (

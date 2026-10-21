@@ -1,6 +1,6 @@
 # 서비스 목록. terraform/application/<서비스>/service.yml 을 읽는다.
 # 서비스 추가·수정은 이 파일이 아니라 application/ 에서 한다.
-# ECR, IAM, securitygroup, ncp database, ECS, scheduler 스택이 함께 쓴다.
+# ECR, IAM, securitygroup, secretsmanager, ECS 스택이 함께 쓴다.
 locals {
   # 스택 경로(…/terraform/<aws|ncp>/…)를 기준으로 terraform/application 을 찾는다
   application_dir = (
@@ -150,7 +150,7 @@ locals {
     for k, v in local.services : [for e, t in v.generated_secrets : trimprefix(t, "shared/") if startswith(t, "shared/")]
   ]))
 
-  # ECS 서비스로 띄울 대상. deploy: false 면 ECR, 역할, DB 계정만 만든다
+  # ECS 서비스로 띄울 대상. deploy: false 면 ECR, 역할, 보안 그룹만 만든다
   deployed_services = { for k, v in local.services : k => v if v.deploy }
 
   # ALB 타깃 그룹이 필요한 서비스

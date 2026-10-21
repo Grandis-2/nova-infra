@@ -1,0 +1,10 @@
+# 안 쓰는 사진 정리 — @Scheduled 작업을 돌리는 상시 앱. 항상 1개만 띄운다
+deploy: false                   # be release 가 nova/batch-imagecleanup 에 이미지를 올린 뒤 true 로 바꾼다
+# Spot 을 쓴다(기본값). 회수돼도 이름 잠금은 연결과 함께 풀리고, 삭제 대기 표(image_deletions)가 남은 S3 삭제를 다음 회차에 잇는다
+cpu: 512
+memory: 1024
+port: 0
+deployment: singleton           # 옛 태스크를 먼저 내린다. 겹쳐도 MySQL 이름 잠금이 한쪽만 돌린다
+
+db: shop                        # 계정 batch_imagecleanup — 권한은 be ImageCleanupAccountTest 의 GRANT 와 같다
+upload_cleanup: true            # 업로드 버킷 products/ · promotions/ · banners/ 에서 지울 권한과 nova.upload.* 설정을 받는다

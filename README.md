@@ -85,7 +85,7 @@ be, 인프라, mock의 실제 설정값(입장 속도, DB 풀, worker 동시 처
 
 ## 비용과 목표 구조
 
-이 문서는 비용을 따지지 않고 설계한 목표 구조를 설명합니다. 실제 운영 환경에서는 비용을 줄이기 위해 12개 항목을 더 저렴한 방식으로 바꿔 두었습니다. 예를 들어 NAT Gateway 대신 NAT 인스턴스를 쓰고, VPC 인터페이스 엔드포인트를 끄고, Fargate는 전부 Spot으로 띄웁니다.
+이 문서는 비용을 따지지 않고 설계한 목표 구조를 설명합니다. 실제 운영 환경에서는 비용을 줄이기 위해 12개 항목을 더 저렴한 방식으로 바꿔 두었습니다. 예를 들어 NAT Gateway 대신 NAT 인스턴스를 쓰고, VPC 인터페이스 엔드포인트를 끄고, Fargate는 대부분 Spot으로 띄웁니다.
 
 항목마다 무엇을 감수하는지, 어떤 변수를 바꾸면 목표 구조로 돌아가는지를 [COST-SAVINGS.md](COST-SAVINGS.md)에 정리했습니다. 모두 합하면 한 달에 약 680달러를 절감합니다.
 
@@ -104,7 +104,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | 종류 | 주입 방식 | 출처 |
 | --- | --- | --- |
 | Spring 설정 | 환경 변수 `SPRING_APPLICATION_JSON` | `application.yml` + 인프라 값 (포트, DB URL, Valkey, 서비스 주소, JWKS) |
-| DB 계정 | `SPRING_DATASOURCE_USERNAME/PASSWORD` | Secrets Manager `nova-prod/db/app/<서비스>` (database 스택이 만듦) |
+| DB 계정 | `SPRING_DATASOURCE_USERNAME/PASSWORD` | Secrets Manager `nova-prod/db/app/<서비스>` (rds 스택이 비밀을 두고, MySQL 계정과 값은 손으로 만듦) |
 | 외부 키 (카카오, 토스) | 키 이름 그대로 환경 변수 | Secrets Manager `nova-prod/app/<서비스>` (sops 파일에서) |
 | 생성 비밀 (JWT 키 등) | `generated_secrets`에 적은 환경 변수 | Secrets Manager `nova-prod/app/<서비스>/<키>`, `nova-prod/shared/<이름>` |
 
@@ -248,7 +248,8 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | member | 회원, 로그인, JWT 발급 | 8080 | Blue/Green | 1~3 |
 | payment | 토스 결제 | 8085 | 롤링 | 1~3 |
 | worker | SQS 소비, 외부 예약 등록 | 없음 | 롤링 | 1~4 (큐 적체로 확장) |
-| batch | 정해진 시각에 도는 작업 | 없음 | 단일 | 1 |
+| batch-reconciliation | 정합성 검사 (매일 03:00 · 관리자 요청 · 회차 마감 뒤) | 없음 | 단일 | 1 |
+| batch-imagecleanup | 안 쓰는 사진 정리 (매일 05:00) | 없음 | 단일 | 1 |
 | mock | 외부 예약 시스템 목업 (별도 저장소) | 8081 | 롤링 | 2~5 |
 
 ## 사용법

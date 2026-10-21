@@ -291,14 +291,21 @@ resource "aws_cloudwatch_metric_alarm" "dlq" {
   alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
-# 배치 태스크가 비정상 종료하면 알린다. batch 가 멈추면 만료 처리가 통째로 서지만
+# 배치 태스크가 비정상 종료하면 알린다. 배치(정합성 검사 · 사진 정리)는 정해진 시각에 돌아, 죽은 동안 그 회차를 놓쳐도
 # ECS 가 새로 띄우므로 겉으로는 잘 드러나지 않는다.
 #
-# group 으로 배치 서비스만 거르고, 배포 때 정상 종료 코드(143 = SIGTERM)는 뺀다.
-# 거르지 않으면 롤링 배포 때마다 경보가 울린다.
+# group 으로 배치 서비스만 거르고 멈춘 까닭(stopCode)으로 가른다 — 필수 컨테이너가 끝났거나(종료 코드와 상관없이) 컨테이너가 뜨기
+# 전에 실패했을 때(비밀 값 · 이미지)다. 배포 · 스케일 인(ServiceSchedulerInitiated) · Spot 회수는 빠진다. 종료 코드로 가르지 않는다 —
+# Service Connect 프록시가 정상 종료 때 0 으로 끝나 코드만으로는 배포와 장애를 나눌 수 없고, 앱이 0 으로 끝나는 장애를 놓친다.
+locals {
+  # 배치 서비스 — 키가 batch 거나 batch- 로 시작한다(application/README). ecs_events.tf 의 태스크 죽음 경보에서는 뺀다
+  batch_service_keys   = [for key in keys(local.service_names) : key if key == "batch" || startswith(key, "batch-")]
+  batch_service_groups = [for key in local.batch_service_keys : "service:${local.service_names[key]}"]
+}
+
 resource "aws_cloudwatch_event_rule" "batch_failure" {
-  # batch 가 deploy: false 면 감시할 서비스가 없다
-  count = contains(keys(local.service_names), "batch") ? 1 : 0
+  # 배치 서비스가 모두 deploy: false 면 감시할 서비스가 없다
+  count = length(local.batch_service_groups) > 0 ? 1 : 0
 
   name        = "${local.name_prefix}-batch-task-failed"
   description = "Batch task stopped abnormally"
@@ -309,10 +316,8 @@ resource "aws_cloudwatch_event_rule" "batch_failure" {
     detail = {
       lastStatus = ["STOPPED"]
       clusterArn = [data.terraform_remote_state.ecs.outputs.cluster_arn]
-      group      = ["service:${local.service_names["batch"]}"]
-      containers = {
-        exitCode = [{ "anything-but" = [0, 143] }]
-      }
+      group      = local.batch_service_groups
+      stopCode   = ["EssentialContainerExited", "TaskFailedToStart"]
     }
   })
 }
@@ -327,11 +332,13 @@ resource "aws_cloudwatch_event_target" "batch_failure" {
   # Chatbot 은 ECS 이벤트 원문을 Slack 에 그리지 못한다. 사용자 정의 알림 형식으로 바꿔 보낸다
   input_transformer {
     input_paths = {
+      group  = "$.detail.group"
+      code   = "$.detail.stopCode"
       task   = "$.detail.taskArn"
       reason = "$.detail.stoppedReason"
     }
     input_template = <<-EOT
-      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally", "description": "<task>: <reason>"}}
+      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally", "description": "<group> (<code>) <task>: <reason>"}}
     EOT
   }
 }

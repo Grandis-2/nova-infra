@@ -1,0 +1,11 @@
+# 정합성 검사 — @Scheduled 작업을 돌리는 상시 앱. 항상 1개만 띄운다
+deploy: false                   # be release 가 nova/batch-reconciliation 에 이미지를 올린 뒤 true 로 바꾼다
+spot: false                     # Spot 회수로 내려가면 도는 검사가 실패로 끝나고, 새 태스크가 정리할 뿐 그날은 다시 돌지 않는다
+cpu: 512
+memory: 1024
+port: 0
+deployment: singleton           # 옛 태스크를 먼저 내려 같은 검사가 두 번 돌지 않게 한다(새 태스크의 기동 정리가 도는 검사를 실패로 바꾼다)
+
+db: shop                        # 계정 batch_reconciliation — 권한은 be ReconciliationAccountTest 의 GRANT 와 같다
+calls:
+  external.mock.base-url: mock  # Mock 원장을 목록 조회 API 로 읽는다. external_mock DB 는 읽지 않는다

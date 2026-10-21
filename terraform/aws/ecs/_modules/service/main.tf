@@ -22,6 +22,9 @@ resource "aws_cloudwatch_log_group" "this" {
 }
 
 locals {
+  # 배포 중 태스크 수 상한(%). singleton(동시에 둘이 뜨면 안 되는 앱)은 옛 태스크를 먼저 내려 100 이다
+  deployment_maximum_percent = var.singleton ? 100 : 200
+
   port_mappings = [for i, p in [for x in distinct([var.port, var.extra_port]) : x if x > 0] : {
     containerPort = p
     protocol      = "tcp"
@@ -106,8 +109,9 @@ resource "aws_ecs_service" "this" {
   enable_execute_command = var.enable_execute_command
   propagate_tags         = "SERVICE"
 
-  # 태스크를 두 AZ 에 나눠 배치한다. AZ 하나가 죽어도 서비스가 남는다.
-  availability_zone_rebalancing = "ENABLED"
+  # AZ 재조정(태스크가 한 AZ 로 치우치면 다시 나눔)은 최대 비율이 100% 를 넘을 때만 켠다 — 100% 이하(singleton)에서 켜면
+  # 서비스를 만들지 못한다(#159 apply 실패)
+  availability_zone_rebalancing = local.deployment_maximum_percent > 100 ? "ENABLED" : "DISABLED"
 
   # 용량 공급자(FARGATE ↔ SPOT)를 바꾸면 ECS 는 새 배포를 요구한다
   force_new_deployment = true
@@ -207,7 +211,7 @@ resource "aws_ecs_service" "this" {
   # 배포 중에도 기존 태스크를 남겨 무중단으로 배포한다 (Blue/Green 도 100/200).
   # singleton(동시에 둘이 뜨면 안 되는 앱)은 옛 태스크를 먼저 내리고 새로 띄운다.
   deployment_minimum_healthy_percent = var.singleton ? 0 : 100
-  deployment_maximum_percent         = var.singleton ? 100 : 200
+  deployment_maximum_percent         = local.deployment_maximum_percent
 
   wait_for_steady_state = false
 
