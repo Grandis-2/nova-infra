@@ -22,7 +22,9 @@ spring:
 
 nova:
   batch:
-    # 정합성 검사 — 정기 04:00(Asia/Seoul), 관리자 실행 요청 5초마다, 회차 마감 뒤 실행. 기본값을 그대로 쓴다(be batch/application.yml.example)
+    # 정합성 검사 — 관리자 실행 요청 5초마다 · 회차 마감 뒤 실행은 기본값(be batch/application.yml.example)
+    reconciliation:
+      cron: "0 0 3 * * *"          # 정기 실행(Asia/Seoul). 기본값 04:00 은 order 재고 장부 대조(04:00 · 05:00)와 겹쳐 앞당긴다
     image-cleanup:
       dry-run: true                # 지울 대상을 세어 로그만 남긴다. 끄면 실제로 지운다 — catalog 와 확인한 뒤 끈다
 

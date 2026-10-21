@@ -1,5 +1,5 @@
 # @Scheduled 작업을 돌리는 상시 앱. 항상 1개만 띄운다
-deploy: false                   # 띄우기 전에 운영 DB 이전 · be main 배포 일정과 맞춘다(application.yml 은 채움)
+deploy: true
 cpu: 512
 memory: 1024
 port: 0
