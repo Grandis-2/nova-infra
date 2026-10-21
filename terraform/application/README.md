@@ -40,7 +40,7 @@ stop_timeout: 30          # SIGTERM 뒤 강제 종료까지(초, 2~120). 비우�
 scaling:
   desired: 1
   min: 1
-  max: 1                  # max ≤ min이면 오토스케일링 없음
+  max: 1                  # max ≤ min이면 오토스케일링 없음. DB를 쓰면 max × 풀 × 2(배포 중)의 합이 RDS 연결 한도를 넘지 않아야 plan 통과
   cpu_target: 60
   requests_per_task: 0    # 1대가 1분에 받는 요청이 넘으면 바로 늘림 (routes 필요). 0이면 CPU 70% · 적체량으로만 바로 늘림
   backlog: { queue: preorder-register, per_task: 50 }   # 큐 적체로 확장 (선택). 여럿이면 queues: [a, b] (메시지 수를 더함)

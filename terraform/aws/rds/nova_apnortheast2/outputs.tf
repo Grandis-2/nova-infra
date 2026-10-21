@@ -54,4 +54,7 @@ output "rds_master_secret_arn" {
   value       = aws_db_instance.this.master_user_secret[0].secret_arn
 }
 
-
+output "max_connections" {
+  description = "최대 연결 수. ecs 스택이 서비스 최대 대수 × Hikari 풀과 비교한다(config.tf)"
+  value       = var.max_connections
+}

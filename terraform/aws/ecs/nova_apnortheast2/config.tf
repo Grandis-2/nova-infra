@@ -107,6 +107,23 @@ locals {
   ])
 }
 
+# DB 연결 예산 — 서비스가 최대 대수까지 늘고 배포로 새 태스크가 함께 떠도(Rolling · Blue/Green 모두 잠깐 2배) 연결 합이
+# RDS max_connections 를 넘지 않아야 한다. 넘으면 늘어난 태스크가 DB 에 붙지 못해 증설이 오히려 장애가 된다.
+# 풀 크기는 application.yml 의 maximum-pool-size, 없으면 Hikari 기본값 10. db 가 있으면 실제로 안 붙는 서비스(worker)도
+# 세어 넉넉하게 본다. max 를 올리거나 풀을 키우는 PR 이 이 검사에 걸리면 rds 의 max_connections 를 먼저 올린다
+locals {
+  _db_pool = {
+    for k, v in local.deployed_services : k => v.max * (
+      (v.db != null ? try(tonumber(yamldecode(local._cfg_text[k]).spring.datasource.hikari["maximum-pool-size"]), 10) : 0)
+      + 10 * length(v.extra_databases)
+    )
+  }
+  _db_conn_reserve = 50 # 사람 · 마이그레이션 · exporter · RDS 관리 연결
+  _db_conn_need    = 2 * sum(concat([0], values(local._db_pool))) + local._db_conn_reserve
+  # rds 스택을 apply 하기 전(출력 없음)에는 검사를 건너뛴다
+  _db_conn_max = try(data.terraform_remote_state.database.outputs.max_connections, null)
+}
+
 resource "terraform_data" "config_check" {
   lifecycle {
     # deploy: true 인데 설정이 비어 있으면 인프라 계산값만 받고 기동에 실패한다
@@ -125,6 +142,10 @@ resource "terraform_data" "config_check" {
     precondition {
       condition     = length(local._secret_reserved) == 0
       error_message = "비밀(secrets.sops.yml · generated_secrets) 키가 인프라 환경변수나 service.yml 의 environment 와 겹친다: ${join(", ", local._secret_reserved)}"
+    }
+    precondition {
+      condition     = local._db_conn_max == null || local._db_conn_need <= local._db_conn_max
+      error_message = "DB 연결이 모자랄 수 있다: 최대 대수 × 풀 × 2(배포 중) + 여유 ${local._db_conn_reserve} = ${local._db_conn_need} > RDS max_connections ${coalesce(local._db_conn_max, 0)}. 서비스별(최대 대수 × 풀): ${join(", ", [for k, n in local._db_pool : "${k} ${n}" if n > 0])}. rds 스택의 max_connections 를 올리거나 scaling.max · maximum-pool-size 를 줄인다."
     }
   }
 }

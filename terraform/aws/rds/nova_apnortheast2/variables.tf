@@ -32,6 +32,7 @@ variable "max_connections" {
   description = <<-EOT
     최대 연결 수. 앱 풀 합계(서비스 최대 태스크 × Hikari 풀, 2026-10-20 기준 약 380, Blue/Green 배포 중 +50)와
     ProxySQL 두 대의 서버별 상한(500 × 2) 중 큰 쪽에 운영 연결 여유를 더했다
+    ecs 스택이 앱 풀 합계 × 2(배포 중) + 여유 50 이 이 값을 넘으면 plan 을 멈춘다(ecs config.tf)
   EOT
   type        = number
   default     = 1200
