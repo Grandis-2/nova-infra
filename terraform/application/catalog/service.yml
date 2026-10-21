@@ -37,7 +37,7 @@ redis: main                     # 상품 · 가격 · 홍보 캐시
 
 queues:
   send: [order-events, preorder-events]   # 아웃박스. 상품 등록 → preorder 회차 · 차수, order 초기 재고
-  consume: [catalog-events]               # order 가 보낸 일반 상품 판매 준비
+  consume: [catalog-events]               # order 가 보낸 일반 상품 판매 준비 · preorder 가 보낸 회차 일정 변경
 
 uploads: true                   # 상품 · 홍보 · 배너 사진. 업로드 버킷 products/ · promotions/ · banners/ 에 올릴 권한과 nova.upload.* 설정을 받는다
 
