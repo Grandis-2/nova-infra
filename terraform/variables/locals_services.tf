@@ -96,7 +96,7 @@ locals {
       max        = try(tonumber(s.scaling.max), try(tonumber(s.scaling.min), try(tonumber(s.scaling.desired), 1)))
       cpu_target = try(tonumber(s.scaling.cpu_target), 60)
       # 순간 폭주 증설(ecs 모듈 burst.tf): 태스크 하나가 1분에 받는 요청이 이 값을 넘으면 바로 늘린다. 0 이면 CPU · 적체로만
-      requests_per_task = try(tonumber(s.scaling.requests_per_task), 0)
+      requests_per_task = try(coalesce(tonumber(s.scaling.requests_per_task), 0), 0) # 비워 두면(null) tonumber 가 null 을 돌려줘 0 으로 바꾼다
       # queue(하나) 또는 queues(여럿). 여럿이면 메시지 수를 더해 본다
       backlog = try({
         queues   = try([tostring(s.scaling.backlog.queue)], [for q in s.scaling.backlog.queues : tostring(q)])
