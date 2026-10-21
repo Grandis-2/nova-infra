@@ -109,7 +109,7 @@ resource "aws_cloudwatch_metric_alarm" "burst_requests" {
     }
   }
 
-  alarm_name         = "${var.name}-burst-requests"
+  alarm_name          = "${var.name}-burst-requests"
   alarm_description   = local.burst_message.requests
   evaluation_periods  = 1
   datapoints_to_alarm = 1
