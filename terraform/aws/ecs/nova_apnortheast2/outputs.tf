@@ -35,11 +35,6 @@ output "service_names" {
   value = { for k, m in module.service : k => m.service_name if m.service_name != null }
 }
 
-output "scaling_limits" {
-  description = "서비스 키 -> { max = 최대 태스크 수, cpu = 순간 폭주 증설 CPU 기준(%) }. 오토스케일링을 쓰는 서비스만"
-  value       = { for k, m in module.service : k => m.scaling_limit if m.scaling_limit != null }
-}
-
 output "task_definition_families" {
   value = { for k, m in module.service : k => m.task_definition_family }
 }

@@ -11,6 +11,7 @@
 #
 # 늘리는 폭은 지금 대수에 비례한다: 기준 ~ 기준의 2배(cpu 는 +20%p) 구간이면 +100%, 그 위면 +200% (최소 1대, max 까지).
 # 경보가 울려 있는 동안 1분마다 다시 판단해 더 늘린다. 경보 상태가 바뀔 때마다 alarm_topic_arn(Slack)에 알린다.
+# max 까지 늘렸는데도 CPU 가 높으면 맨 아래 증설 한계 경보가 사람을 부른다.
 # ─────────────────────────────────────────────────────────────
 
 locals {
@@ -219,6 +220,70 @@ resource "aws_cloudwatch_metric_alarm" "burst_backlog" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["backlog"].arn, var.alarm_topic_arn])
+  ok_actions    = compact([var.alarm_topic_arn])
+
+  tags = var.tags
+}
+
+# 증설 한계 — 순간 폭주 증설 · 대상 추적이 max 까지 다 늘렸는데도 부하가 남았다. 사람이 조치한다(max 를 올리거나
+# waitingroom 입장 속도를 낮춘다). 태스크 수만 보면 Blue/Green 배포 중 두 묶음이 함께 떠 상한에 닿은 것처럼 보이므로,
+# 상한에 닿았고 CPU 도 높은 상태가 3분 이어질 때만 울린다. max 와 같은 곳에 둬야 max 를 바꾸는 apply 에서 기준도 함께 바뀐다
+locals {
+  # CPU 기준은 순간 폭주 증설 기준. 그걸 껐으면(0) 대상 추적 목표, 그것도 없으면 70 — 0 이면 배포 중 겹침에도 울린다
+  limit_cpu = var.burst_cpu > 0 ? var.burst_cpu : (var.cpu_target > 0 ? var.cpu_target : 70)
+}
+
+resource "aws_cloudwatch_metric_alarm" "at_max" {
+  count = local.burst_on ? 1 : 0
+
+  alarm_name          = "${var.name}-at-max"
+  alarm_description   = "${var.name} is at its max of ${var.max_capacity} tasks and CPU is still above ${local.limit_cpu}% for 3 minutes. Auto scaling cannot add more. Raise scaling.max or lower the waitingroom admission rate"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  metric_query {
+    id = "tasks"
+
+    metric {
+      namespace   = "AWS/ECS"
+      metric_name = "LiveTaskCount"
+      period      = 60
+      stat        = "Minimum"
+
+      dimensions = {
+        ClusterName = var.cluster_name
+        ServiceName = var.name
+      }
+    }
+  }
+
+  metric_query {
+    id = "cpu"
+
+    metric {
+      namespace   = "AWS/ECS"
+      metric_name = "CPUUtilization"
+      period      = 60
+      stat        = "Average"
+
+      dimensions = {
+        ClusterName = var.cluster_name
+        ServiceName = var.name
+      }
+    }
+  }
+
+  metric_query {
+    id          = "at_max"
+    expression  = "IF(tasks >= ${var.max_capacity} AND cpu > ${local.limit_cpu}, 1, 0)"
+    label       = "At max tasks under load"
+    return_data = true
+  }
+
+  alarm_actions = compact([var.alarm_topic_arn])
   ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
