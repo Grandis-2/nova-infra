@@ -11,6 +11,7 @@ variable "queues" {
     "notification",       # preorder, order → member : 알림
     "waitingroom-events", # preorder → waitingroom
     "catalog-events",     # order → catalog : 일반 상품 판매 준비
+    "admin-alert",        # preorder, order → member : 관리자 알림
   ]
 }
 
