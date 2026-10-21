@@ -39,7 +39,7 @@ jwt:
 nova:
   outbox:
     transport: sqs
-    concurrency: 32
+    # 커밋 직후 발행 스레드 수(= 발행이 쥐는 커넥션 상한)는 코드 기본값 2 — 덮지 않는다. 32 면 풀(10)을 접수와 다툰다
     relay-interval: 10s
     relay-after: 1m
     relay-batch: 100
