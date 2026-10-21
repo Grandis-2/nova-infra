@@ -25,6 +25,10 @@ output "target_group_arns" {
 }
 
 output "scaling_limit" {
-  description = "오토스케일링 상한과 순간 폭주 증설의 CPU 기준(%). 오토스케일링이 없으면 null. monitoring 의 증설 한계 경보가 쓴다"
-  value       = var.create_service && var.max_capacity > 0 ? { max = var.max_capacity, cpu = var.burst_cpu } : null
+  description = "오토스케일링 상한과 '부하가 남았다'로 볼 CPU(%). 오토스케일링이 없으면 null. monitoring 의 증설 한계 경보가 쓴다"
+  # CPU 기준은 순간 폭주 증설 기준. 그걸 껐으면(0) 대상 추적 목표, 그것도 없으면 70 — 0 이면 배포 중 겹침에도 울린다
+  value = var.create_service && var.max_capacity > 0 ? {
+    max = var.max_capacity
+    cpu = var.burst_cpu > 0 ? var.burst_cpu : (var.cpu_target > 0 ? var.cpu_target : 70)
+  } : null
 }
