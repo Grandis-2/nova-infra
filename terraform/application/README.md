@@ -42,6 +42,7 @@ scaling:
   min: 1
   max: 1                  # max ≤ min이면 오토스케일링 없음
   cpu_target: 60
+  requests_per_task: 0    # 1대가 1분에 받는 요청이 넘으면 바로 늘림 (routes 필요). 0이면 CPU 70% · 적체량으로만 바로 늘림
   backlog: { queue: preorder-register, per_task: 50 }   # 큐 적체로 확장 (선택). 여럿이면 queues: [a, b] (메시지 수를 더함)
 
 health:                   # routes가 있으면 필수. routes 없이 쓰면 컨테이너 헬스체크가 됨

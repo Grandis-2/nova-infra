@@ -11,8 +11,14 @@
 # ─────────────────────────────────────────────────────────────
 
 locals {
+  # 경보 토픽 — monitoring/cloudwatch 스택이 만든다(Chatbot → Slack 구독). 그 스택은 ecs 출력을 읽으므로
+  # remote state 대신 이름 규칙으로 ARN 을 만든다: 클러스터 ARN 의 파티션 · 리전 · 계정 + <name_prefix>-alerts
+  _cluster_arn_parts = split(":", aws_ecs_cluster.this.arn)
+  alerts_topic_arn   = "arn:${local._cluster_arn_parts[1]}:sns:${local._cluster_arn_parts[3]}:${local._cluster_arn_parts[4]}:${local.name_prefix}-alerts"
+
   # 요청 수 기반 스케일링 (타깃당 분당 요청 수). 롤링 서비스만 쓴다.
-  # Blue/Green 은 배포마다 트래픽 받는 타깃 그룹이 바뀌어 지표 대상을 고정할 수 없으므로 CPU 로 늘린다
+  # Blue/Green 은 배포마다 트래픽 받는 타깃 그룹이 바뀌어 대상 추적의 지표 대상을 고정할 수 없으므로 CPU 로 늘린다.
+  # 요청 수로 바로 늘리기는 모듈 burst.tf 가 blue · green 대상 그룹을 더해 본다 (service.yml 의 scaling.requests_per_task)
   request_count_targets = {}
 }
 
@@ -69,6 +75,10 @@ module "service" {
   max_capacity         = each.value.max > each.value.min ? each.value.max : 0
   cpu_target           = each.value.cpu_target
   request_count_target = each.value.blue_green ? 0 : lookup(local.request_count_targets, each.key, 0)
+
+  # 순간 폭주 증설 (모듈 burst.tf). 먼저 늘리고 경보 토픽(Slack)에 알린다
+  burst_requests_per_task = each.value.requests_per_task
+  alarm_topic_arn         = local.alerts_topic_arn
 
   queue_backlog = each.value.backlog == null ? null : {
     queue_names     = [for q in each.value.backlog.queues : local.queues[q].name]

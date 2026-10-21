@@ -52,6 +52,8 @@ locals {
         (can(tostring(s.scaling.backlog.queue)) || try(length([for q in s.scaling.backlog.queues : tostring(q)]) >= 1 && length(s.scaling.backlog.queues) <= 8, false))
         && try(tonumber(s.scaling.backlog.per_task) > 0, false)
       ) ? "" : "scaling.backlog 는 queue(문자열) 또는 queues(1~8개 목록)와 per_task(0 보다 큰 수)가 필요",
+      # 요청 수로 바로 늘리기는 ALB 대상 그룹이 있어야 잴 수 있다
+      try(s.scaling.requests_per_task, null) == null || (try(tonumber(s.scaling.requests_per_task) > 0, false) && length(try(s.routes, [])) > 0) ? "" : "scaling.requests_per_task 는 0 보다 큰 수이고 routes 가 있는 서비스만 쓴다",
       # 컨테이너 헬스체크(routes 없음)는 200 만 본다. ALB 처럼 범위(200-299)를 쓰지 않는다
       length(try(s.routes, [])) > 0 || try(s.health, null) == null || try(tostring(s.health.matcher), "200") == "200" ? "" : "routes 없이 쓰는 health 의 matcher 는 200 만 된다",
       # 컨테이너 헬스체크 명령(bash)에 그대로 들어가므로 경로 문자를 제한한다
@@ -93,6 +95,8 @@ locals {
       min        = try(tonumber(s.scaling.min), try(tonumber(s.scaling.desired), 1))
       max        = try(tonumber(s.scaling.max), try(tonumber(s.scaling.min), try(tonumber(s.scaling.desired), 1)))
       cpu_target = try(tonumber(s.scaling.cpu_target), 60)
+      # 순간 폭주 증설(ecs 모듈 burst.tf): 태스크 하나가 1분에 받는 요청이 이 값을 넘으면 바로 늘린다. 0 이면 CPU · 적체로만
+      requests_per_task = try(tonumber(s.scaling.requests_per_task), 0)
       # queue(하나) 또는 queues(여럿). 여럿이면 메시지 수를 더해 본다
       backlog = try({
         queues   = try([tostring(s.scaling.backlog.queue)], [for q in s.scaling.backlog.queues : tostring(q)])
