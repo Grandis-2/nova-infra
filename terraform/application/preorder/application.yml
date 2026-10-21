@@ -68,6 +68,10 @@ nova:
   # 결제 기한이 지난 예약을 만료 취소한다. 태스크마다 돌지만 예약 행을 잠근 뒤 다시 확인해 한 번만 처리된다
   preorder-expiry:
     enabled: true
+  # 회차 일정을 바꾸면 catalog-events 로 알려 catalog 공개 회차 캐시를 비운다. catalog 처리기(NV-745)가 배포된 뒤 켠다
+  campaign:
+    schedule-notice:
+      enabled: true
 management:
   endpoints:
     web:
