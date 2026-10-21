@@ -23,3 +23,8 @@ output "target_group_arns" {
   description = "\"<순번>-<색>\" -> 타깃 그룹 ARN (서비스 밖에서 규칙을 더 걸 때)"
   value       = { for k, tg in aws_lb_target_group.this : k => tg.arn }
 }
+
+output "scaling_limit" {
+  description = "오토스케일링 상한과 순간 폭주 증설의 CPU 기준(%). 오토스케일링이 없으면 null. monitoring 의 증설 한계 경보가 쓴다"
+  value       = var.create_service && var.max_capacity > 0 ? { max = var.max_capacity, cpu = var.burst_cpu } : null
+}
