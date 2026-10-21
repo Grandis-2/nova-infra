@@ -101,7 +101,15 @@ resource "aws_cloudwatch_metric_alarm" "burst_cpu" {
 resource "aws_cloudwatch_metric_alarm" "burst_requests" {
   count = contains(keys(local.burst), "requests") ? 1 : 0
 
-  alarm_name          = "${var.name}-burst-requests"
+  lifecycle {
+    # 지표 수식 경보는 지표를 10개까지 받는다(대상 그룹 + 태스크 수). Blue/Green 은 규칙 하나에 대상 그룹 2개라 규칙 4개까지다
+    precondition {
+      condition     = length(local.burst_tg_keys) + 1 <= 10
+      error_message = "${var.name}: 대상 그룹이 ${length(local.burst_tg_keys)}개라 요청 수 경보의 지표 한도(10)를 넘는다. routes 를 줄이거나 scaling.requests_per_task 를 0 으로 둔다."
+    }
+  }
+
+  alarm_name         = "${var.name}-burst-requests"
   alarm_description   = local.burst_message.requests
   evaluation_periods  = 1
   datapoints_to_alarm = 1
