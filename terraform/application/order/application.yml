@@ -56,8 +56,9 @@ nova:
       visibility: 5m         # 처리 한 건보다 길게
       backoff-base: 30s      # 실패는 대개 DB 장애 — 재수신 5회(DLQ 전)가 장애 조치보다 길게(약 7분), payment 와 같다
       backoff-max: 5m
-      # 결과를 정할 수 없는 예약 취소는 같은 큐에 지연을 두고 다시 보낸다(order-events 쓰기 권한 필요)
-      defer-first-delay: 60s
+      # 결과를 정할 수 없는 예약 취소는 같은 큐에 지연을 두고 다시 보낸다(order-events 쓰기 권한 필요). 환불 중인 취소는 환불을 마친
+      # 트랜잭션이 결과를 바로 알리고 재수신은 안전망이다 — 첫 지연은 승인 중에 겹친 취소가 승인 결과 직후 정리되게 짧게 둔다(be NV-735)
+      defer-first-delay: 5s
       defer-max-delay: 15m
       defer-alert-after: 24h
 
