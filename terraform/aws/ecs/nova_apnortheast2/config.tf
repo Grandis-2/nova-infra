@@ -109,12 +109,21 @@ locals {
 
 # DB 연결 예산 — 서비스가 최대 대수까지 늘고 배포로 새 태스크가 함께 떠도(Rolling · Blue/Green 모두 잠깐 2배) 연결 합이
 # RDS max_connections 를 넘지 않아야 한다. 넘으면 늘어난 태스크가 DB 에 붙지 못해 증설이 오히려 장애가 된다.
-# 풀 크기는 application.yml 의 maximum-pool-size, 없으면 Hikari 기본값 10. db 가 있으면 실제로 안 붙는 서비스(worker)도
-# 세어 넉넉하게 본다. max 를 올리거나 풀을 키우는 PR 이 이 검사에 걸리면 rds 의 max_connections 를 먼저 올린다
+# 대수는 desired · min · max 중 큰 값(오토스케일링이 없으면 desired 로 뜬다). 풀 크기는 application.yml 의 maximum-pool-size
+# (중첩 · 점 키)와 service.yml environment 덮어쓰기 중 큰 값, 아무것도 없으면 Hikari 기본값 10. db 가 있으면 실제로 안 붙는
+# 서비스(worker)도 세어 넉넉하게 본다. max 를 올리거나 풀을 키우는 PR 이 이 검사에 걸리면 rds 의 max_connections 를 먼저 올린다
 locals {
+  _db_pool_size = {
+    for k, v in local.deployed_services : k => max(concat([0], compact([
+      try(tostring(tonumber(yamldecode(local._cfg_text[k]).spring.datasource.hikari["maximum-pool-size"])), null),
+      try(tostring(tonumber(yamldecode(local._cfg_text[k])["spring.datasource.hikari.maximum-pool-size"])), null),
+      try(tostring(tonumber(v.environment["SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE"])), null),
+      try(tostring(tonumber(v.environment["SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"])), null),
+    ]))...)
+  }
   _db_pool = {
-    for k, v in local.deployed_services : k => v.max * (
-      (v.db != null ? try(tonumber(yamldecode(local._cfg_text[k]).spring.datasource.hikari["maximum-pool-size"]), 10) : 0)
+    for k, v in local.deployed_services : k => max(v.desired, v.min, v.max) * (
+      (v.db != null ? (local._db_pool_size[k] > 0 ? local._db_pool_size[k] : 10) : 0)
       + 10 * length(v.extra_databases)
     )
   }
