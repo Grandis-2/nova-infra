@@ -36,6 +36,9 @@ variable "queue_age_threshold_overrides" {
     "preorder-cancel" = 1200
     # worker 가 지우지 않고 가시성 시간을 늘려 다시 받는다(대기 1m+5m+15m+30m+1h, 합계 약 1시간 51분 뒤 5회 수신으로 DLQ)
     "draw-register" = 7200
+    # member 의 관리자 알림 소비자가 나오기 전까지 preorder · order 의 관리자 알림이 쌓이기만 한다. 보관 기간(4일)과 같게 두어 울리지 않게 하고,
+    # 소비자가 배포되면 이 줄을 지운다
+    "admin-alert" = 345600
   }
 
   validation {
