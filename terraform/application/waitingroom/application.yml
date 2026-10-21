@@ -6,7 +6,7 @@ spring:
       connect-timeout: 1s
 # jwt.jwk-set-uri · jwk-set-allow-http 는 인프라가 member 주소로 채운다(service.yml 의 jwt: verify)
 jwt:
-  issuer: nova                  # member 와 같은 값이어야 검증이 통과한다
+  issuer: nova # member 와 같은 값이어야 검증이 통과한다
   audience: nova-api
 waitingroom:
   token:
@@ -16,8 +16,8 @@ waitingroom:
     rollout-ends-at: ${WAITING_TOKEN_ROLLOUT_ENDS_AT:}
   admission:
     # 기본 입장 속도(초당 인원). 운영 중에는 관리자 API 로 바꾼다
-    global-credit: 150
-    product-cap: 150
+    global-credit: 15
+    product-cap: 15
   schedule:
-    queue: waitingroom-events   # 회차 일정 수신
-    resync-queue: preorder-events  # 일정을 하나도 모를 때 재발행 요청
+    queue: waitingroom-events # 회차 일정 수신
+    resync-queue: preorder-events # 일정을 하나도 모를 때 재발행 요청
