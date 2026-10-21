@@ -126,6 +126,24 @@ variable "request_count_target" {
   default     = 0
 }
 
+variable "burst_cpu" {
+  description = "순간 폭주 증설(burst.tf): CPU(%)가 이 값을 2번 연속 넘으면 바로 늘린다. 0 이면 쓰지 않는다"
+  type        = number
+  default     = 70
+}
+
+variable "burst_requests_per_task" {
+  description = "순간 폭주 증설(burst.tf): 태스크 하나가 1분에 받은 요청이 이 값을 넘으면 바로 늘린다. 0 이면 쓰지 않는다 (routes 가 있는 서비스만)"
+  type        = number
+  default     = 0
+}
+
+variable "alarm_topic_arn" {
+  description = "순간 폭주 증설 경보를 알릴 SNS 토픽(Slack). 비우면 알리지 않고 늘리기만 한다"
+  type        = string
+  default     = ""
+}
+
 variable "queue_backlog" {
   description = "큐 적체 기반 스케일링 설정. 컨슈머 전용. 큐가 여럿이면 메시지 수를 더한다. 태스크 수는 AWS/ECS 의 LiveTaskCount 를 쓴다"
   type = object({

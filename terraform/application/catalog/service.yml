@@ -11,6 +11,7 @@ scaling:
   desired: 1
   min: 1
   max: 4                      # 상품 조회는 사전예약이 열릴 때 같이 몰린다
+  requests_per_task: 1400     # 1대가 1분에 받는 요청이 넘으면 바로 늘린다(부하 시험 10-21: 1대 분당 약 2,000건에 CPU 100%)
 
 health:
   port: 9082

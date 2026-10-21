@@ -116,7 +116,7 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 | --- | --- |
 | 배포 | ALB 뒤의 서비스는 ECS Blue/Green(새 버전을 5분 지켜본 뒤 전환), 나머지는 롤링. 둘 다 실패하면 자동으로 되돌림 |
 | 용량 | 서비스마다 온디맨드 1개를 두고, 늘어나는 태스크는 Fargate Spot. 2 AZ에 나누어 배치 |
-| 확장 | CPU 목표 추적. worker는 SQS 적체량도 함께 봄 |
+| 확장 | 평상시는 CPU 목표 추적(worker는 SQS 적체량도). 순간 폭주는 1분 지표로 바로 늘리고 Slack에 알림 — CPU 70% 2분, 태스크당 요청 수 1분, 태스크당 적체량 1분. 지금 대수의 +100~200% |
 | 서비스 간 호출 | ECS Service Connect 별칭 `http://<서비스>.nova.local:<포트>` (ALB를 거치지 않음) |
 | 운영 | CloudWatch Logs (14일), ECS Exec, Container Insights |
 

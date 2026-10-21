@@ -10,6 +10,8 @@ scaling:
   desired: 1
   min: 1
   max: 5                      # 접수가 몰리면 가장 먼저 늘어난다
+  requests_per_task: 1500     # 1대가 1분에 받는 요청이 넘으면 바로 늘린다(부하 시험 10-21: 1대 분당 약 2,100건에 CPU 84%)
+                              # ALB 로 직접 오는 조회 · 폴링만 센다. 접수(POST)는 waitingroom 이 Service Connect 로 넘겨 여기 없고 CPU 경보가 맡는다
 
 health:
   port: 9083

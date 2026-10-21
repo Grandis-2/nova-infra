@@ -10,6 +10,7 @@ scaling:
   desired: 1
   min: 1
   max: 5                      # 대기열 트래픽을 직접 받는다
+  requests_per_task: 3500     # 1대가 1분에 받는 요청이 넘으면 바로 늘린다(부하 시험 10-21: 1대 분당 6,000건에 CPU 100%)
 
 health:
   port: 9085
