@@ -30,15 +30,18 @@ resource "aws_lb_target_group" "this" {
 
   deregistration_delay = 30 # 배포 · 스케일인 때 지연을 줄인다
 
+  # 넣을 때는 빠르게, 뺄 때는 신중하게. 새 태스크는 5초 × 2번(약 10초)이면 요청을 받는다.
+  # 부하가 몰리면 정상 태스크도 readiness 응답이 몇 초씩 늦을 수 있어 25초(5번) 연속 실패해야 뺀다 —
+  # 빨리 빼면 남은 태스크로 부하가 몰려 줄줄이 빠진다. readiness 는 앱 상태만 본다(DB · Redis 제외, be 기본값)
   health_check {
     enabled             = true
     port                = tostring(var.health.port) # 관리 포트가 있으면 그 포트의 readiness 를 본다
     path                = var.health.path
     matcher             = var.health.matcher
-    interval            = 15
-    timeout             = 5
+    interval            = 5 # ALB 최솟값
+    timeout             = 4 # interval 보다 짧아야 한다
     healthy_threshold   = 2
-    unhealthy_threshold = 3
+    unhealthy_threshold = 5
   }
 
   tags = {
