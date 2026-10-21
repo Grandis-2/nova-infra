@@ -4,6 +4,7 @@ cpu: 512
 memory: 1024
 port: 0
 deployment: singleton           # 옛 태스크를 먼저 내려 같은 작업이 두 번 돌지 않게 한다
+spot: false                     # Spot 회수로 태스크가 내려가면 도는 중이던 정합성 검사가 실패로 끝나고 그날은 다시 돌지 않는다
 
 db: shop
 calls:
