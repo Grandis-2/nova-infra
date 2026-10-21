@@ -339,7 +339,7 @@ flowchart LR
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회가 실패하면 Error 상태 알림이 따로 간다.
 - 엣지는 CloudWatch 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/certs_alb.tf`)로 감시한다. 인증서 만료 14일 전(ALB · CloudFront 인증서, 트래픽과 무관)과 ALB 가 직접 만든 4xx 비율 50% 초과(원본 확인 헤더 · 리스너 규칙 어긋남)에 울린다. 4xx 경보는 5분 요청이 20건 이상일 때만 판단하고 15분 연속 넘어야 울리며, 기준값은 `alb_elb_4xx_ratio_threshold` 다.
 - RDS 의 CPU · 여유 메모리 · 남은 스토리지도 CloudWatch 경보(`rds_instance_ids`)로 본다.
-- ECS 서비스 상태도 CloudWatch 로 감시한다(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/`). 서비스별 "태스크 0개" 경보(`AWS/ECS` `LiveTaskCount` < 1, 5분)와 ECS 이벤트 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/ecs_events.tf`)가 있다.
+- ECS 서비스 상태도 CloudWatch 로 감시한다(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/`). 서비스별 "태스크 0개" 경보(`AWS/ECS` `LiveTaskCount` < 1, 5분), "증설 한계" 경보(`<서비스>-at-max`: 최대 대수에 닿았고 CPU 가 순간 폭주 기준을 넘는 상태가 3분)와 ECS 이벤트 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/ecs_events.tf`)가 있다.
   ECS 이벤트 경보는 배포 실패(되돌림), 태스크 배치 · 설정 실패, 태스크 비정상 종료를 알린다. 비정상 종료는 필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패이고, 배포 · 스케일 인 · Spot 회수는 뺀다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식이어야 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 이 JSON 을 만든다.
 

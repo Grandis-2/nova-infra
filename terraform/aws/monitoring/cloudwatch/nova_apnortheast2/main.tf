@@ -4,7 +4,7 @@
 # 경보는 사람이 바로 조치할 것만 만든다. 할 일 없는 경보는 무시하게 되고 진짜 장애를 놓친다.
 #
 #   사용자가 이미 아프다 : ALB 5xx, 응답 지연, 태스크 0개, CloudFront 5xx (edge.tf)
-#   곧 아파진다          : CPU, 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
+#   곧 아파진다          : 증설 한계, CPU, 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
 #   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
 #   공격 · 차단          : WAF 차단 급증 (edge.tf)
 #   트래픽이 없어도      : 인증서 만료 (certs_alb.tf)
@@ -18,6 +18,8 @@ locals {
   alb_suffix    = data.terraform_remote_state.ecs.outputs.alb_arn_suffix
   cluster_name  = data.terraform_remote_state.ecs.outputs.cluster_name
   service_names = data.terraform_remote_state.ecs.outputs.service_names
+  # 오토스케일링 상한 · 순간 폭주 증설 CPU 기준 (ecs 출력). ecs 를 아직 apply 하지 않았으면 비어 경보를 만들지 않는다
+  scaling_limits = { for k, v in try(data.terraform_remote_state.ecs.outputs.scaling_limits, {}) : k => v if contains(keys(local.service_names), k) }
 
   queues         = data.terraform_remote_state.sqs.outputs.queues
   sched_dlq_name = data.terraform_remote_state.sqs.outputs.scheduler_dlq.name
@@ -135,6 +137,63 @@ resource "aws_cloudwatch_metric_alarm" "no_running_tasks" {
 }
 
 # ── 곧 아파진다 ──────────────────────────────────────────────
+# 증설 한계 — 자동 증설(ecs 의 순간 폭주 증설 · 대상 추적)이 할 수 있는 만큼 다 했는데도 부하가 남았다. 사람이 조치한다
+# (max 를 올리거나 waitingroom 입장 속도를 낮춘다). 태스크 수만 보면 Blue/Green 배포 중 두 묶음이 함께 떠 상한에 닿은 것처럼
+# 보이므로, 상한에 닿았고 CPU 도 순간 폭주 기준을 넘는 상태가 3분 이어질 때만 울린다.
+resource "aws_cloudwatch_metric_alarm" "scaling_limit" {
+  for_each = local.scaling_limits
+
+  alarm_name          = "${local.name_prefix}-${each.key}-at-max"
+  alarm_description   = "${local.service_names[each.key]} is at its max of ${each.value.max} tasks and CPU is still above ${each.value.cpu}% for 3 minutes. Auto scaling cannot add more. Raise scaling.max or lower the waitingroom admission rate"
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  metric_query {
+    id = "tasks"
+
+    metric {
+      namespace   = "AWS/ECS"
+      metric_name = "LiveTaskCount"
+      period      = 60
+      stat        = "Minimum"
+
+      dimensions = {
+        ClusterName = local.cluster_name
+        ServiceName = local.service_names[each.key]
+      }
+    }
+  }
+
+  metric_query {
+    id = "cpu"
+
+    metric {
+      namespace   = "AWS/ECS"
+      metric_name = "CPUUtilization"
+      period      = 60
+      stat        = "Average"
+
+      dimensions = {
+        ClusterName = local.cluster_name
+        ServiceName = local.service_names[each.key]
+      }
+    }
+  }
+
+  metric_query {
+    id          = "at_max"
+    expression  = "IF(tasks >= ${each.value.max} AND cpu > ${each.value.cpu}, 1, 0)"
+    label       = "At max tasks under load"
+    return_data = true
+  }
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+}
+
 resource "aws_cloudwatch_metric_alarm" "service_cpu" {
   for_each = local.service_names
 
