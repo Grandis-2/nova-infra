@@ -1,6 +1,7 @@
 # 서비스별 태스크 역할 — terraform/application/<서비스>/service.yml 에서 만든다
 #   queues  → 보내기 · 받기 · DLQ 들여다보기 · DLQ 에 바로 넣기 권한
 #   uploads · upload_cleanup → 이미지 업로드 버킷에 사진 올리기 · 지우기
+#   scales  → 그 서비스들의 최소 대수 바꾸기 (오토스케일링 대상 등록 · ECS 서비스 조회 · 수정)
 # KMS 권한은 주지 않는다. JWT 서명은 시크릿의 PEM 개인키로 한다.
 
 module "task_role" {
@@ -20,6 +21,8 @@ module "task_role" {
   uploads           = each.value.uploads
   upload_cleanup    = each.value.upload_cleanup
   upload_bucket_arn = local.upload_bucket
+
+  scale_service_arns = [for t in each.value.scales : "${local.service_arn_prefix}/${local.name_prefix}-${local.services[t].name}"]
 }
 
 # 업로드 버킷 권한(올리기 · 지우기)을 주기 전에, upload 버킷 정책에 비TLS 요청 거부가 실제로 걸려 있는지 확인한다.

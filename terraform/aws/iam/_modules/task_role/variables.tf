@@ -57,3 +57,9 @@ variable "upload_cleanup" {
   type        = bool
   default     = false
 }
+
+variable "scale_service_arns" {
+  description = "최소 대수를 바꿀 ECS 서비스 ARN (service.yml 의 scales)"
+  type        = list(string)
+  default     = []
+}

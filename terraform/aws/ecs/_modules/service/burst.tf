@@ -49,9 +49,9 @@ resource "aws_appautoscaling_policy" "burst" {
 
   name               = "${var.name}-burst-${each.key}"
   policy_type        = "StepScaling"
-  service_namespace  = aws_appautoscaling_target.this[0].service_namespace
-  resource_id        = aws_appautoscaling_target.this[0].resource_id
-  scalable_dimension = aws_appautoscaling_target.this[0].scalable_dimension
+  service_namespace  = local.scalable_target.service_namespace
+  resource_id        = local.scalable_target.resource_id
+  scalable_dimension = local.scalable_target.scalable_dimension
 
   step_scaling_policy_configuration {
     adjustment_type          = "PercentChangeInCapacity"

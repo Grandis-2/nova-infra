@@ -75,6 +75,7 @@ module "service" {
   # max > min 일 때만 오토스케일링을 건다
   min_capacity         = each.value.min
   max_capacity         = each.value.max > each.value.min ? each.value.max : 0
+  min_capacity_by_app  = contains(local.app_scaled_services, each.key) # 회차 일정에 맞춰 앱(preorder)이 최소 대수를 바꾼다
   cpu_target           = each.value.cpu_target
   request_count_target = each.value.blue_green ? 0 : lookup(local.request_count_targets, each.key, 0)
 
@@ -110,4 +111,16 @@ resource "terraform_data" "db_ready" {
       error_message = "DB 주소가 비어 있습니다. rds 스택 출력(db_address)을 확인하세요."
     }
   }
+}
+
+# 앱이 최소 대수를 바꾸게 되면서 오토스케일링 대상을 app_min 으로 옮긴다(NV-754). 다시 만들지 않아 스케일링 정책이 그대로 남는다.
+# 적용된 뒤에는 지워도 된다
+moved {
+  from = module.service["waitingroom"].aws_appautoscaling_target.this[0]
+  to   = module.service["waitingroom"].aws_appautoscaling_target.app_min[0]
+}
+
+moved {
+  from = module.service["preorder"].aws_appautoscaling_target.this[0]
+  to   = module.service["preorder"].aws_appautoscaling_target.app_min[0]
 }

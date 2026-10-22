@@ -21,6 +21,7 @@ application/<서비스>/
 | `redis` · `queues` · `uploads` · `upload_cleanup` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
 | `generated_secrets` · `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager · iam) |
 | `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs · securitygroup) |
+| `scales` | 그 서비스들의 최소 대수를 바꾸는 권한과 대상 설정. 대상의 min 은 처음 만들 때만 Terraform 이 넣는다 (iam · ecs) |
 
 ## service.yml
 
@@ -71,6 +72,7 @@ upload_cleanup: false     # true면 업로드 버킷의 사진 지우기 권한 
 generated_secrets: {}     # 아래 '비밀' 참고
 environment: {}
 profiling: false          # true면 프로파일(Pyroscope)을 보냄. 이미지에 /otel/pyroscope-otel.jar 가 있어야 함
+scales: []                # 이 앱이 최소 대수를 바꾸는 서비스(대상은 scaling.max > min). 대상의 min 은 그 뒤 Terraform 이 되돌리지 않음
 ```
 
 모르는 필드가 있거나 필수 필드가 빠지면 plan이 실패합니다.
@@ -85,6 +87,7 @@ be의 `application.yml.example`을 복사해 운영 값으로 고칩니다. 공�
 - `spring.datasource.url`, `spring.data.redis.*`
 - `jwt.jwk-set-uri`, `calls`에 적은 속성, SQS 리전
 - `uploads: true` 또는 `upload_cleanup: true`이면 `nova.upload.bucket`, `nova.upload.cdn-base-url`, `nova.upload.region`
+- `scales`가 있으면 `nova.scaling.cluster`, `nova.scaling.region`, `nova.scaling.<대상>.service` · `baseline`(min) · `max`
 
 비밀 값이나 `localhost`를 적으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
 

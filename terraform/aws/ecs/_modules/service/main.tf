@@ -228,7 +228,7 @@ resource "aws_ecs_service" "this" {
 
 # ── 오토스케일링 ─────────────────────────────────────────────
 resource "aws_appautoscaling_target" "this" {
-  count = var.create_service && var.max_capacity > 0 ? 1 : 0
+  count = var.create_service && var.max_capacity > 0 && !var.min_capacity_by_app ? 1 : 0
 
   service_namespace  = "ecs"
   resource_id        = "service/${var.cluster_name}/${var.name}"
@@ -239,14 +239,36 @@ resource "aws_appautoscaling_target" "this" {
   depends_on = [aws_ecs_service.this]
 }
 
+# 앱이 최소 대수를 바꾸는 서비스(다른 서비스의 service.yml scales). lifecycle 은 조건을 받지 않아 리소스를 따로 둔다.
+# min 은 처음 만들 때만 넣고, 앱이 올려 둔 값을 다음 apply 가 되돌리지 않게 한다. max 는 계속 Terraform 이 맞춘다
+resource "aws_appautoscaling_target" "app_min" {
+  count = var.create_service && var.max_capacity > 0 && var.min_capacity_by_app ? 1 : 0
+
+  service_namespace  = "ecs"
+  resource_id        = "service/${var.cluster_name}/${var.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = var.min_capacity
+  max_capacity       = var.max_capacity
+
+  lifecycle {
+    ignore_changes = [min_capacity]
+  }
+
+  depends_on = [aws_ecs_service.this]
+}
+
+locals {
+  scalable_target = one(concat(aws_appautoscaling_target.this, aws_appautoscaling_target.app_min))
+}
+
 resource "aws_appautoscaling_policy" "cpu" {
   count = var.create_service && var.max_capacity > 0 && var.cpu_target > 0 ? 1 : 0
 
   name               = "${var.name}-cpu"
   policy_type        = "TargetTrackingScaling"
-  service_namespace  = aws_appautoscaling_target.this[0].service_namespace
-  resource_id        = aws_appautoscaling_target.this[0].resource_id
-  scalable_dimension = aws_appautoscaling_target.this[0].scalable_dimension
+  service_namespace  = local.scalable_target.service_namespace
+  resource_id        = local.scalable_target.resource_id
+  scalable_dimension = local.scalable_target.scalable_dimension
 
   target_tracking_scaling_policy_configuration {
     target_value = var.cpu_target
@@ -265,9 +287,9 @@ resource "aws_appautoscaling_policy" "request_count" {
 
   name               = "${var.name}-requests"
   policy_type        = "TargetTrackingScaling"
-  service_namespace  = aws_appautoscaling_target.this[0].service_namespace
-  resource_id        = aws_appautoscaling_target.this[0].resource_id
-  scalable_dimension = aws_appautoscaling_target.this[0].scalable_dimension
+  service_namespace  = local.scalable_target.service_namespace
+  resource_id        = local.scalable_target.resource_id
+  scalable_dimension = local.scalable_target.scalable_dimension
 
   target_tracking_scaling_policy_configuration {
     target_value = var.request_count_target
@@ -289,9 +311,9 @@ resource "aws_appautoscaling_policy" "queue_backlog" {
 
   name               = "${var.name}-backlog"
   policy_type        = "TargetTrackingScaling"
-  service_namespace  = aws_appautoscaling_target.this[0].service_namespace
-  resource_id        = aws_appautoscaling_target.this[0].resource_id
-  scalable_dimension = aws_appautoscaling_target.this[0].scalable_dimension
+  service_namespace  = local.scalable_target.service_namespace
+  resource_id        = local.scalable_target.resource_id
+  scalable_dimension = local.scalable_target.scalable_dimension
 
   target_tracking_scaling_policy_configuration {
     target_value = var.queue_backlog.target_per_task
