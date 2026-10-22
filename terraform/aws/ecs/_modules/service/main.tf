@@ -107,7 +107,8 @@ resource "aws_ecs_service" "this" {
   propagate_tags         = "SERVICE"
 
   # 태스크를 두 AZ 에 나눠 배치한다. AZ 하나가 죽어도 서비스가 남는다.
-  availability_zone_rebalancing = "ENABLED"
+  # singleton 은 끈다 — AWS 가 최대 100% 배포와 함께 받지 않고, 태스크가 1개라 나눌 것도 없다
+  availability_zone_rebalancing = var.singleton ? "DISABLED" : "ENABLED"
 
   # 용량 공급자(FARGATE ↔ SPOT)를 바꾸면 ECS 는 새 배포를 요구한다
   force_new_deployment = true

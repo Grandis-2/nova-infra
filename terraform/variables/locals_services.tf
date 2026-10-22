@@ -24,7 +24,7 @@ locals {
   _service_fields = [
     "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "stop_timeout", "scaling",
     "health", "routes", "jwt", "calls", "db", "extra_databases", "redis", "queues", "uploads", "generated_secrets", "environment",
-    "profiling", "upload_cleanup",
+    "profiling", "upload_cleanup", "schedule", "db_account",
   ]
 
   # 형식 검사. 오류가 있으면 services.name 계산에서 해당 폴더 이름과 함께 plan 을 멈춘다
@@ -46,6 +46,11 @@ locals {
       [for r in try(s.routes, []) : length(try(r.paths, [])) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
       # Fargate 의 stopTimeout 상한은 120초다
       try(s.stop_timeout, null) == null || (can(tonumber(s.stop_timeout)) && try(tonumber(s.stop_timeout) >= 2 && tonumber(s.stop_timeout) <= 120, false)) ? "" : "stop_timeout 은 2~120(초)",
+      # Scheduler 가 띄우는 단발 태스크는 요청을 받지 않고(port 0) 서비스 배포 방식도 없다
+      try(s.schedule, null) == null || (
+        can(regex("^(cron|rate)\\(.+\\)$", tostring(s.schedule))) && try(tonumber(s.port), -1) == 0
+        && length(try(s.routes, [])) == 0 && try(s.deployment, null) == null && try(s.scaling, null) == null
+      ) ? "" : "schedule 은 cron(...) | rate(...) 이고 port: 0 · routes · deployment · scaling 없이 쓴다",
       can(s.scaling.backlog.queue) && can(s.scaling.backlog.queues) ? "scaling.backlog 에는 queue 와 queues 중 하나만 쓴다" : "",
       # 틀린 모양이면 backlog 가 조용히 빠져 큐 적체로 늘지 않는다. 그래서 여기서 멈춘다
       try(s.scaling.backlog, null) == null || (
@@ -117,6 +122,7 @@ locals {
       jwt             = try(tostring(s.jwt), "none")
       calls           = { for p, to in try(s.calls, {}) : p => tostring(to) } # Spring 속성 -> 서비스 키
       db              = try(tostring(s.db), null)
+      db_account      = try(tostring(s.db_account), k) # DB 계정 비밀 nova-prod/db/app/<이름>. 비우면 서비스 키
       extra_databases = { for db, prefix in try(s.extra_databases, {}) : db => tostring(prefix) }
       redis           = try(tostring(s.redis), null)
       queues = {
@@ -129,6 +135,7 @@ locals {
       generated_secrets = { for e, t in try(s.generated_secrets, {}) : e => tostring(t) } # 환경변수 -> 만드는 방식
       uploads           = try(tobool(s.uploads), false)                                   # 업로드 버킷에 사진 올리기 권한 (catalog)
       upload_cleanup    = try(s.upload_cleanup, false) == true                            # 업로드 버킷의 사진 지우기 권한 (정리 배치)
+      schedule          = try(tostring(s.schedule), null)                                 # EventBridge Scheduler 식(Asia/Seoul). 있으면 서비스 대신 태스크 정의만 만든다
       environment       = { for e, v in try(s.environment, {}) : e => tostring(v) }
     }
   }
@@ -156,6 +163,9 @@ locals {
 
   # ECS 서비스로 띄울 대상. deploy: false 면 ECR, 역할, DB 계정만 만든다
   deployed_services = { for k, v in local.services : k => v if v.deploy }
+
+  # Scheduler 가 RunTask 로 띄우는 단발 태스크 (schedule 이 있는 것). ecs 는 서비스 없이 태스크 정의만 만든다
+  scheduled_services = { for k, v in local.deployed_services : k => v if v.schedule != null }
 
   # ALB 타깃 그룹이 필요한 서비스
   alb_services = { for k, v in local.services : k => v if length(v.routes) > 0 }
