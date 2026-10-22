@@ -27,9 +27,6 @@ scaling:
 
 calls:
   nova.worker.mock.base-url: mock
-# worker 는 DB 를 쓰지 않지만 계정은 남겨 둔다. 빼면 ncp-database 의 사용자 목록이 바뀌는데, NCP provider 는
-# 목록이 조금만 바뀌어도 모든 서비스 계정을 지우고 다시 만든다(RequiresReplace). 서비스별 리소스로 나눈 뒤 뺀다
-db: shop
 
 queues:
   consume: [preorder-register, preorder-cancel, draw-register]

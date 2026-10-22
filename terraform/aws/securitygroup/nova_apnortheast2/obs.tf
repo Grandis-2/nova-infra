@@ -50,8 +50,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_obs_grafana" {
 
 # 나가는 것은 둘이다.
 #   443  — S3 (게이트웨이 엔드포인트: 저장소 · 설정 내려받기) · ECR · SSM(ECS Exec) · Secrets Manager · SNS (엔드포인트 또는 NAT)
-#   3306 — NCP DB (mysqld_exporter). NAT 고정 IP 로 나가야 ACG 를 지난다. Public 도메인의 IP 가 고정되지 않아 0.0.0.0/0 이다
-#          (migration.tf 와 같은 이유)
+#   3306 — RDS (mysqld_exporter). RDS SG 로만
 # VPC DNS · 시간 동기화 · IMDS 는 SG 가 거르지 않는다.
 resource "aws_vpc_security_group_egress_rule" "obs_https" {
   security_group_id = aws_security_group.obs.id
@@ -63,12 +62,12 @@ resource "aws_vpc_security_group_egress_rule" "obs_https" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "obs_mysql" {
-  security_group_id = aws_security_group.obs.id
-  description       = "MySQL to NCP DB via NAT (mysqld_exporter)"
-  cidr_ipv4         = "0.0.0.0/0"
-  ip_protocol       = "tcp"
-  from_port         = 3306
-  to_port           = 3306
+  security_group_id            = aws_security_group.obs.id
+  description                  = "MySQL to RDS (mysqld_exporter)"
+  referenced_security_group_id = aws_security_group.rds.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
 }
 
 # 인터페이스 엔드포인트를 켜면 SSM 에이전트가 엔드포인트로 붙는다 (엔드포인트 SG 는 vpc 스택 소유)

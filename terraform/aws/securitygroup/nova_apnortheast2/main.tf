@@ -3,7 +3,7 @@
 #
 #   routes 있음    → ALB 에서 앱 포트 · 헬스체크 포트       (모듈)
 #   redis 있음     → Valkey 6379                            (모듈)
-#   db 있음        → ProxySQL NLB · RDS 3306 (RDS 이전)     (모듈)
+#   db 있음        → RDS 3306                               (모듈)
 #   모든 서비스    → VPC 엔드포인트 443, 아웃바운드 전부     (모듈)
 #   calls          → 부르는 서비스에서 불리는 서비스 포트    (아래 service_to_service)
 

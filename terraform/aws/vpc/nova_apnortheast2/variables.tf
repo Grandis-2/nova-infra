@@ -44,15 +44,6 @@ variable "single_nat_gateway" {
   default     = false
 }
 
-variable "db_subnet_nat_egress" {
-  description = <<-EOT
-    db 서브넷의 0.0.0.0/0 을 첫 NAT(2a)로 보낸다. 2026-10-20 NCP → RDS 복제 기간에만 켰다.
-    다시 켤 때는 RDS SG 에 필요한 아웃바운드 규칙도 함께 둔다.
-  EOT
-  type        = bool
-  default     = false
-}
-
 variable "enable_interface_endpoints" {
   description = "Interface VPC Endpoint 생성 여부. NAT 로도 나갈 수 있어 선택 사항이고 시간당 요금이 붙는다"
   type        = bool

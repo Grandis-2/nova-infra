@@ -10,7 +10,7 @@
 | --- | --- | --- | --- | --- |
 | VPC 인터페이스 엔드포인트 | ECR · Logs · Secrets Manager · SSM 엔드포인트 | 꺼 둠. AWS API 호출이 NAT를 거침 | 약 130달러 | vpc `enable_interface_endpoints = true` |
 | Fargate 용량 | 서비스마다 온디맨드 1개, 늘어나는 태스크는 Spot | 전부 Spot (mock 만 온디맨드) | 약 160달러 | ecs `spot_on_demand_base = 1` |
-| DB | AWS RDS for MySQL Multi-AZ, db 서브넷 | NCP Cloud DB for MySQL 단일, NAT 고정 IP 로 접속 | 약 110달러 | RDS 스택을 만들고 이관 |
+| DB | RDS for MySQL Multi-AZ | RDS for MySQL 단일 AZ(db.t4g.large) | 약 120달러 | rds `main.tf` 의 `multi_az = true` |
 | Container Insights | 켬 (태스크 단위 지표) | 끔. 무료 `AWS/ECS` 지표와 ECS 이벤트 경보로 대신 | 약 75달러 | ecs `container_insights = "enhanced"` |
 | NAT | NAT Gateway, AZ마다 하나 | NAT 인스턴스(fck-nat t4g.micro) AZ마다 하나 | 약 70달러 + 처리 요금 | vpc `nat_mode = "gateway"` |
 | obs 호스트 크기 | t4g.large (2 vCPU · 8 GiB) | t4g.medium (2 vCPU · 4 GiB), 컨테이너 메모리 한도를 실측으로 다시 나눔. 부하 시험 기간(2026-10-19부터 2~3일)에는 large 로 잠시 되돌린다 | 약 30달러 | ecs `obs_instance_type`, lgtm `obs_memory` |
@@ -21,7 +21,7 @@
 | 엣지 로그 Lambda → 게이트웨이 | 내부 NLB | 게이트웨이 태스크 IP를 가리키는 DNS 레코드 | 약 16달러 | lgtm `gateway.tf` |
 | VPC Flow Logs | 켬 | 끔 | 트래픽에 비례 | vpc `enable_flow_logs = true` |
 
-모두 합하면 한 달에 약 670달러를 절감합니다. 현재 운영비는 한 달에 약 240달러입니다.
+모두 합하면 한 달에 약 680달러를 절감합니다. 현재 운영비는 한 달에 약 240달러입니다.
 
 금액은 서울 리전 정가로 계산한 추정치이며, 트래픽, 태스크 수, 크레딧에 따라 달라집니다.
 
@@ -31,13 +31,7 @@
 
 **Fargate Spot.** 서비스마다 최소 대수가 1대라서, Spot이 회수되면 새 태스크가 뜰 때까지 그 서비스가 멈춥니다. mock은 판정용 부하를 받는 서비스라 대수가 바뀌면 안 되므로 온디맨드로 운영합니다.
 
-**NCP DB.** AWS와 NCP 사이에는 사설망이 없어서 DB 연결이 인터넷을 거칩니다. 그 결과 다음을 감수합니다.
-- NCP 방화벽(ACG)은 NAT 고정 IP 두 개에서 오는 연결만 허용하고, JDBC 연결에는 TLS를 강제합니다.
-- NAT가 DB 경로의 단일 장애점이 됩니다.
-- Multi-AZ 장애조치가 없습니다.
-- DB 계정에 PROCESS 권한을 줄 수 없어 계정별 연결, 쿼리 상태, 교착 상태 지표를 수집할 수 없습니다. DB 서버의 CPU · 메모리 · 디스크도 NCP Cloud Insight 에만 있어 Grafana 에서 보지 못합니다.
-
-RDS로 이관할 때 필요한 출력값과 설정은 관측 스택 README의 "DB 지표" 절에 정리되어 있습니다.
+**RDS 단일 AZ.** 대기 인스턴스가 없어서 그 AZ에 장애가 나거나 인스턴스가 재부팅되는 동안(엔진 패치 · 정적 파라미터 변경) DB가 멈추고, 모든 서비스의 쓰기가 실패합니다. 인스턴스가 망가지면 자동 백업(7일)에서 새 인스턴스로 복원해야 합니다. 2026-10-20에 NCP Cloud DB에서 옮겨 온 뒤로 DB는 VPC 안 db 서브넷에 있고 TLS로만 접속합니다.
 
 **Container Insights.** "목표 대비 모자란 태스크 수"와 태스크 단위 CPU · 메모리를 볼 수 없습니다. 대신 서비스별 "태스크 0개" 경보와 ECS 이벤트 경보(배포 실패, 배치 실패, 태스크 비정상 종료)로 장애의 원인이 되는 이벤트를 알립니다.
 

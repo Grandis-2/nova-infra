@@ -27,7 +27,7 @@ reviews:
     - "!docs/architecture/img/**"
     - "!**/.terraform.lock.hcl"
     - "!**/secrets.sops.yml"
-    # 스택 폴더의 공용 파일은 terraform/variables · terraform/<aws|ncp> 를 가리키는 심볼릭 링크다. 원본만 리뷰한다
+    # 스택 폴더의 공용 파일은 terraform/variables · terraform/aws 를 가리키는 심볼릭 링크다. 원본만 리뷰한다
     - "!terraform/*/*/**/provider.tf"
     - "!terraform/*/*/**/version.tf"
     - "!terraform/*/*/**/provider_us_east_1.tf"
@@ -40,7 +40,7 @@ reviews:
   path_instructions:
     - path: "terraform/**/*.tf"
       instructions: |
-        AWS(ap-northeast-2) · NCP 인프라를 Terraform 1.16, AWS provider 6 으로 관리한다. 변경은 PR 에서 Atlantis 가 plan/apply 한다.
+        AWS(ap-northeast-2) 인프라를 Terraform 1.16, AWS provider 6 으로 관리한다. 변경은 PR 에서 Atlantis 가 plan/apply 한다.
         다음을 우선 본다.
         - 기존 리소스가 교체(replace)되거나 삭제될 수 있는 변경: 이름 · 식별자 변경, for_each 키 변경, ForceNew 인자
         - 최소 권한: IAM 정책의 와일드카드 Action/Resource, 보안 그룹의 0.0.0.0/0 인바운드, 필요 이상으로 넓은 포트
@@ -49,7 +49,7 @@ reviews:
         - 다른 스택 출력은 terraform/variables/remote_state_global.tf 의 local.remote_state 로 읽는다
         의도한 설계라 지적하지 않는 것.
         - 서비스 간 내부 통신은 HTTP 다 (Service Connect TLS 를 쓰지 않음)
-        - DB 는 NCP Cloud DB 이고 NAT 고정 IP 와 TLS 로만 접근한다
+        - DB 는 RDS for MySQL 단일 AZ(db 서브넷)이고 TLS 로만 접근한다
         - VPC 인터페이스 엔드포인트와 Flow Logs 는 비용 때문에 기본으로 끈다
         - ECS 는 Fargate Spot 만 쓴다
         - ALB 는 public 이지만 CloudFront prefix list 와 CloudFront 가 붙이는 비밀 헤더가 있는 요청만 받는다

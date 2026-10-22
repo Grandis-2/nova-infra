@@ -102,8 +102,7 @@ module "service" {
   }
 }
 
-# NCP DB 의 Public 도메인은 콘솔에서 켜야 생긴다. 주소가 비면 모든 서비스가
-# 재시작만 반복하므로 apply 를 먼저 막는다.
+# DB 주소가 비면(rds 스택 출력이 없으면) 모든 서비스가 재시작만 반복하므로 apply 를 먼저 막는다.
 resource "terraform_data" "db_ready" {
   lifecycle {
     precondition {

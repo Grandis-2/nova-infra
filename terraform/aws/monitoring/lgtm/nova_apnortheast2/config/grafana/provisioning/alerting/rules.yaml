@@ -448,7 +448,7 @@ groups:
             model:
               refId: A
               instant: true
-              # 상태별로 그 상태에 있는 쿼리들이 머문 시간의 합이다. RDS(obs_mysql_platform = rds)에서만 나온다
+              # 상태별로 그 상태에 있는 쿼리들이 머문 시간의 합이다.
               expr: "max by (state) (mysql_info_schema_processlist_seconds{job=\"mysqld\", command=\"query\"})"
           - refId: B
             datasourceUid: __expr__

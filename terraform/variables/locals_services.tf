@@ -1,12 +1,12 @@
 # 서비스 목록. terraform/application/<서비스>/service.yml 을 읽는다.
 # 서비스 추가·수정은 이 파일이 아니라 application/ 에서 한다.
-# ECR, IAM, securitygroup, ncp database, ECS, scheduler 스택이 함께 쓴다.
+# ECR, IAM, securitygroup, ECS, scheduler 스택이 함께 쓴다.
 locals {
-  # 스택 경로(…/terraform/<aws|ncp>/…)를 기준으로 terraform/application 을 찾는다
+  # 스택 경로(…/terraform/aws/…)를 기준으로 terraform/application 을 찾는다
   application_dir = (
     var.application_dir != ""
     ? var.application_dir
-    : "${regex("^(.*)/terraform/(?:aws|ncp)/", "${abspath(path.root)}/")[0]}/terraform/application"
+    : "${regex("^(.*)/terraform/aws/", "${abspath(path.root)}/")[0]}/terraform/application"
   )
 
   # be release 가 이미지마다 붙이는 버전 태그(0.0.N-rM). image_tag 형식 검사 · ecs 고정 조회 · ecr 고정 보호가 함께 쓴다

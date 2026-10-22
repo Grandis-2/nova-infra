@@ -225,10 +225,9 @@ be 이미지에는 설정 파일이 없습니다. 설정과 비밀은 모두 태
 └── terraform/
     ├── application/<서비스>/  service.yml(인프라), application.yml(Spring 설정)
     ├── variables/             공용 변수, 서비스 목록
-    ├── aws/<스택>/            init · kms · vpc · securitygroup · s3 · sqs · ecr · acm · cognito · secretsmanager
-    │                          elasticache · iam · ecs · edge · cdn · scheduler · monitoring · lambda · bastion
-    │                          loadtest(부하 시험 리소스만 한 스택에 모은다)
-    └── ncp/database/          지금 쓰는 DB (COST-SAVINGS.md 참고)
+    └── aws/<스택>/            init · kms · vpc · securitygroup · s3 · sqs · ecr · acm · cognito · secretsmanager
+                               elasticache · rds · iam · ecs · edge · cdn · scheduler · monitoring · lambda · bastion
+                               loadtest(부하 시험 리소스만 한 스택에 모은다)
 ```
 
 | 문서 | 내용 |

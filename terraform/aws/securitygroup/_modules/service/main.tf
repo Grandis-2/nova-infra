@@ -9,7 +9,7 @@ resource "aws_security_group" "this" {
   tags = { Name = "${var.name_prefix}-${var.name}-sg" }
 }
 
-# 앱 서브넷은 인터넷에서 들어올 경로가 없다. 외부 호출 · 이미지 Pull · DB(NCP) 는 NAT 로 나간다
+# 앱 서브넷은 인터넷에서 들어올 경로가 없다. 외부 호출 · 이미지 Pull 은 NAT(또는 VPC 엔드포인트)로 나간다
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.this.id
   description       = "all outbound via NAT / VPC endpoint"

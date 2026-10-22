@@ -38,7 +38,7 @@ locals {
     for k, v in local.services : k => "http://${v.name}.${var.namespace_name}:${v.port}" if v.port > 0
   }
 
-  # DB 가 인터넷 너머(NCP)에 있다. TLS 모드는 db_ssl_mode 로 정한다
+  # TLS 모드는 db_ssl_mode 로 정한다
   jdbc_params = "serverTimezone=UTC&characterEncoding=UTF-8&sslMode=${var.db_ssl_mode}"
 
   # ── 환경변수 ───────────────────────────────────────────────

@@ -62,7 +62,7 @@ output "rum_collector_security_group_id" {
 }
 
 output "rds_security_group_id" {
-  description = "RDS SG. ProxySQL · 서비스(db) · 마이그레이션 · obs · bastion 에서 3306 을 받는다"
+  description = "RDS SG. 서비스(db) · 마이그레이션 · obs · bastion 에서 3306 을 받는다"
   value       = aws_security_group.rds.id
 }
 

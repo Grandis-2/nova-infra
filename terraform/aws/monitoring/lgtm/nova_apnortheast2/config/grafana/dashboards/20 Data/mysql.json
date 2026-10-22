@@ -263,7 +263,7 @@
     {
       "type": "stat",
       "title": "오래 도는 쿼리",
-      "description": "실행 중인 쿼리들이 지금 상태에 머문 시간의 합 중 가장 큰 것. 한 쿼리가 오래 돌거나 같은 상태에 여럿이 몰리면 커진다. RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "실행 중인 쿼리들이 지금 상태에 머문 시간의 합 중 가장 큰 것. 한 쿼리가 오래 돌거나 같은 상태에 여럿이 몰리면 커진다..",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -988,7 +988,7 @@
     {
       "type": "table",
       "title": "상위 SQL (선택한 기간, 총 시간 순)",
-      "description": "SQL 형태(다이제스트)별 합계. 값 자리는 ? 로 바뀌어 있다. 검사 행 / 보낸 행이 크면 인덱스를 확인하고, 인덱스 없이가 0 이 아니면 EXPLAIN 을 본다. 최근 하루 동안 본 것 중 시간 순 100개를 모은다. performance_schema 를 읽는다(NCP · RDS).",
+      "description": "SQL 형태(다이제스트)별 합계. 값 자리는 ? 로 바뀌어 있다. 검사 행 / 보낸 행이 크면 인덱스를 확인하고, 인덱스 없이가 0 이 아니면 EXPLAIN 을 본다. 최근 하루 동안 본 것 중 시간 순 100개를 모은다. performance_schema 를 읽는다.",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1328,7 +1328,7 @@
     {
       "type": "timeseries",
       "title": "교착 상태 · 잠금 시간 초과",
-      "description": "구간별 횟수. 교착 상태는 InnoDB 가 한쪽을 롤백한다(앱에는 Deadlock 예외). RDS 에서만 나온다(lgtm 스택 obs_mysql_platform = rds).",
+      "description": "구간별 횟수. 교착 상태는 InnoDB 가 한쪽을 롤백한다(앱에는 Deadlock 예외)..",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"

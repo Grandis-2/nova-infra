@@ -14,10 +14,6 @@ if ! terraform fmt -recursive -check "${targets[@]}"; then
 fi
 
 echo
-# NCP provider 는 인증키 환경변수가 없으면 validate 도 거부한다. API 는 부르지 않으니 가짜 값을 넣는다
-export NCLOUD_ACCESS_KEY="${NCLOUD_ACCESS_KEY:-validate-only}"
-export NCLOUD_SECRET_KEY="${NCLOUD_SECRET_KEY:-validate-only}"
-
 echo "== terraform validate =="
 # 임시 폴더를 .terraform 대신 써서 원격 상태와 기존 .terraform 을 건드리지 않는다. 프로바이더는 공유 캐시에서 링크한다.
 data_root="$(mktemp -d)"
@@ -39,6 +35,6 @@ while IFS= read -r dir; do
     fail=1
   fi
 done < <(unset TF_DATA_DIR; find "${targets[@]}" -name '*.tf' -not -path '*/.terraform/*' -not -path '*/terraform/variables/*' -printf '%h\n' \
-  | grep -Ev '/terraform/(aws|ncp)$' | sort -u)   # 공용 파일 폴더는 리프가 링크해서 쓰므로 뺀다
+  | grep -Ev '/terraform/aws$' | sort -u)   # 공용 파일 폴더는 리프가 링크해서 쓰므로 뺀다
 
 exit $fail

@@ -29,7 +29,7 @@ locals {
       ecr            = "ecr"         # aws/ecr/grandis-nova/ap-northeast-2
       acm            = "acm"         # aws/acm/grandis-nova/ap-northeast-2
       secretsmanager = "secrets"     # aws/secretsmanager/grandis-nova/ap-northeast-2
-      database       = "database"    # ncp/database/grandis-nova/kr
+      rds            = "rds"         # aws/rds/nova_apnortheast2
       elasticache    = "elasticache" # aws/elasticache/nova_apnortheast2
       iam            = "iam"         # aws/iam/grandis-nova
       ecs            = "ecs"         # aws/ecs/nova_apnortheast2
