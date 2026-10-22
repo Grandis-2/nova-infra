@@ -1072,7 +1072,7 @@
     {
       "type": "table",
       "title": "API (선택 기간)",
-      "description": "API(경로)별 선택 기간 호출 수 · 5xx 수 · 비율 · P50 · P95 · 이 서비스 전체 처리 시간 중 비중. 호출 수 순. 경로를 누르면 트러블슈팅(그 API 의 지연 분포 · 느린 · 오류 요청)으로 간다. 시간 비중이 큰 API 가 최적화 효과가 크다",
+      "description": "API(경로)별 선택 기간 호출 수 · 5xx 수 · 비율 · P50 · P95 · 이 서비스 전체 처리 시간 중 비중. 호출 수 순. 경로를 누르면 API 상세(응답 코드 · 응답 시간 · 느린 · 오류 트레이스 · 시간 구성)로 간다. 시간 비중이 큰 API 가 최적화 효과가 크다 등록되지 않은 경로(/**, 스캐너 · 오타 요청)는 API 가 아니라 빼고, 응답 코드별 요청의 404 로 본다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1225,8 +1225,8 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "트러블슈팅에서 이 경로",
-                    "url": "/d/nova-troubleshooting?var-service=${service}&var-route=${__value.raw}&${__url_time_range}"
+                    "title": "API 상세",
+                    "url": "/d/nova-api?var-service=${service}&var-method=$__all&var-route=${__value.raw}&${__url_time_range}"
                   }
                 ]
               }
@@ -1320,7 +1320,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "round(sum by (http_route) (increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\"}[$__range])))",
+          "expr": "round(sum by (http_route) (increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -1332,7 +1332,7 @@
             "uid": "mimir"
           },
           "refId": "F",
-          "expr": "round(sum by (http_route) (increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[$__range]))) or 0 * sum by (http_route) (increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\"}[$__range]))",
+          "expr": "round(sum by (http_route) (increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_response_status_code=~\"5..\"}[$__range]))) or 0 * sum by (http_route) (increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -1344,7 +1344,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[$__range])) / sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\"}[$__range])) or 0 * sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\"}[$__range]))",
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_response_status_code=~\"5..\"}[$__range])) / sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range])) or 0 * sum by (http_route) (rate(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\"}[$__range]))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -1356,7 +1356,7 @@
             "uid": "mimir"
           },
           "refId": "C",
-          "expr": "histogram_quantile(0.5, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[$__range])))",
+          "expr": "histogram_quantile(0.5, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range])))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -1368,7 +1368,7 @@
             "uid": "mimir"
           },
           "refId": "D",
-          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[$__range])))",
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range])))",
           "legendFormat": "",
           "instant": true,
           "range": false,
@@ -1380,7 +1380,7 @@
             "uid": "mimir"
           },
           "refId": "E",
-          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_sum{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[$__range])) / scalar(sum(rate(http_server_request_duration_seconds_sum{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[$__range])) > 0)",
+          "expr": "sum by (http_route) (rate(http_server_request_duration_seconds_sum{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range])) / scalar(sum(rate(http_server_request_duration_seconds_sum{job=\"nova/$service\", http_route!~\"/actuator.*\", http_route!=\"/**\", http_route!=\"/api/v1/notifications/stream\"}[$__range])) > 0)",
           "legendFormat": "",
           "instant": true,
           "range": false,

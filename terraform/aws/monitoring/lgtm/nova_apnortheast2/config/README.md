@@ -157,14 +157,12 @@ flowchart LR
   alert(["Slack 경보"]) --> ov["개요<br/>어느 서비스가 이상한가"]
   ov -- "서비스 이름" --> svc["서비스 상세<br/>오류 코드 · CPU · Redis · DB 풀<br/>어느 API 가 시간을 먹나"]
   ov -. "오픈 · 부하 시험" .-> open["오픈 상황판<br/>서비스 포화 · Redis 서버 vs 앱<br/>대기열 · 접수 · 캐시"]
-  svc -- "경로" --> ts["트러블슈팅<br/>그 경로의 지연 분포<br/>느린 · 오류 요청"]
-  ov -. "대시보드 목록" .-> url["URL 목록 · 그리드 → 상세<br/>API 별 성공률 · P99"]
-  url -- "trace_id · exemplar" --> trace
+  svc -- "API 표의 경로" --> api["API 상세<br/>응답 코드 · 응답 시간 · 지난주 비교<br/>느린 · 오류 요청 · 시간 구성"]
   svc -- "exemplar" --> trace["트레이스 (Tempo)"]
-  ts -- "trace_id · exemplar" --> trace
+  api -- "trace_id" --> trace
   trace -- "Logs for this span" --> log["로그 (Loki)"]
   trace -. "Profiles for this span (켠 서비스)" .-> prof["플레임 그래프 (Pyroscope)"]
-  ts -. "DB 시간이 크면" .-> data["MySQL 상위 SQL<br/>20 Data · 30 Platform"]
+  api -. "DB 시간이 크면" .-> data["MySQL 상위 SQL<br/>20 Data · 30 Platform"]
 ```
 
 ![개요 대시보드](../../../../../../docs/architecture/img/grafana/overview.jpg)
@@ -172,7 +170,7 @@ flowchart LR
 > 화면은 부하 시험 전에 찍었다. 구성을 보여 주는 용도이고, 수치에는 의미가 없다.
 
 <details>
-<summary>대시보드 화면 (15개)</summary>
+<summary>대시보드 화면 (11개)</summary>
 
 **SLO**
 
@@ -181,22 +179,6 @@ flowchart LR
 **서비스 상세**
 
 <img alt="서비스 상세" src="../../../../../../docs/architecture/img/grafana/service.jpg" width="100%">
-
-**트러블슈팅**
-
-<img alt="트러블슈팅" src="../../../../../../docs/architecture/img/grafana/troubleshooting.jpg" width="100%">
-
-**URL 목록**
-
-<img alt="URL 목록" src="../../../../../../docs/architecture/img/grafana/url.jpg" width="100%">
-
-**URL 그리드**
-
-<img alt="URL 그리드" src="../../../../../../docs/architecture/img/grafana/url-grid.jpg" width="100%">
-
-**URL 상세**
-
-<img alt="URL 상세" src="../../../../../../docs/architecture/img/grafana/url-detail.jpg" width="100%">
 
 **MySQL**
 
@@ -248,8 +230,7 @@ flowchart LR
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`). 맨 위 숫자(선택 기간 요청 수 · 5xx 건수 · 비율 · 0.5초 초과 · p95, 지금 CPU 최대 · 인스턴스 · DB 풀) → 원인 추적(5xx 업무 오류 코드 · 태스크별 CPU · 인스턴스 수 · 이 서비스가 본 Redis 명령 시간 · DB 커넥션 대기 · 나가는 호출 오류율(대상 서비스 · DB 별)) → API 표(선택 기간 호출 수 · 5xx 수 · 비율 · P50 · P95 · 시간 비중, 호출 수 순) → 처리 시간 구성 · 서비스 맵 · 호출 상대 → 오류 종류(예외 · 업무 오류 코드) · 로그 · 트레이스. JVM · 외부 호출 · HikariCP 는 접힌 행에 있다 |
 | `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS · 비동기 흐름 (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL, 버퍼 풀 사용률 · 적중률 · 디스크 I/O · 풀 스캔 · 테이블 캐시 · 잠금. NCP 에서 나오지 않는 패널(processlist · innodb_metrics · RDS 서버 자원)은 맨 아래 "RDS 전용" 행에 접어 둔다. 캐시 적중률 · 메모리, 큐마다 보내는 서비스와 처리하는 서비스, 처리 오류율 · 처리 시간(트레이스) · 적체 · DLQ |
 | `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), 접근 로그로 본 요청 구간(CloudFront 응답 시간 · 구간별 시간 · 캐시 결과 · 엣지 위치별, 느린 요청과 5xx 로그에서 앱 트레이스로), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
-| `40 Troubleshooting` | 트러블슈팅 (`nova-troubleshooting`) | 서비스 · 경로 하나로 좁혀 ① 지난주 대비 · 새 태스크 ② 서비스 맵 · 느린 엔드포인트 ③ 지연 분포 · 느린/오류 트레이스 ④ 시간 구성 · 느린 DB 쿼리 ⑤ 오류 그룹 · 로그 |
-| `50 URLs` | URL 목록 (`nova-url`) · URL 그리드 (`nova-url-grid`) · URL 상세 (`nova-url-detail`) | 실제 요청을 API(메서드 + 경로)별로 본다. 목록은 API × 시간 히트맵, API 표(요청 수 · 지난주 대비 증감 · 성공률 · 4xx · 1초 초과 비율 · P95 · P99 · P99 증감), 새로 생긴 · 사라진 API(최근 7일), 서비스 시간대 잔디, 경로마다 펼쳐 보는 행. 그리드는 API 마다 카드 하나. 상세는 401 · 403 · 404 · 429 수, 응답 코드별 요청량, 지연 분포, 요청량 · P99 · 성공률 지난주 대비, 시간 구성(트레이스 표본), 날짜 × 시각(KST) 잔디, 느린/오류 트레이스 |
+| `40 API` | API 상세 (`nova-api`) | API 하나(서비스 · 메서드 · 경로). 선택 기간 호출 수 · 5xx 수 · 비율 · 4xx 비율 · p95 · 0.5초 초과 → 응답 코드별 요청 · p50/p95/p99 · 지난주 같은 시각 비교 → 느린 · 오류 트레이스 → 시간 구성 · 이 API 안에서 오래 걸린 호출 · 느린 DB 쿼리 → 서비스의 5xx 업무 오류 코드 · WARN/ERROR 로그. 서비스 상세의 API 표에서 경로를 누르면 온다 |
 | `60 Frontend` | 프런트 · 실사용자 (`nova-frontend`) | 브라우저(Faro)가 보낸 데이터로 본 사용자 체감 성능. 세션 · JS 오류 · LCP · INP · CLS p75, 페이지별 웹 바이탈, 오류 종류 · 메시지 Top · 최근 오류, 핵심 동작(버튼 이름)별 소요 시간 · API 실패율, 브라우저와 서버가 잰 API p95, 느린 API, 브라우저 · OS · 모바일 비율. 세션을 샘플링하므로 수치는 전체가 아니다 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 가 데이터를 빠뜨리지 않는지, 디스크 · 메모리가 모자라지 않는지. 카디널리티 · 한도(시계열 · 스트림 한도 사용률, 시계열 많은 지표 · job Top 10, 게이트웨이 전송 큐) |
 
@@ -291,7 +272,7 @@ Grafana 가 1분마다 평가해서 SNS, AWS Chatbot 을 거쳐 Slack 으로 보
 | 응답 시간 | 95% 가 0.5초 이내 | 5% (0.5초는 히스토그램 버킷 경계라 근사가 없다) |
 
 - 헬스체크(`/actuator`)는 뺀다.
-- 응답 시간 계열(0.5초 초과 · Apdex · 느린 요청 표 · 시간 구성 · 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 요청 수와 5xx 에는 남겨 두었으므로 응답 시간 SLO 의 분모(요청 수)에 이 연결이 들어가 비율이 조금 낮게 나온다. URL 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
+- 응답 시간 계열(0.5초 초과 · Apdex · 느린 요청 표 · 시간 구성 · 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 요청 수와 5xx 에는 남겨 두었으므로 응답 시간 SLO 의 분모(요청 수)에 이 연결이 들어가 비율이 조금 낮게 나온다. API 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
 - **기록 규칙**(`slo.yaml` 의 `nova-slo-rec`): 5분 · 30분 · 1시간 · 6시간 창마다 요청 · 5xx · 0.5초 초과 요청의 초당 수를 1분마다 미리 계산해 Mimir 에 기록한다(`nova:http_requests:rate1h` 등). Grafana 가 관리하는 기록 규칙이다. 경보와 SLO 대시보드가 이 값을 읽으므로 긴 창을 매번 다시 계산하지 않는다.
 - **소진 속도 경보**: 예산을 평소 속도의 몇 배로 쓰는지 본다. 긴 창과 짧은 창이 모두 기준을 넘어야 울린다. 문제가 끝나면 짧은 창이 먼저 기준 아래로 내려가므로 경보가 빨리 풀린다.
 
@@ -607,13 +588,13 @@ grafana cli admin reset-admin-password --password-from-stdin
 
 1. SLO 대시보드에서 어느 서비스가 예산을 쓰는지, 1시간 · 6시간 소진 속도가 오르는 중인지 본다.
 2. 서비스 상세의 원인 추적 줄에서 5xx 업무 오류 코드 · 태스크 CPU · 인스턴스 수를 같은 시각으로 본다. API 표의 5xx 수로 몰린 경로를 찾는다. 인스턴스 수가 막 바뀐 직후라면 배포나 새 태스크 예열이 원인일 가능성이 크다.
-3. 트러블슈팅에서 그 경로의 오류 요청 트레이스를 열고, 붉은 스팬과 로그를 차례로 보며 원인을 찾는다. DB · 외부 호출 오류라면 MySQL 대시보드나 의존 서비스를 본다.
+3. API 표에서 그 경로를 눌러 API 상세의 오류 요청 트레이스를 열고, 붉은 스팬과 로그를 차례로 보며 원인을 찾는다. DB · 외부 호출 오류라면 MySQL 대시보드나 의존 서비스를 본다.
 4. 배포가 원인이면 이전 이미지로 되돌린다. critical 경보는 지금 속도라면 이틀 안에 30일 예산을 다 쓴다는 뜻이다.
 
 ### SLO 응답 시간 예산 소진
 
-1. URL 목록 · 서비스 상세에서 1초 초과 비율 · P99 가 오른 경로를 찾는다.
-2. 상세의 시간 구성(DB · 외부 · 자체)과 "이 URL 안에서 오래 걸린 호출"로 어디에서 시간이 걸리는지 본다.
+1. 서비스 상세의 API 표에서 P95 · 시간 비중이 큰 경로를 찾는다.
+2. API 상세의 시간 구성(DB · 외부 · 자체)과 "이 API 안에서 오래 걸린 호출" · 느린 DB 쿼리로 어디에서 시간이 걸리는지 본다.
 3. DB 비중이 크면 MySQL 대시보드의 상위 SQL 과 잠금을 보고, 자체 비중이 크면 HikariCP 대기 · JVM GC · CPU(프로파일을 켰다면 플레임 그래프)를 본다.
 
 ### 요청 급감
@@ -624,8 +605,8 @@ grafana cli admin reset-admin-password --password-from-stdin
 
 ### 응답 시간 급증
 
-1. URL 목록의 P99 증감 열로 어느 API 가 평소보다 느린지 본다.
-2. 그 API 의 상세 화면에서 지연 분포와 시간 구성을 "SLO 응답 시간 예산 소진"과 같은 순서로 본다. 트래픽이 평소보다 많으면 태스크 수와 CPU 를 확인한다.
+1. 서비스 상세의 API 표에서 P95 가 큰 경로를 찾고, API 상세의 "지난주 같은 시각과 비교"로 평소보다 느린지 본다.
+2. 같은 화면에서 응답 시간과 시간 구성을 "SLO 응답 시간 예산 소진"과 같은 순서로 본다. 트래픽이 평소보다 많으면 태스크 수와 CPU 를 확인한다.
 
 ### 메시지 처리 오류율
 
@@ -669,7 +650,7 @@ preorder 가 1분마다 회차 일정을 보고 waitingroom · preorder 의 최�
 ### 프런트 LCP 악화
 
 1. 프런트 대시보드의 "페이지별 웹 바이탈" 에서 어느 페이지인지 본다.
-2. 같은 시각에 "브라우저 vs 서버" 의 서버 p95 도 올랐으면 API 문제다(응답 시간 급증 · URL 목록). 서버 값이 그대로면 이미지 · 번들 크기 · CDN 을 본다.
+2. 같은 시각에 "브라우저 vs 서버" 의 서버 p95 도 올랐으면 API 문제다(응답 시간 급증 · API 상세). 서버 값이 그대로면 이미지 · 번들 크기 · CDN 을 본다.
 3. 엣지 대시보드의 CloudFront 응답 시간 · 캐시 결과로 정적 자원이 느린지 본다.
 
 ### obs 수집 실패
