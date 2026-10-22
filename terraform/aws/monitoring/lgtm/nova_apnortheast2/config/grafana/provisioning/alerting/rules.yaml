@@ -12,40 +12,6 @@ groups:
     folder: nova
     interval: 1m
     rules:
-      - uid: nova-http-p99
-        title: HTTP P99 응답 시간
-        condition: C
-        for: 10m
-        noDataState: OK
-        execErrState: Error
-        labels:
-          severity: warning
-        annotations:
-          summary: "10분 동안 P99 가 2초를 넘었다 — 값 {{ with .Values.B }}{{ humanizeDuration .Value }}{{ end }}"
-          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#http-p99-응답-시간"
-        data:
-          - refId: A
-            datasourceUid: mimir
-            relativeTimeRange: {from: 3600, to: 0}
-            model:
-              refId: A
-              instant: true
-              expr: "histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!=\"/api/v1/notifications/stream\"}[5m])))"
-          - refId: B
-            datasourceUid: __expr__
-            model:
-              refId: B
-              type: reduce
-              reducer: last
-              expression: A
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              refId: C
-              type: threshold
-              expression: B
-              conditions:
-                - evaluator: {type: gt, params: [2]}
       - uid: nova-jvm-heap
         title: JVM 힙 사용률
         condition: C
@@ -185,6 +151,41 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0]}
+      - uid: nova-preorder-scaling-failures
+        title: 회차 증설 실패
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "preorder 가 회차 일정에 맞춰 waitingroom · preorder 최소 대수를 10분 동안 {{ with .Values.B }}{{ .Value }}{{ end }} 번 바꾸지 못했다 — 오픈 전이면 미리 늘리지 못한 채 몰림을 맞는다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#회차-증설-실패"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 1분마다 맞추고 실패하면 다음 주기에 다시 한다. 한두 번은 넘기고 계속 실패할 때만 본다
+              expr: "sum(increase(preorder_scaling_failures_total[10m]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [2]}
       - uid: nova-frontend-errors
         title: 프런트 JS 오류 급증
         condition: C
@@ -607,6 +608,9 @@ groups:
 
 # 파일에서 규칙을 빼도 Grafana 는 지우지 않는다. 지울 규칙은 여기 적는다.
 #   nova-http-5xx(5분 5xx 5%) — SLO 가용성 소진 속도 경보(slo.yaml)로 대신한다(NV-541)
+#   nova-http-p99(P99 2초) — 저트래픽에서 몇 건으로 울렸다. 응답 시간 SLO 소진 속도 · 평소 대비 급증 경보로 대신한다(NV-774)
 deleteRules:
   - orgId: 1
     uid: nova-http-5xx
+  - orgId: 1
+    uid: nova-http-p99

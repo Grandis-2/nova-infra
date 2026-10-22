@@ -3,8 +3,9 @@
 #
 # 경보는 사람이 바로 조치할 것만 만든다. 할 일 없는 경보는 무시하게 되고 진짜 장애를 놓친다.
 #
-#   사용자가 이미 아프다 : ALB 5xx, 응답 지연, 태스크 0개, CloudFront 5xx (edge.tf)
-#   곧 아파진다          : CPU, 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
+#   사용자가 이미 아프다 : ALB 가 만든 5xx, 태스크 0개, CloudFront 5xx (edge.tf)
+#                          서비스가 낸 5xx · 증설 한계는 ecs 모듈(<서비스>-5xx · -at-max), 응답 시간 · 가용성은 Grafana SLO 경보
+#   곧 아파진다          : 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
 #   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
 #   공격 · 차단          : WAF 차단 급증 (edge.tf)
 #   트래픽이 없어도      : 인증서 만료 (certs_alb.tf)
@@ -56,7 +57,7 @@ resource "aws_sns_topic" "alerts" {
 # ── 사용자가 이미 아프다 ─────────────────────────────────────
 resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
   alarm_name          = "${local.name_prefix}-alb-5xx"
-  alarm_description   = "ALB is returning 5xx. Service errors or no healthy targets"
+  alarm_description   = "The ALB itself returned 5xx: no healthy targets, target timeout or connection error. 5xx from the apps are in <service>-5xx"
   namespace           = "AWS/ApplicationELB"
   metric_name         = "HTTPCode_ELB_5XX_Count"
   statistic           = "Sum"
@@ -70,23 +71,6 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
 
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "latency" {
-  alarm_name          = "${local.name_prefix}-latency-p95"
-  alarm_description   = "Response time p95 is above the 500ms target"
-  namespace           = "AWS/ApplicationELB"
-  metric_name         = "TargetResponseTime"
-  extended_statistic  = "p95"
-  period              = 300
-  evaluation_periods  = 2 # 한 번 튄 것으로는 울리지 않는다
-  threshold           = var.latency_p95_threshold
-  comparison_operator = "GreaterThanThreshold"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = { LoadBalancer = local.alb_suffix }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
 resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
@@ -137,28 +121,6 @@ resource "aws_cloudwatch_metric_alarm" "no_running_tasks" {
 }
 
 # ── 곧 아파진다 ──────────────────────────────────────────────
-resource "aws_cloudwatch_metric_alarm" "service_cpu" {
-  for_each = local.service_names
-
-  alarm_name          = "${local.name_prefix}-${each.key}-cpu"
-  alarm_description   = "${each.value} CPU has been high for a while. Check whether it hit the scaling max"
-  namespace           = "AWS/ECS"
-  metric_name         = "CPUUtilization"
-  statistic           = "Average"
-  period              = 300
-  evaluation_periods  = 3
-  threshold           = 85
-  comparison_operator = "GreaterThanThreshold"
-  treat_missing_data  = "notBreaching"
-
-  dimensions = {
-    ClusterName = local.cluster_name
-    ServiceName = each.value
-  }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
-}
-
 # NCP DB 는 CloudWatch 지표가 없어 NCP Cloud Insight 알림(CPU, 디스크, 연결 수)으로 본다. RDS 는 아래 rds 경보다.
 
 # Valkey: 대기열 · 세션이 여기 있다. 메모리가 차서 키가 밀려나면(eviction) 대기 순번이 사라진다
@@ -329,12 +291,15 @@ resource "aws_cloudwatch_event_target" "batch_failure" {
 
   # Chatbot 은 ECS 이벤트 원문을 Slack 에 그리지 못한다. 사용자 정의 알림 형식으로 바꿔 보낸다
   input_transformer {
+    # 종료 코드로 원인을 가른다. batch-imagecleanup 의 2 는 예외가 아니라 삭제 대기가 며칠째 남아 멈췄다는 뜻이다(1 = 예외)
     input_paths = {
+      group  = "$.detail.group"
       task   = "$.detail.taskArn"
       reason = "$.detail.stoppedReason"
+      exit   = "$.detail.containers[0].exitCode"
     }
     input_template = <<-EOT
-      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally", "description": "<task>: <reason>"}}
+      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally: <group>", "description": "exit code <exit> (imagecleanup: 2 = deletions blocked for days, 1 = exception). <reason>. Task <task>"}}
     EOT
   }
 }

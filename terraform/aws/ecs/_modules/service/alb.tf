@@ -147,3 +147,90 @@ resource "aws_lb_listener_rule" "blue_green" {
     ignore_changes = [action]
   }
 }
+
+# 이 서비스가 직접 돌려준 5xx — 어느 서비스가 사용자에게 오류를 냈는지 이름으로 알린다.
+# 계정 전체 ALB 5xx(monitoring)는 ALB 가 만든 것(대상 없음 · 시간 초과)만 세고, 앱이 낸 5xx 는 여기서 본다.
+# 부하 시험처럼 1~2분만 몰려도 보이게 1분 지표 한 번으로 울리되, 몇 건의 오류로 튀지 않게 건수와 비율을 함께 본다.
+locals {
+  error_alarm_min_count = 50 # 1분 5xx 건수
+  error_alarm_ratio     = 2  # 1분 5xx 비율(%)
+  error_tg_keys         = sort(keys(local.target_groups))
+}
+
+resource "aws_cloudwatch_metric_alarm" "target_5xx" {
+  count = var.create_service && length(local.error_tg_keys) > 0 ? 1 : 0
+
+  lifecycle {
+    # 지표 수식 경보는 지표를 10개까지 받는다(대상 그룹마다 5xx · 요청 두 개)
+    precondition {
+      condition     = 2 * length(local.error_tg_keys) <= 10
+      error_message = "${var.name}: 대상 그룹이 ${length(local.error_tg_keys)}개라 5xx 경보의 지표 한도(10)를 넘는다."
+    }
+  }
+
+  alarm_name          = "${var.name}-5xx"
+  alarm_description   = "${var.name} returned 5xx to users: at least ${local.error_alarm_min_count} in a minute and over ${local.error_alarm_ratio}% of its requests. See the service dashboard for error codes (DEPENDENCY_UNAVAILABLE = a dependency or Redis call timed out), CPU and task count"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 1
+  threshold           = local.error_alarm_ratio
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dynamic "metric_query" {
+    for_each = local.error_tg_keys
+
+    content {
+      id = "e${metric_query.key}"
+
+      metric {
+        namespace   = "AWS/ApplicationELB"
+        metric_name = "HTTPCode_Target_5XX_Count"
+        period      = 60
+        stat        = "Sum"
+
+        dimensions = {
+          LoadBalancer = var.alb_arn_suffix
+          TargetGroup  = aws_lb_target_group.this[metric_query.value].arn_suffix
+        }
+      }
+    }
+  }
+
+  dynamic "metric_query" {
+    for_each = local.error_tg_keys
+
+    content {
+      id = "r${metric_query.key}"
+
+      metric {
+        namespace   = "AWS/ApplicationELB"
+        metric_name = "RequestCount"
+        period      = 60
+        stat        = "Sum"
+
+        dimensions = {
+          LoadBalancer = var.alb_arn_suffix
+          TargetGroup  = aws_lb_target_group.this[metric_query.value].arn_suffix
+        }
+      }
+    }
+  }
+
+  metric_query {
+    id = "ratio"
+    # 대기 중인 쪽(blue 또는 green)은 데이터가 없어 0 으로 채운다. 건수가 모자라면 0 이다
+    expression = format(
+      "IF((%s) >= ${local.error_alarm_min_count}, 100 * (%s) / (%s), 0)",
+      join(" + ", [for i, k in local.error_tg_keys : "FILL(e${i}, 0)"]),
+      join(" + ", [for i, k in local.error_tg_keys : "FILL(e${i}, 0)"]),
+      join(" + ", [for i, k in local.error_tg_keys : "FILL(r${i}, 0)"]),
+    )
+    label       = "5xx percent of requests"
+    return_data = true
+  }
+
+  alarm_actions = compact([var.alarm_topic_arn])
+  ok_actions    = compact([var.alarm_topic_arn])
+
+  tags = var.tags
+}

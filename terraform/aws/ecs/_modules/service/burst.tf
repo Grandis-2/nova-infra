@@ -10,7 +10,8 @@
 #   backlog  태스크 하나에 밀린 메시지가 queue_backlog 목표의 2배를 1번 넘으면
 #
 # 늘리는 폭은 지금 대수에 비례한다: 기준 ~ 기준의 2배(cpu 는 +20%p) 구간이면 +100%, 그 위면 +200% (최소 1대, max 까지).
-# 경보가 울려 있는 동안 1분마다 다시 판단해 더 늘린다. 경보 상태가 바뀔 때마다 alarm_topic_arn(Slack)에 알린다.
+# 경보가 울려 있는 동안 1분마다 다시 판단해 더 늘린다. 증설을 시작할 때만 alarm_topic_arn(Slack)에 알린다 — 증설 시각을 남기려는 것이고,
+# 끝났다는 알림(OK)은 할 일이 없어 보내지 않는다.
 # max 까지 늘렸는데도 CPU 가 높으면 맨 아래 증설 한계 경보가 사람을 부른다.
 # ─────────────────────────────────────────────────────────────
 
@@ -94,7 +95,6 @@ resource "aws_cloudwatch_metric_alarm" "burst_cpu" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["cpu"].arn, var.alarm_topic_arn])
-  ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
 }
@@ -163,7 +163,6 @@ resource "aws_cloudwatch_metric_alarm" "burst_requests" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["requests"].arn, var.alarm_topic_arn])
-  ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
 }
@@ -220,7 +219,6 @@ resource "aws_cloudwatch_metric_alarm" "burst_backlog" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["backlog"].arn, var.alarm_topic_arn])
-  ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
 }

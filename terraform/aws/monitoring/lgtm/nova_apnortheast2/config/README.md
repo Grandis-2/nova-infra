@@ -289,7 +289,7 @@ Grafana 가 1분마다 평가해서 SNS, AWS Chatbot 을 거쳐 Slack 으로 보
 | 응답 시간 | 95% 가 0.5초 이내 | 5% (0.5초는 히스토그램 버킷 경계라 근사가 없다) |
 
 - 헬스체크(`/actuator`)는 뺀다.
-- 응답 시간 계열(0.5초 초과 · P99 경보 · Apdex · 느린 요청 표 · 시간 구성 · 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 요청 수와 5xx 에는 남겨 두었으므로 응답 시간 SLO 의 분모(요청 수)에 이 연결이 들어가 비율이 조금 낮게 나온다. URL 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
+- 응답 시간 계열(0.5초 초과 · Apdex · 느린 요청 표 · 시간 구성 · 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 요청 수와 5xx 에는 남겨 두었으므로 응답 시간 SLO 의 분모(요청 수)에 이 연결이 들어가 비율이 조금 낮게 나온다. URL 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
 - **기록 규칙**(`slo.yaml` 의 `nova-slo-rec`): 5분 · 30분 · 1시간 · 6시간 창마다 요청 · 5xx · 0.5초 초과 요청의 초당 수를 1분마다 미리 계산해 Mimir 에 기록한다(`nova:http_requests:rate1h` 등). Grafana 가 관리하는 기록 규칙이다. 경보와 SLO 대시보드가 이 값을 읽으므로 긴 창을 매번 다시 계산하지 않는다.
 - **소진 속도 경보**: 예산을 평소 속도의 몇 배로 쓰는지 본다. 긴 창과 짧은 창이 모두 기준을 넘어야 울린다. 문제가 끝나면 짧은 창이 먼저 기준 아래로 내려가므로 경보가 빨리 풀린다.
 
@@ -317,10 +317,10 @@ flowchart LR
 | SLO 응답 시간 예산 소진 | 6시간 · 30분 모두 6배(30%) 초과 | 15분 | warning |
 | 요청 급감 (평소 대비) | 최근 30분 요청 < 평소의 30% (평소 30분 30건 이상인 시간대만) | 20분 | warning |
 | 응답 시간 급증 (평소 대비) | 최근 30분 P99 > 평소의 2배 그리고 0.5초 이상 | 15분 | warning |
-| HTTP P99 응답 시간 | 서비스별 P99 > 2초 | 10분 | warning |
 | JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
 | 메시지 처리 오류율 | 큐별 처리 스팬 중 오류 비율 > 5% (10분에 6건 넘게 처리한 큐만) | 10분 | warning |
 | 포기한 예약 동기화 작업 | 작업 종류(`jobType`)별 DEAD_LETTER 작업 수 `preorder_sync_dead_letter` > 0 | 1분 | warning |
+| 회차 증설 실패 | preorder 가 최소 대수를 바꾸지 못한 횟수 `preorder_scaling_failures_total` 10분 > 2 | 5분 | warning |
 | 프런트 JS 오류 급증 | 브라우저 오류 15분 > 30건 그리고 지난주 같은 시각의 3배 초과 (Loki) | 5분 | warning |
 | 프런트 LCP 악화 | LCP p75 30분 > 4초 (측정 30건 이상일 때만, Loki) | 15분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
@@ -339,7 +339,7 @@ flowchart LR
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회가 실패하면 Error 상태 알림이 따로 간다.
 - 엣지는 CloudWatch 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/certs_alb.tf`)로 감시한다. 인증서 만료 14일 전(ALB · CloudFront 인증서, 트래픽과 무관)과 ALB 가 직접 만든 4xx 비율 50% 초과(원본 확인 헤더 · 리스너 규칙 어긋남)에 울린다. 4xx 경보는 5분 요청이 20건 이상일 때만 판단하고 15분 연속 넘어야 울리며, 기준값은 `alb_elb_4xx_ratio_threshold` 다.
 - RDS 의 CPU · 여유 메모리 · 남은 스토리지도 CloudWatch 경보(`rds_instance_ids`)로 본다.
-- ECS 서비스 상태도 CloudWatch 로 감시한다(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/`). 서비스별 "태스크 0개" 경보(`AWS/ECS` `LiveTaskCount` < 1, 5분)와 ECS 이벤트 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/ecs_events.tf`)가 있다. 증설 경보(순간 폭주 `<서비스>-burst-*`, 증설 한계 `<서비스>-at-max`: 최대 대수에서 CPU 가 3분 높음)는 기준값인 max 와 함께 바뀌도록 ecs 모듈(`terraform/aws/ecs/_modules/service/burst.tf`)에 있다.
+- ECS 서비스 상태도 CloudWatch 로 감시한다(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/`). 서비스별 "태스크 0개" 경보(`AWS/ECS` `LiveTaskCount` < 1, 5분)와 ECS 이벤트 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/ecs_events.tf`)가 있다. 증설 경보(순간 폭주 `<서비스>-burst-*`: 증설을 시작할 때만 알림, 증설 한계 `<서비스>-at-max`: 최대 대수에서 CPU 가 3분 높음)는 기준값인 max 와 함께 바뀌도록 ecs 모듈(`terraform/aws/ecs/_modules/service/burst.tf`)에 있다. 서비스가 직접 돌려준 5xx(`<서비스>-5xx`: 1분에 50건 이상이고 요청의 2% 초과)도 대상 그룹이 있는 ecs 모듈(`alb.tf`)에 있어, 어느 서비스가 사용자에게 오류를 냈는지 이름으로 온다. 계정 전체 `alb-5xx` 는 ALB 가 직접 만든 5xx(대상 없음 · 시간 초과)만 센다.
   ECS 이벤트 경보는 배포 실패(되돌림), 태스크 배치 · 설정 실패, 태스크 비정상 종료를 알린다. 비정상 종료는 필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패이고, 배포 · 스케일 인 · Spot 회수는 뺀다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식이어야 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 이 JSON 을 만든다.
 
@@ -625,10 +625,6 @@ grafana cli admin reset-admin-password --password-from-stdin
 1. URL 목록의 P99 증감 열로 어느 API 가 평소보다 느린지 본다.
 2. 그 API 의 상세 화면에서 지연 분포와 시간 구성을 "SLO 응답 시간 예산 소진"과 같은 순서로 본다. 트래픽이 평소보다 많으면 태스크 수와 CPU 를 확인한다.
 
-### HTTP P99 응답 시간
-
-응답 시간 급증과 같은 순서로 확인한다. 이 경보는 평소 값과 상관없이 P99 가 2초를 넘으면 울린다.
-
 ### 메시지 처리 오류율
 
 1. SQS · 비동기 흐름 대시보드에서 어느 큐인지, 보내는 양이 갑자기 늘었는지 본다.
@@ -643,6 +639,14 @@ preorder 가 그 메시지를 바로 가져가 작업을 DEAD_LETTER 로 바꾸�
 1. 관리자 API `GET /api/v1/admin/preorders/sync-jobs?status=DEAD_LETTER&groupByError=true` 로 어떤 작업이 어떤 오류로 멈췄는지 본다.
 2. 외부 쪽 원인(Mock 장애 · 계약 오류)을 고친 뒤 `POST /api/v1/admin/preorders/sync-jobs/{id}/reprocess` 로 다시 보낸다. 외부에서 이미 처리됐으면 취소 작업은 `POST /api/v1/admin/preorders/sync-jobs/{id}/resolve` 로 수동 완료한다. 본문에 이유(5~500자)를 넣는다: `{"reason": "..."}`.
 3. 취소(`CANCEL`)는 외부에 예약이 남아 있을 수 있으니 외부 상태를 먼저 확인한다.
+
+### 회차 증설 실패
+
+preorder 가 1분마다 회차 일정을 보고 waitingroom · preorder 의 최소 대수(MinCapacity)를 맞추는데(NV-754), 그 호출이 계속 실패한다.
+
+1. preorder 로그에서 "최소 대수를 맞추지 못했다"를 찾아 예외를 본다. `AccessDenied` 면 태스크 역할의 `scaling` 정책, 대상이 없다는 오류면 ECS 서비스 · 오토스케일링 대상 이름(`nova.scaling.*.service`)을 확인한다.
+2. 오픈이 15분 안에 있으면 고치기 전에 콘솔이나 CLI 로 두 서비스의 최소 대수를 직접 올린다. 앱이 다음 주기에 계산한 값으로 다시 맞추므로 되돌릴 필요는 없다.
+3. "최대 대수를 넘어 최대로 맞춘다" 경고가 함께 있으면 service.yml 의 `scaling.max` 를 올린다.
 
 ### JVM 힙 사용률
 
