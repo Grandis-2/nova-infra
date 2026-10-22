@@ -73,6 +73,10 @@ nova:
   campaign:
     schedule-notice:
       enabled: true
+  # 회차 일정에 맞춘 최소 대수(service.yml 의 scales). 꺼져 있으면 계산만 해서 값이 바뀔 때 로그와 preorder.scaling.floor 지표로 남긴다.
+  # 대상 · 기본 대수 · 최대 대수는 인프라가 넣으므로 적지 않는다
+  scaling:
+    enabled: false
 management:
   endpoints:
     web:

@@ -114,6 +114,12 @@ variable "max_capacity" {
   default = 0
 }
 
+variable "min_capacity_by_app" {
+  description = "true 면 min_capacity 를 처음 만들 때만 넣고, 그 뒤 앱이 바꾼 값을 되돌리지 않는다"
+  type        = bool
+  default     = false
+}
+
 variable "cpu_target" {
   description = "CPU 목표 사용률(%). 0 이면 CPU 기반 스케일링을 걸지 않는다"
   type        = number

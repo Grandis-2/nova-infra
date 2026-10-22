@@ -12,12 +12,13 @@ locals {
 
   # ecs 스택 리소스의 ARN 을 이름 규칙으로 계산한다
   # (remote state 로 참조하면 iam <-> ecs 순환 의존이 생긴다)
-  cluster_arn   = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:cluster/${local.name_prefix}"
-  task_def_arn  = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:task-definition/${local.name_prefix}-*"
-  log_group_arn = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/ecs/${local.name_prefix}*"
-  queues        = data.terraform_remote_state.sqs.outputs.queues
-  sched_dlq_arn = data.terraform_remote_state.sqs.outputs.scheduler_dlq.arn
-  upload_bucket = data.terraform_remote_state.s3.outputs.upload_bucket.arn
+  cluster_arn        = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:cluster/${local.name_prefix}"
+  service_arn_prefix = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:service/${local.name_prefix}"
+  task_def_arn       = "arn:${local.partition}:ecs:${var.aws_region}:${local.account_id}:task-definition/${local.name_prefix}-*"
+  log_group_arn      = "arn:${local.partition}:logs:${var.aws_region}:${local.account_id}:log-group:/ecs/${local.name_prefix}*"
+  queues             = data.terraform_remote_state.sqs.outputs.queues
+  sched_dlq_arn      = data.terraform_remote_state.sqs.outputs.scheduler_dlq.arn
+  upload_bucket      = data.terraform_remote_state.s3.outputs.upload_bucket.arn
   # be 배포 역할이 push 하는 저장소. mock 저장소는 mock 전용 배포 역할(github_deploy_mock.tf)만 push 한다
   mock_ecr_repo_keys = ["mock", "mock-migration"]
   ecr_repo_arns      = [for k, arn in data.terraform_remote_state.ecr.outputs.repository_arns : arn if !contains(local.mock_ecr_repo_keys, k)]
