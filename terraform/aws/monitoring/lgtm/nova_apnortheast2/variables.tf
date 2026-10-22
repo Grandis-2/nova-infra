@@ -39,24 +39,3 @@ variable "obs_mysqld_exporter_enabled" {
   default     = true
 }
 
-variable "obs_mysql_platform" {
-  description = "mysqld_exporter 가 긁는 DB 의 플랫폼. 켜는 수집기가 달라진다(main.tf 의 obs_mysqld_collectors)"
-  type        = string
-  default     = "ncp"
-
-  validation {
-    condition     = contains(["ncp", "rds"], var.obs_mysql_platform)
-    error_message = "obs_mysql_platform 은 ncp 또는 rds 다."
-  }
-}
-
-variable "db_state" {
-  description = "DB 출력을 읽을 스택. ncp = ncp-database, rds = rds 스택. 전환 뒤 rds 로 바꾸고 obs_mysql_platform 도 rds 로 둔다"
-  type        = string
-  default     = "ncp"
-
-  validation {
-    condition     = contains(["ncp", "rds"], var.db_state)
-    error_message = "db_state 는 ncp 또는 rds 다."
-  }
-}

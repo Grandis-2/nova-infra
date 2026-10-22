@@ -23,7 +23,7 @@
 # 아래층을 apply 한 뒤 `atlantis plan -p <위층>` 으로 다시 plan 하고 apply 한다.
 #
 # 공통 값은 terraform/variables/global.auto.tfvars 에서 읽는다. Atlantis 서버는
-# 실행 역할(TF_VAR_assume_role_arn), backend 설정(TF_CLI_ARGS_init), NCP 인증키만 넣는다.
+# 실행 역할(TF_VAR_assume_role_arn), backend 설정(TF_CLI_ARGS_init)만 넣는다.
 # 스택은 PR 하나에 층 하나씩 올린다. 아직 레포에 올리지 않은 스택은 autoplan 을 꺼 둔다 —
 # 켜 두면 공용 파일이 바뀐 PR 에서 Atlantis 가 없는 폴더까지 plan 하려다 실패한다. 그 스택을 올리는 PR 에서 true 로 바꾼다.
 version: 3
@@ -177,7 +177,7 @@ projects:
       enabled: true # 이 스택을 올리는 PR 에서 true
     apply_requirements: [mergeable] # TODO: 팀원이 승인할 수 있게 되면 [approved, mergeable] 로 되돌린다
 
-  # MySQL (RDS). NCP 에서 옮겨 오는 DB. NCP 스택 출력을 같은 이름으로 내보내고 쓰기 DB(primary)를 고른다
+  # MySQL (RDS). 운영 DB. ecs · lgtm 이 출력(주소 · 계정 비밀 · max_connections)을 읽는다
   - name: rds
     dir: terraform/aws/rds/nova_apnortheast2
     execution_order_group: 4

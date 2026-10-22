@@ -23,15 +23,14 @@ variable "max_allocated_storage" {
 }
 
 variable "backup_retention_days" {
-  description = "자동 백업 보관(일). NCP 를 내린 뒤의 안전망이다. 0 과 0 이 아닌 값 사이로 바꾸면 재부팅된다"
+  description = "자동 백업 보관(일). 운영 DB 의 안전망이다. 0 과 0 이 아닌 값 사이로 바꾸면 재부팅된다"
   type        = number
   default     = 7
 }
 
 variable "max_connections" {
   description = <<-EOT
-    최대 연결 수. 앱 풀 합계(서비스 최대 태스크 × Hikari 풀, 2026-10-20 기준 약 380, Blue/Green 배포 중 +50)와
-    ProxySQL 두 대의 서버별 상한(500 × 2) 중 큰 쪽에 운영 연결 여유를 더했다
+    최대 연결 수. 앱 풀 합계(서비스 최대 태스크 × Hikari 풀)의 Blue/Green 배포 중 두 배에 운영 연결 여유를 더해 정한다
     ecs 스택이 앱 풀 합계 × 2(배포 중) + 여유 50 이 이 값을 넘으면 plan 을 멈춘다(ecs config.tf)
   EOT
   type        = number

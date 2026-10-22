@@ -2,8 +2,7 @@
 # 서비스가 아니라 application/ 에 없으므로 SG 를 여기 따로 둔다.
 #
 # 인바운드는 없다. 나가는 것은 둘이다.
-#   3306 — NCP DB. NAT 고정 IP 로 나가야 ACG 를 지난다. Public 도메인의 IP 가 고정되지 않아 0.0.0.0/0 이다.
-#          RDS 로 옮긴 뒤에도 이 규칙으로 나간다(RDS SG 가 이 SG 를 받는다, rds.tf)
+#   3306 — RDS (RDS SG 로만. RDS SG 도 이 SG 에서만 받는다, rds.tf)
 #   443  — 이미지 Pull(ECR · S3 게이트웨이 엔드포인트) · 시크릿 · 로그 (엔드포인트 또는 NAT)
 resource "aws_security_group" "migration" {
   name        = "${local.name_prefix}-migration-sg"
@@ -14,14 +13,21 @@ resource "aws_security_group" "migration" {
 }
 
 resource "aws_vpc_security_group_egress_rule" "migration" {
-  for_each = { db = 3306, https = 443 }
-
   security_group_id = aws_security_group.migration.id
-  description       = each.key == "db" ? "MySQL to NCP DB via NAT" : "HTTPS to ECR, Secrets Manager, CloudWatch Logs"
+  description       = "HTTPS to ECR, Secrets Manager, CloudWatch Logs"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "tcp"
-  from_port         = each.value
-  to_port           = each.value
+  from_port         = 443
+  to_port           = 443
+}
+
+resource "aws_vpc_security_group_egress_rule" "migration_db" {
+  security_group_id            = aws_security_group.migration.id
+  description                  = "MySQL to RDS"
+  referenced_security_group_id = aws_security_group.rds.id
+  ip_protocol                  = "tcp"
+  from_port                    = 3306
+  to_port                      = 3306
 }
 
 # 인터페이스 엔드포인트로 붙는 AWS API (엔드포인트 SG 는 vpc 스택 소유)
@@ -32,4 +38,10 @@ resource "aws_vpc_security_group_ingress_rule" "vpce_from_migration" {
   ip_protocol                  = "tcp"
   from_port                    = 443
   to_port                      = 443
+}
+
+# 3306 규칙을 RDS SG 로 좁히며 for_each 의 https 인스턴스를 단일 리소스로 옮긴다(다시 만들지 않는다)
+moved {
+  from = aws_vpc_security_group_egress_rule.migration["https"]
+  to   = aws_vpc_security_group_egress_rule.migration
 }

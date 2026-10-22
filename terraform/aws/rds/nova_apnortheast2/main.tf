@@ -1,5 +1,5 @@
 # RDS for MySQL — 운영 DB. 2026-10-20 NCP Cloud DB for MySQL 에서 옮겨 왔다(에픽 NV-678).
-# 소비자(ecs · lgtm)는 NCP 스택과 같은 이름의 출력(outputs.tf)을 읽는다(db_state = "rds"). DB 계정 비밀은 secrets.tf.
+# 소비자(ecs · lgtm)는 이 스택의 출력(outputs.tf)을 읽는다. DB 계정 비밀은 secrets.tf.
 
 locals {
   db_subnet_ids = data.terraform_remote_state.vpc.outputs.db_subnet_ids
@@ -17,11 +17,11 @@ resource "aws_db_subnet_group" "this" {
 }
 
 # ── 파라미터 그룹 ───────────────────────────────────────────
-# NCP 와 다르게 동작하지 않도록 2026-10-19 G1 점검(00-precheck)에서 읽은 NCP 값에 맞춘다.
+# 옮겨 오기 전과 다르게 동작하지 않도록 NCP 에서 쓰던 값(2026-10-19 점검)에 맞췄다.
 # read_only · local_infile 만 단계마다 바꾸므로 인스턴스마다 변수로 둔다.
 locals {
   base_parameters = {
-    # 복제 받기: 소스(NCP)가 GTID 를 쓰므로 받는 쪽도 켜야 적용된다. 전환 때 GTID 집합으로 따라잡음을 판정한다
+    # GTID: 이전 때 NCP 복제를 받으려고 켰다. 정적 값이라 끄면 재부팅된다
     "gtid-mode"                     = { value = "ON", static = true }
     enforce_gtid_consistency        = { value = "ON", static = true }
     binlog_format                   = { value = "ROW", static = false }
@@ -29,7 +29,7 @@ locals {
     require_secure_transport        = { value = "1", static = false }
     log_bin_trust_function_creators = { value = var.log_bin_trust_function_creators ? "1" : "0", static = false }
 
-    # NCP 와 같게 (G1)
+    # 옮겨 오기 전과 같게
     lower_case_table_names          = { value = "0", static = true } # 만들 때만 정할 수 있다
     character_set_server            = { value = "utf8mb4", static = false }
     collation_server                = { value = "utf8mb4_0900_ai_ci", static = false }
@@ -118,7 +118,7 @@ resource "aws_db_instance" "this" {
   storage_encrypted     = true # AWS 관리 키
 
   # 마스터 비밀번호는 RDS 가 Secrets Manager 에 만들고 돌린다(상태 파일에 남지 않는다).
-  # 이름은 NCP 의 nova_admin 과 겹치지 않게 한다. 앱 · 운영 계정은 런북(20-rds-accounts)이 NCP 와 같은 이름 · 비밀번호로 만든다
+  # 앱 · 운영 계정(nova_*)과 겹치지 않는 이름이다. 앱 · 운영 계정은 옮겨 올 때 NCP 와 같은 이름 · 비밀번호로 만들었다
   username                    = "nova_master"
   manage_master_user_password = true
 

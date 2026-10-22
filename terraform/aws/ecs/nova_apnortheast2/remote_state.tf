@@ -18,11 +18,10 @@ data "terraform_remote_state" "ecr" {
   config  = local.remote_state.ecr
 }
 
-# DB 주소 · 계정 비밀. 지금은 NCP 스택이고, RDS 이전 중에는 rds 스택(NCP 출력을 같은 이름으로 내보내고
-# primary 로 쓰기 DB 를 고른다)을 읽는다(db_state). rds 는 공용 remote_state_global 에 넣지 않는다 — 넣으면 모든 스택이 다시 plan 된다
+# DB 주소 · 계정 비밀 · max_connections (rds 스택)
 data "terraform_remote_state" "database" {
   backend = "s3"
-  config  = var.db_state == "rds" ? merge(local.remote_state_defaults, { key = "${var.env}/rds/terraform.tfstate" }) : local.remote_state.database
+  config  = local.remote_state.rds
 }
 
 data "terraform_remote_state" "elasticache" {

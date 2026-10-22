@@ -1,6 +1,6 @@
 # sops 용 KMS 키와 그 키를 쓰는 IAM 역할
 #   common : 애플리케이션 비밀 (JWT 개인키, 카카오, 대기열 키 등)
-#   secure : 인프라 자격증명 (GitHub 토큰, NCP 인증키 등)
+#   secure : 인프라 자격증명 (GitHub 토큰 등)
 #
 # .sops.yaml 에 키 ARN 과 역할 ARN 을 함께 적어, sops 가 역할을 assume 해서 암복호화한다.
 # 키 정책은 이 역할에만 사용 권한을 준다.

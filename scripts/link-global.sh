@@ -2,10 +2,9 @@
 # 공용 파일을 리프 스택에 심볼릭 링크로 연결한다.
 #
 #   scripts/link-global.sh terraform/aws/<서비스>/<계정|VPC>[/<리전>] [추가 파일...]
-#   scripts/link-global.sh terraform/ncp/<서비스>/... [추가 파일...]
 #
 # 항상 링크하는 것
-#   terraform/<aws|ncp>/version.tf · provider.tf      (ncp 스택도 시크릿과 원격 상태 때문에 AWS provider 를 쓴다)
+#   terraform/aws/version.tf · provider.tf
 #   terraform/variables/var_global.tf · locals_global.tf · global.auto.tfvars
 #
 # 필요하면 인자로 더 넘긴다 (확장자 없이)
@@ -22,9 +21,8 @@ leaf_abs="$root/${leaf#./}"
 mkdir -p "$leaf_abs"
 
 case "$leaf" in
-  *terraform/ncp/*) cloud=ncp ;;
   *terraform/aws/*) cloud=aws ;;
-  *) echo "terraform/aws/... 또는 terraform/ncp/... 아래여야 합니다: $leaf" >&2; exit 1 ;;
+  *) echo "terraform/aws/... 아래여야 합니다: $leaf" >&2; exit 1 ;;
 esac
 
 link() { # link <terraform/ 기준 경로> <리프 안의 이름>
@@ -34,7 +32,6 @@ link() { # link <terraform/ 기준 경로> <리프 안의 이름>
 
 link "$cloud/version.tf" version.tf
 link aws/provider.tf provider.tf
-[[ $cloud == ncp ]] && link ncp/provider.tf provider_ncp.tf
 link variables/var_global.tf var_global.tf
 link variables/locals_global.tf locals_global.tf
 link variables/global.auto.tfvars global.auto.tfvars

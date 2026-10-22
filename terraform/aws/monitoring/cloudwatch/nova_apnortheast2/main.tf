@@ -6,7 +6,7 @@
 #   사용자가 이미 아프다 : ALB 가 만든 5xx, 태스크 0개, CloudFront 5xx (edge.tf)
 #                          서비스가 낸 5xx · 증설 한계 · 늘릴 수 없는 서비스의 CPU 는 ecs 모듈(<서비스>-5xx · -at-max · -cpu-high),
 #                          응답 시간 · 가용성은 Grafana SLO 경보
-#   곧 아파진다          : 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
+#   곧 아파진다          : 큐 적체, Valkey, RDS(var.rds_instance_ids)
 #   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
 #   공격 · 차단          : WAF 차단 급증 (edge.tf)
 #   트래픽이 없어도      : 인증서 만료 (certs_alb.tf)
@@ -122,8 +122,6 @@ resource "aws_cloudwatch_metric_alarm" "no_running_tasks" {
 }
 
 # ── 곧 아파진다 ──────────────────────────────────────────────
-# NCP DB 는 CloudWatch 지표가 없어 NCP Cloud Insight 알림(CPU, 디스크, 연결 수)으로 본다. RDS 는 아래 rds 경보다.
-
 # Valkey: 대기열 · 세션이 여기 있다. 메모리가 차서 키가 밀려나면(eviction) 대기 순번이 사라진다
 resource "aws_cloudwatch_metric_alarm" "valkey" {
   for_each = {
@@ -172,34 +170,6 @@ resource "aws_cloudwatch_metric_alarm" "rds" {
   treat_missing_data  = "notBreaching"
 
   dimensions = { DBInstanceIdentifier = each.value.instance }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
-  ok_actions    = [aws_sns_topic.alerts.arn]
-}
-
-# RDS 이전 기간의 NCP → RDS 복제. 덤프와 전환 사이(몇 주)에 복제가 멈추면 binlog 보존(7일) 안에 알아야 덤프를 다시 하지 않는다.
-# ReplicaLag 는 문서상 읽기 복제본 지표이고, 외부 소스 복제에서도 나오는지는 문서에 없다(복제를 시작한 뒤 지표가 보이는지 확인한다).
-# 그래서 지표가 아예 없어도 경보가 울리게(breaching) 둔다. 울리면 SHOW REPLICA STATUS 로 먼저 본다.
-#   lag     지연이 rds_replication_lag_threshold 초를 5분 넘게 넘는다
-#   stopped 복제 스레드가 멈췄다(-1) 또는 지표가 없다
-resource "aws_cloudwatch_metric_alarm" "rds_replication" {
-  for_each = var.rds_replication_alarm_instance == "" ? {} : {
-    lag     = { statistic = "Maximum", comparison = "GreaterThanThreshold", threshold = var.rds_replication_lag_threshold, missing = "notBreaching", description = "replication from NCP is more than ${var.rds_replication_lag_threshold}s behind" }
-    stopped = { statistic = "Minimum", comparison = "LessThanThreshold", threshold = 0, missing = "breaching", description = "replication from NCP is not running (ReplicaLag -1 or missing). Check SHOW REPLICA STATUS" }
-  }
-
-  alarm_name          = "${var.rds_replication_alarm_instance}-replication-${each.key}"
-  alarm_description   = "${var.rds_replication_alarm_instance}: ${each.value.description}"
-  namespace           = "AWS/RDS"
-  metric_name         = "ReplicaLag"
-  statistic           = each.value.statistic
-  period              = 60
-  evaluation_periods  = 5
-  threshold           = each.value.threshold
-  comparison_operator = each.value.comparison
-  treat_missing_data  = each.value.missing
-
-  dimensions = { DBInstanceIdentifier = var.rds_replication_alarm_instance }
 
   alarm_actions = [aws_sns_topic.alerts.arn]
   ok_actions    = [aws_sns_topic.alerts.arn]

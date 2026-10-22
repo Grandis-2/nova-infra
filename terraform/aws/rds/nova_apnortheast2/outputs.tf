@@ -1,4 +1,4 @@
-# ── 소비자(ecs · lgtm)가 읽는 출력. NCP 스택(ncp-database)과 같은 이름이다 ─────────
+# ── 소비자(ecs · lgtm)가 읽는 출력 ─────────────────────────────
 
 output "db_address" {
   description = "DB 주소(RDS 엔드포인트)"

@@ -300,7 +300,7 @@ flowchart LR
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
 | MySQL 수집 끊김 | `mysql_up` 또는 exporter 수집 대상의 `up` < 1 (exporter 를 띄운 환경만) | 5분 | critical |
 | MySQL 연결 사용률 | 연결 수 / max_connections > 80% | 10분 | warning |
-| MySQL 오래 도는 쿼리 | 상태별 실행 중 쿼리 시간 합 > 60초 (RDS 만) | 2분 | warning |
+| MySQL 오래 도는 쿼리 | 상태별 실행 중 쿼리 시간 합 > 60초 | 2분 | warning |
 | obs 수집 실패 | Collector 의 수신 거부 · 내보내기 실패 · 큐가 가득 차 버린 양 > 0 | 10분 | warning |
 | obs 저장소 거부 | Loki · Tempo · Mimir 가 버린 로그 · 스팬 · 샘플 > 0 (job · reason 별) | 10분 | warning |
 | obs 디스크 사용률 | obs 호스트 마운트별 사용률 > 80% | 15분 | warning |
@@ -524,15 +524,10 @@ Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 켜므
 <details>
 <summary>DB 지표 (mysqld_exporter)</summary>
 
-exporter 는 `database` 원격 상태의 출력 네 개(`db_address` · `db_port` · `exporter_username` · `exporter_secret_arn`)로 DB 에 접속한다. DB 스택은 플랫폼과 상관없이 이 출력만 내보내면 된다.
+exporter 는 rds 스택 출력 네 개(`db_address` · `db_port` · `exporter_username` · `exporter_secret_arn`)로 DB 에 접속한다.
 비밀 이름이 `nova-prod/db/exporter` 규칙을 따라야 obs 실행 역할이 읽을 수 있다(`terraform/aws/iam/grandis-nova/obs.tf`).
 
-켤 수집기는 `obs_mysql_platform`(`ncp` · `rds`)으로 고른다.
-
-| 값 | 계정 권한 | 더 켜는 것 |
-|---|---|---|
-| `ncp` | READ (모든 테이블 SELECT, PROCESS · REPLICATION CLIENT 없음) | 다이제스트별 SQL 통계(상위 SQL), mysqld 메모리. PROCESS 가 필요한 기본 수집기는 끈다 |
-| `rds` | `PROCESS` · `REPLICATION CLIENT` · `SELECT` | ncp 것에 더해 계정 · 상태별 연결(processlist), 교착 상태 · 잠금 시간 초과(innodb_metrics) |
+exporter 계정에는 `PROCESS` · `REPLICATION CLIENT` · `SELECT` 를 준다. 기본 수집기에 더해 다이제스트별 SQL 통계(상위 SQL), mysqld 메모리, 계정 · 상태별 연결(processlist), 교착 상태 · 잠금 시간 초과(innodb_metrics)를 켠다(`main.tf` 의 `obs_mysqld_collectors`).
 
 RDS 는 파라미터 그룹에서 `performance_schema` 를 켜야 상위 SQL 이 나온다. 정적 파라미터라 바꾸려면 재부팅해야 하므로 인스턴스를 만들 때 켜 둔다.
 다이제스트 지표는 SQL 형태마다 한 벌씩 생긴다. 그래서 최근 하루 동안 관측된 것 중 시간 순으로 100개만 모으고, 대시보드에서 쓰지 않는 항목은 Collector 가 버린다(`collector.yaml` 의 mysqld `metric_relabel_configs`).

@@ -63,9 +63,8 @@ variable "spot_on_demand_base" {
 
 variable "db_ssl_mode" {
   description = <<-EOT
-    JDBC sslMode. DB 가 인터넷 너머(NCP Public 도메인)에 있어 기본값은 REQUIRED 다.
-    DB 가 TLS 를 지원하지 않으면 연결이 실패한다. 이때 PREFERRED 로 낮출 수 있지만
-    DB 트래픽이 평문으로 인터넷을 지나게 된다.
+    JDBC sslMode. RDS 는 TLS 를 받으므로 VPC 안에서도 암호화해 REQUIRED 로 둔다.
+    PREFERRED 로 낮추면 TLS 협상에 실패할 때 평문으로 붙는다.
   EOT
   type        = string
   default     = "REQUIRED"
@@ -117,20 +116,6 @@ variable "mock_admin_allowed_origin" {
   default     = "https://*grandis-nova.link"
 }
 
-# ── RDS 이전 (NCP → RDS) ────────────────────────────────────
-variable "db_state" {
-  description = <<-EOT
-    DB 출력을 읽을 스택. ncp = ncp-database, rds = rds 스택(같은 이름의 출력을 내고 primary 로 쓰기 DB 를 고른다).
-    rds 스택을 apply 한 뒤 rds 로 바꾼다. 출력이 같으므로 바꾸기만 해서는 아무것도 다시 배포되지 않는다
-  EOT
-  type        = string
-  default     = "ncp"
-
-  validation {
-    condition     = contains(["ncp", "rds"], var.db_state)
-    error_message = "db_state 는 ncp 또는 rds 다."
-  }
-}
 
 
 

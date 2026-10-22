@@ -113,7 +113,7 @@ resource "aws_iam_role_policy" "github_deploy" {
         ]
       },
       # ── 배포 전 마이그레이션 (migration.tf, be .github/scripts/ecs-migrate.sh) ──
-      # DB(NCP)는 NAT 고정 IP 만 받아 러너에서는 닿지 않는다. 그래서 클러스터 안에 Flyway 태스크를 띄우고 끝나기를 기다린다
+      # DB(RDS)는 VPC 안에 있어 러너에서는 닿지 않는다. 그래서 클러스터 안에 Flyway 태스크를 띄우고 끝나기를 기다린다
       {
         Sid      = "RunMigration"
         Effect   = "Allow"
