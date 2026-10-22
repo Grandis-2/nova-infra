@@ -1,5 +1,5 @@
 # 대시보드를 파일에서 읽는다(grafana/dashboards/<폴더>/*.json). 하위 디렉터리 이름이 그대로 Grafana 폴더가 된다.
-#   01 Overview · 10 Services · 20 Data · 30 Platform · 40 Troubleshooting · 90 Observability (앞 번호는 목록 순서)
+#   01 Overview · 05 Business · 10 Services · 20 Data · 30 Platform · 40 API · 60 Frontend · 90 Observability (앞 번호는 목록 순서)
 # 화면에서 고쳐도 저장되지 않는다 — 고칠 때는 JSON 파일을 고친다. 화면에서 지울 수도 없다(provisioned dashboard cannot be deleted).
 # 파일을 지우면 대시보드도 지워진다(disableDeletion: false). 파일이 곧 대시보드 목록이다.
 apiVersion: 1
