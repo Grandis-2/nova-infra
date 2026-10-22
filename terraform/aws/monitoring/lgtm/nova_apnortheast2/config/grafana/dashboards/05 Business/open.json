@@ -803,7 +803,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (job) (rate(lettuce_seconds_count{error!=\"none\"}[2m])) * 60 or vector(0)",
+          "expr": "sum by (job) (rate(lettuce_seconds_count{error=~\".+\", error!=\"none\"}[2m])) * 60 or vector(0)",
           "legendFormat": "실패 {{job}}",
           "range": true
         },
