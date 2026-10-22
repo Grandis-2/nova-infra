@@ -116,8 +116,8 @@ resource "aws_iam_role_policy" "upload" {
 }
 
 # 다른 서비스의 최소 대수 바꾸기 (service.yml 의 scales). preorder 가 회차 일정에 맞춰 waitingroom · preorder 를 미리 늘린다.
-# Application Auto Scaling 은 ECS 대상을 등록할 때 부르는 쪽에게 그 ECS 서비스의 DescribeServices · UpdateService 를 요구한다.
-# 그래서 확장 대상 ARN(무작위 id) 대신 ECS 권한을 대상 서비스로 좁혀 바꿀 수 있는 서비스를 묶는다
+# 확장 대상 ARN 은 무작위 id 라 대상별로 묶을 수 없다. 등록은 ECS 서비스 대수로만 좁히고, 어느 서비스인지는
+# Application Auto Scaling 이 등록 때 부르는 쪽에게 요구하는 ECS DescribeServices · UpdateService 를 대상 서비스로 좁혀 묶는다
 resource "aws_iam_role_policy" "scaling" {
   count = length(var.scale_service_arns) > 0 ? 1 : 0
 
@@ -128,10 +128,22 @@ resource "aws_iam_role_policy" "scaling" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "ScalableTargets"
+        Sid      = "DescribeScalableTargets"
         Effect   = "Allow"
-        Action   = ["application-autoscaling:DescribeScalableTargets", "application-autoscaling:RegisterScalableTarget"]
+        Action   = "application-autoscaling:DescribeScalableTargets"
         Resource = "*"
+      },
+      {
+        Sid      = "RegisterEcsScalableTargets"
+        Effect   = "Allow"
+        Action   = "application-autoscaling:RegisterScalableTarget"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "application-autoscaling:service-namespace"  = "ecs"
+            "application-autoscaling:scalable-dimension" = "ecs:service:DesiredCount"
+          }
+        }
       },
       {
         Sid      = "ScaledServices"
