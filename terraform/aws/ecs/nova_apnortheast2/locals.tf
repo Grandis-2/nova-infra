@@ -58,21 +58,21 @@ locals {
 
   # ── 시크릿 ─────────────────────────────────────────────────
   # 값 대신 "시크릿 ARN:json 키::" 를 넘겨 태스크 정의에 비밀 값이 남지 않게 한다.
-  #   db              → rds 스택이 관리하는 서비스 계정 비밀 (nova-prod/db/app/<서비스>)
+  #   db              → rds 스택이 관리하는 서비스 계정 비밀 (nova-prod/db/app/<db_account, 기본은 서비스 키>)
   #   extra_databases → 같은 계정으로 접속하는 다른 DB
   #   secrets.sops.yml  → 그 서비스의 시크릿(nova-prod/app/<서비스>). 키 이름이 곧 환경변수 이름
   #   generated_secrets → Terraform 이 만든 시크릿 (값 전체가 환경변수 값). shared/<이름> 은 공유 시크릿
   service_secrets = {
     for k, v in local.deployed_services : k => merge(
       v.db != null ? {
-        SPRING_DATASOURCE_USERNAME = "${local.db_secret_arns[k]}:username::"
-        SPRING_DATASOURCE_PASSWORD = "${local.db_secret_arns[k]}:password::"
+        SPRING_DATASOURCE_USERNAME = "${local.db_secret_arns[v.db_account]}:username::"
+        SPRING_DATASOURCE_PASSWORD = "${local.db_secret_arns[v.db_account]}:password::"
       } : {},
       {
         for pair in flatten([
           for db, prefix in v.extra_databases : [
-            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_USERNAME", ref = "${local.db_secret_arns[k]}:username::" },
-            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_PASSWORD", ref = "${local.db_secret_arns[k]}:password::" },
+            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_USERNAME", ref = "${local.db_secret_arns[v.db_account]}:username::" },
+            { env = "${upper(replace(replace(prefix, "-", ""), ".", "_"))}_PASSWORD", ref = "${local.db_secret_arns[v.db_account]}:password::" },
           ]
         ]) : pair.env => pair.ref
       },

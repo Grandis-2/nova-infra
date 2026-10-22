@@ -1,4 +1,4 @@
-# EventBridge Scheduler (배치 실행 주체)
+# EventBridge Scheduler (단발 배치 실행 주체) — scheduler 스택이 service.yml 의 schedule 마다 RunTask 로 띄운다
 data "aws_iam_policy_document" "scheduler_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -48,10 +48,11 @@ resource "aws_iam_role_policy" "scheduler" {
         }
       },
       {
-        Sid      = "PassRolesToTask"
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = [aws_iam_role.task_execution.arn, module.task_role["batch"].role_arn]
+        Sid    = "PassRolesToTask"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        # service.yml 에 schedule 이 있는 앱의 태스크 역할만
+        Resource = concat([aws_iam_role.task_execution.arn], [for k in keys(local.scheduled_services) : module.task_role[k].role_arn])
         Condition = {
           StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
         }

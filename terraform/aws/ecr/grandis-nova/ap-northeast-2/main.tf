@@ -2,12 +2,15 @@
 #   서비스마다 하나 (application/<서비스>/service.yml)
 #   migration — Flyway 와 마이그레이션 SQL. release 가 배포 전에 마이그레이션 태스크로 돌린다 (ecs 스택 migration.tf)
 #   mock-migration — mock 저장소의 Flyway(external_mock). mock release 가 올리고 돌린다 (NV-523)
+#   batch          — 정합성 검사 · 사진 정리가 batch-reconciliation · batch-imagecleanup 으로 나뉘기 전 이미지.
+#                    이미지가 남아 있어 지우면 apply 가 실패한다(force_delete = false). 되돌릴 일이 없으면 이미지를 지운 뒤 뺀다
 # 배포는 커밋 SHA 태그를 쓰므로 태그를 덮어쓸 수 없게 하고, CI 가 함께 올리는 latest 만 예외로 둔다.
 locals {
   repositories = merge(
     { for k, v in local.services : k => { name = v.name, image_tag = v.image_tag } },
     { migration = { name = "migration", image_tag = "latest" } },
     { mock-migration = { name = "mock-migration", image_tag = "latest" } },
+    { batch = { name = "batch", image_tag = "latest" } },
   )
 }
 

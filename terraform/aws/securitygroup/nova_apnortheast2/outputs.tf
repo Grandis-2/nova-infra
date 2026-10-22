@@ -3,7 +3,7 @@ output "alb_security_group_id" {
 }
 
 output "app_security_group_ids" {
-  description = "서비스 키(member, catalog, preorder, order, waitingroom, worker, batch, mock) -> SG ID"
+  description = "서비스 키 -> SG ID"
   value       = { for k, m in module.service : k => m.security_group_id }
 }
 

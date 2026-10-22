@@ -39,9 +39,18 @@ output "task_definition_families" {
   value = { for k, m in module.service : k => m.task_definition_family }
 }
 
-output "batch_task_definition_arn" {
-  description = "Scheduler 가 RunTask 로 띄울 태스크 정의"
-  value       = try(module.service["batch"].task_definition_arn, "") # batch 가 deploy: false 면 빈 값
+# 배치 태스크의 ECS group — monitoring 이 비정상 종료를 따로 알린다.
+# singleton 서비스는 service:<이름>, Scheduler 가 RunTask 로 띄우는 태스크는 family:<태스크 정의 이름>
+output "batch_task_groups" {
+  value = concat(
+    [for k, v in local.deployed_services : "service:${module.service[k].service_name}" if v.singleton && v.schedule == null],
+    [for k in keys(local.scheduled_services) : "family:${module.service[k].task_definition_family}"],
+  )
+}
+
+output "scheduled_task_definition_arns" {
+  description = "서비스 키 -> Scheduler 가 RunTask 로 띄울 태스크 정의 (service.yml 의 schedule)"
+  value       = { for k in keys(local.scheduled_services) : k => module.service[k].task_definition_arn }
 }
 
 output "log_group_names" {

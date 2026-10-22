@@ -1,8 +1,9 @@
 # ─────────────────────────────────────────────────────────────
 # 서비스 — application/<서비스>/service.yml 을 모듈에 넘긴다 (deploy: true 만)
 #
-# 모두 상시 구동한다. batch 도 앱 안의 @Scheduled 로 돌기 때문에 서비스로 띄우고,
+# 상시 구동한다. 정합성 검사(batch-reconciliation)도 앱 안의 @Scheduled 로 돌기 때문에 서비스로 띄우고,
 # 같은 작업이 두 번 돌지 않게 singleton 으로 배포한다.
+# service.yml 에 schedule 이 있으면 서비스 없이 태스크 정의만 만들고 scheduler 스택이 RunTask 로 띄운다.
 #
 # 배포 방식 (service.yml 의 deployment)
 #   blue_green : ECS 자체 Blue/Green. ALB 규칙마다 blue/green 타깃 그룹 한 쌍
@@ -43,6 +44,7 @@ module "service" {
   use_spot       = each.value.spot
   on_demand_base = var.spot_on_demand_base
   singleton      = each.value.singleton
+  create_service = each.value.schedule == null # schedule 이 있으면 태스크 정의만 만든다 (scheduler 스택이 띄운다)
 
   subnet_ids         = local.app_subnets
   security_group_ids = [local.app_sg_ids[each.key]]

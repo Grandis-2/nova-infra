@@ -14,9 +14,10 @@ application/<서비스>/
 | 필드 | 만들어지는 것 |
 | --- | --- |
 | `cpu` · `memory` · `port` · `deployment` · `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
+| `schedule` | ECS 서비스 대신 태스크 정의만 만들고, 정해진 시각에 한 번 띄우는 스케줄 (ecs · scheduler) |
 | `routes` · `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
 | `calls` · `jwt` | 호출하는 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup · ecs) |
-| `db` · `extra_databases` | DB 계정과 비밀, DB 보안 그룹 규칙 (database · secretsmanager) |
+| `db` · `db_account` · `extra_databases` | DB 계정과 비밀, DB 보안 그룹 규칙 (database · secretsmanager) |
 | `redis` · `queues` · `uploads` · `upload_cleanup` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
 | `generated_secrets` · `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager · iam) |
 | `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs · securitygroup) |
@@ -27,7 +28,7 @@ application/<서비스>/
 # 필수
 cpu: 1024                 # 256 · 512 · 1024 · 2048 · 4096
 memory: 2048              # MiB, cpu에 맞는 값
-port: 8080                # 0 = 웹 서버 없음 (worker, batch)
+port: 8080                # 0 = 웹 서버 없음 (worker, batch-*)
 
 # 선택 (오른쪽이 기본값)
 deploy: true              # false면 ECS 서비스를 띄우지 않음
@@ -36,6 +37,8 @@ management_port: 0
 deployment: rolling       # rolling | blue_green | singleton
 spot: true
 stop_timeout: 30          # SIGTERM 뒤 강제 종료까지(초, 2~120). 비우면 ECS 기본값(30)
+schedule: null            # "cron(0 5 * * ? *)" 처럼 쓰면(Asia/Seoul) 서비스 없이 그 시각에 태스크를 한 번 띄움. 이미지는 일을 마치면 종료해야 함
+                          # port: 0 이어야 하고 deployment · scaling · routes 는 쓰지 않음. 회수돼도 되는 작업이라 Spot 으로 띄움
 
 scaling:
   desired: 1
@@ -59,6 +62,7 @@ jwt: none                 # sign | verify | none (verify면 member 접근 자동
 calls:                    # Spring 속성: 호출할 서비스
   spring.http.serviceclient.order.base-url: order
 db: null                  # DB 이름
+db_account: <서비스>       # DB 계정 비밀 nova-prod/db/app/<이름>. 다른 서비스의 계정을 같이 쓸 때만 적음
 extra_databases: {}       # 같은 계정으로 붙는 추가 DB: 속성 접두사
 redis: null               # 캐시 클러스터 키 (main)
 queues: { send: [], consume: [], dlq: [], dlq_send: [] }   # dlq: DLQ 들여다보기 · 옮기기, dlq_send: 확정 거절을 그 큐의 DLQ 에 바로 넣기(본 큐 이름)

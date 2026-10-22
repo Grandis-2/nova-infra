@@ -1,0 +1,10 @@
+# 안 쓰는 사진 정리. Scheduler 가 하루 한 번 띄우고, 정리를 마치면 태스크가 종료한다
+deploy: false                   # be 가 nova/<이 폴더 이름> 에 이미지를 올린 뒤 true 로 바꾼다(2단계)
+cpu: 512
+memory: 1024
+port: 0
+schedule: "cron(0 5 * * ? *)"   # Asia/Seoul. 있으면 ECS 서비스 대신 태스크 정의만 만들고 scheduler 스택이 RunTask 로 띄운다
+
+db: shop
+db_account: batch               # 합치기 전 batch 계정을 같이 쓴다(nova-prod/db/app/batch). 앱별 계정을 만들면 지운다
+upload_cleanup: true            # 업로드 버킷 products/ · promotions/ · banners/ 에서 지울 권한과 nova.upload.* 설정을 받는다
