@@ -47,7 +47,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**읽는 순서** — 오픈 · 부하 시험 때 위에서 아래로 내려가며 본다. 모든 패널은 1분 단위다(5분 평균은 1~2분짜리 몰림을 지운다).\n\n1. **사용자가 겪은 것**: 어느 서비스가 5xx 를 냈고 어떤 오류 코드인가 → 2. **왜**: 그 서비스 CPU 가 찼나, 태스크는 언제 늘었나 → 3. **의존 대상 탓인가**: Redis 서버가 바빴나(서버 쪽) vs 앱이 Redis 를 늦게 받았나(앱 쪽) → 4. **대기열 · 접수 동작**: 입장 속도를 줄였나, 접수 결과는 → 5. **캐시**"
+        "content": "**읽는 순서** — 오픈 · 부하 시험 때 위에서 아래로 내려가며 본다. AWS 지표는 1분 단위, 앱 지표는 1분마다 보내므로 최근 2분 기울기로 분당 값을 그린다(5분 평균은 1~2분짜리 몰림을 지운다).\n\n1. **사용자가 겪은 것**: 어느 서비스가 5xx 를 냈고 어떤 오류 코드인가 → 2. **왜**: 그 서비스 CPU 가 찼나, 태스크는 언제 늘었나 → 3. **의존 대상 탓인가**: Redis 서버가 바빴나(서버 쪽) vs 앱이 Redis 를 늦게 받았나(앱 쪽) → 4. **대기열 · 접수 동작**: 입장 속도를 줄였나, 접수 결과는 → 5. **캐시**"
       }
     },
     {
@@ -119,7 +119,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[1m]))",
+          "expr": "sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[2m])) * 60",
           "legendFormat": "{{job}}",
           "range": true
         }
@@ -135,7 +135,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "오류 코드별 (업무 오류 로그, 분당)",
-      "description": "앱이 업무 오류로 답한 코드(GlobalExceptionHandler 의 '업무 오류 CODE'). DEPENDENCY_UNAVAILABLE 은 의존 대상(Redis · 다른 서비스)을 제때 못 부른 것 — 3번 줄에서 서버 탓인지 앱 탓인지 본다. 4xx 성 코드(중복 · 매진)도 여기 보인다",
+      "description": "앱이 5xx 업무 오류로 답한 코드(공통 · waitingroom 오류 처리기가 5xx 만 '업무 오류 CODE' 로 남긴다). DEPENDENCY_UNAVAILABLE 은 의존 대상(Redis · 다른 서비스)을 제때 못 부른 것 — 3번 줄에서 서버 탓인지 앱 탓인지 본다. 4xx 업무 거절(중복 · 매진)은 로그가 없어 아래 '사전예약 접수 결과' · '대기열 진입 결과'에서 본다",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -259,7 +259,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[2m])))",
           "legendFormat": "{{job}}",
           "range": true
         }
@@ -502,7 +502,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "sum(increase(preorder_scaling_failures_total[1m])) or vector(0)",
+          "expr": "sum(rate(preorder_scaling_failures_total[2m])) * 60 or vector(0)",
           "legendFormat": "실패",
           "range": true
         }
@@ -594,7 +594,7 @@
           "label": "${PROP('Dim.CacheClusterId')}",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName=\"EngineCPUUtilization\"', 'Maximum', 60)",
+          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} CacheClusterId=nova-prod-valkey MetricName=\"EngineCPUUtilization\"', 'Maximum', 60)",
           "statistic": "Maximum"
         }
       ],
@@ -665,10 +665,10 @@
           "region": "default",
           "id": "",
           "period": "60",
-          "label": "${PROP('MetricName')}",
+          "label": "${PROP('MetricName')} ${PROP('Dim.CacheClusterId')}",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName=(\"GetTypeCmdsLatency\" OR \"SetTypeCmdsLatency\" OR \"EvalBasedCmdsLatency\")', 'Maximum', 60)",
+          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} CacheClusterId=nova-prod-valkey MetricName=(\"GetTypeCmdsLatency\" OR \"SetTypeCmdsLatency\" OR \"EvalBasedCmdsLatency\")', 'Maximum', 60)",
           "statistic": "Maximum"
         }
       ],
@@ -735,7 +735,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum by (le, job) (rate(lettuce_seconds_bucket[1m])))",
+          "expr": "histogram_quantile(0.99, sum by (le, job) (rate(lettuce_seconds_bucket[2m])))",
           "legendFormat": "{{job}}",
           "range": true
         }
@@ -803,7 +803,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (job) (increase(lettuce_seconds_count{error!=\"none\"}[1m])) or vector(0)",
+          "expr": "sum by (job) (rate(lettuce_seconds_count{error!=\"none\"}[2m])) * 60 or vector(0)",
           "legendFormat": "실패 {{job}}",
           "range": true
         },
@@ -813,7 +813,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "sum by (job) (max_over_time(lettuce_active_active[1m]))",
+          "expr": "sum by (job) (max_over_time(lettuce_active_active[2m]))",
           "legendFormat": "대기 중 {{job}}",
           "range": true
         }
@@ -894,7 +894,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (outcome) (increase(waitingroom_entry_total[1m]))",
+          "expr": "sum by (outcome) (rate(waitingroom_entry_total[2m])) * 60",
           "legendFormat": "{{outcome}}",
           "range": true
         }
@@ -962,7 +962,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (outcome) (increase(waitingroom_status_total[1m]))",
+          "expr": "sum by (outcome) (rate(waitingroom_status_total[2m])) * 60",
           "legendFormat": "{{outcome}}",
           "range": true
         }
@@ -1046,8 +1046,8 @@
     {
       "id": 19,
       "type": "timeseries",
-      "title": "접수 전달 결과 (waitingroom → preorder, 분당)",
-      "description": "대기열이 preorder 로 넘긴 접수의 응답 코드. 5xx · 시간 초과가 늘면 브레이크가 걸린다",
+      "title": "접수 전달 응답 (waitingroom → preorder, 분당)",
+      "description": "대기열이 preorder 로 넘긴 접수의 응답 코드(게이트웨이 HTTP 클라이언트 지표). 5xx 와 응답 없음(error_type: 시간 초과 · 연결 실패)이 늘면 브레이크가 입장 속도를 줄인다. 2xx · 4xx 는 정상 처리(4xx = 중복 · 매진 등 업무 거절)",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1099,8 +1099,8 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (code) (increase(waitingroom_relay_observed_total[1m]))",
-          "legendFormat": "{{code}}",
+          "expr": "sum by (http_response_status_code, error_type) (rate(http_client_request_duration_seconds_count{job=\"nova/waitingroom\", server_address=~\"preorder.*\"}[2m])) * 60",
+          "legendFormat": "{{http_response_status_code}} {{error_type}}",
           "range": true
         }
       ],
@@ -1167,7 +1167,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (product) (increase(waitingroom_admitted_total[1m]))",
+          "expr": "sum by (product) (rate(waitingroom_admitted_total[2m])) * 60",
           "legendFormat": "입장 {{product}}",
           "range": true
         },
@@ -1245,7 +1245,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (loop) (increase(waitingroom_control_failures_total[1m]))",
+          "expr": "sum by (loop) (rate(waitingroom_control_failures_total[2m])) * 60",
           "legendFormat": "{{loop}}",
           "range": true
         }
@@ -1313,7 +1313,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (result) (increase(nova_preorder_created_total[1m]))",
+          "expr": "sum by (result) (rate(nova_preorder_created_total[2m])) * 60",
           "legendFormat": "{{result}}",
           "range": true
         }
@@ -1381,7 +1381,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum(increase(preorder_accept_bulkhead_rejected_total[1m])) or vector(0)",
+          "expr": "sum(rate(preorder_accept_bulkhead_rejected_total[2m])) * 60 or vector(0)",
           "legendFormat": "거절",
           "range": true
         }
@@ -1459,7 +1459,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "sum(increase(preorder_capacity_heartbeat_failures_total[1m])) or vector(0)",
+          "expr": "sum(rate(preorder_capacity_heartbeat_failures_total[2m])) * 60 or vector(0)",
           "legendFormat": "하트비트 실패",
           "range": true
         }
@@ -1541,7 +1541,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (cache) (rate(nova_read_cache_requests_total{outcome=~\"hit|hit_refresh\"}[1m])) / sum by (cache) (rate(nova_read_cache_requests_total[1m]))",
+          "expr": "sum by (cache) (rate(nova_read_cache_requests_total{outcome=~\"hit|hit_refresh\"}[2m])) / sum by (cache) (rate(nova_read_cache_requests_total[2m]))",
           "legendFormat": "{{cache}}",
           "range": true
         }
@@ -1557,7 +1557,7 @@
       "id": 27,
       "type": "timeseries",
       "title": "읽기 캐시 결과 (분당)",
-      "description": "load = DB 에서 읽음, wait = 같은 키를 다른 요청이 읽는 중이라 기다림. wait 가 많으면 같은 키에 몰린 것이다(기다림 5초를 넘으면 503)",
+      "description": "load = 캐시에 없어 원본을 부름(DB 또는 다른 서비스 — catalog 의 사전예약 회차는 preorder 호출), wait = 같은 키를 다른 요청이 읽는 중이라 기다림. wait 가 많으면 같은 키에 몰린 것이다(기다림 5초를 넘으면 503)",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1609,7 +1609,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (cache, outcome) (increase(nova_read_cache_requests_total[1m]))",
+          "expr": "sum by (cache, outcome) (rate(nova_read_cache_requests_total[2m])) * 60",
           "legendFormat": "{{cache}} {{outcome}}",
           "range": true
         }
@@ -1681,10 +1681,10 @@
           "region": "default",
           "id": "",
           "period": "60",
-          "label": "${PROP('MetricName')}",
+          "label": "${PROP('MetricName')} ${PROP('Dim.CacheClusterId')}",
           "metricQueryType": 0,
           "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName=(\"CacheHits\" OR \"CacheMisses\")', 'Sum', 60)",
+          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} CacheClusterId=nova-prod-valkey MetricName=(\"CacheHits\" OR \"CacheMisses\")', 'Sum', 60)",
           "statistic": "Sum"
         }
       ],
