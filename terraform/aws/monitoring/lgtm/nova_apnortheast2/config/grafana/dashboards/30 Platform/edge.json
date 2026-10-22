@@ -984,442 +984,6 @@
     },
     {
       "type": "row",
-      "title": "WAF",
-      "id": 15,
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 36
-      },
-      "panels": []
-    },
-    {
-      "type": "timeseries",
-      "title": "CloudFront WAF 허용 · 차단",
-      "description": "Web ACL nova-prod-cloudfront. 5분 합. 경보: 차단 급증(monitoring 스택)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "허용",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"AllowedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
-          "statistic": "Average"
-        },
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "B",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "차단",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
-          "statistic": "Average"
-        },
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "C",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "카운트(차단 안 함)",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"CountedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
-          "statistic": "Average"
-        }
-      ],
-      "id": 16,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 37
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "ALB WAF 허용 · 차단",
-      "description": "Web ACL nova-prod-alb. 5분 합. 경보: 차단 급증(monitoring 스택)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never"
-          },
-          "min": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "허용",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"AllowedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
-          "statistic": "Average"
-        },
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "B",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "차단",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
-          "statistic": "Average"
-        },
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "C",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "카운트(차단 안 함)",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"CountedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
-          "statistic": "Average"
-        }
-      ],
-      "id": 17,
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 37
-      }
-    },
-    {
-      "type": "bargauge",
-      "title": "차단 규칙 (CloudFront, 기간 합)",
-      "description": "어느 규칙이 차단했는지. 정상 요청이 걸리면(오탐) 그 규칙을 카운트 모드로 돌려 본다",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.Rule')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\" NOT Rule=\"ALL\"', 'Sum', 3600)",
-          "statistic": "Average"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 22,
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "Value",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "id": 18,
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 0,
-        "y": 45
-      }
-    },
-    {
-      "type": "bargauge",
-      "title": "차단 국가 (CloudFront, 기간 합)",
-      "description": "",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.Country')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Country,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\"', 'Sum', 3600)",
-          "statistic": "Average"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 22,
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "Value",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "id": 19,
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 8,
-        "y": 45
-      }
-    },
-    {
-      "type": "bargauge",
-      "title": "차단 공격 유형 (CloudFront, 기간 합)",
-      "description": "관리형 규칙이 분류한 공격 유형(봇 · LFI · RFI 등)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.Attack')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/WAFV2,Attack,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\"', 'Sum', 3600)",
-          "statistic": "Average"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 22,
-        "reduceOptions": {
-          "calcs": [
-            "sum"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "sortBy",
-          "options": {
-            "sort": [
-              {
-                "field": "Value",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ],
-      "id": 20,
-      "gridPos": {
-        "h": 9,
-        "w": 8,
-        "x": 16,
-        "y": 45
-      }
-    },
-    {
-      "type": "row",
       "title": "ALB",
       "id": 21,
       "collapsed": false,
@@ -1427,7 +991,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 36
       },
       "panels": []
     },
@@ -1486,7 +1050,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 55
+        "y": 37
       }
     },
     {
@@ -1541,7 +1105,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 55
+        "y": 37
       }
     },
     {
@@ -1596,7 +1160,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 55
+        "y": 37
       }
     },
     {
@@ -1723,7 +1287,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 63
+        "y": 45
       }
     },
     {
@@ -1794,7 +1358,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 63
+        "y": 45
       }
     },
     {
@@ -1877,129 +1441,567 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 63
+        "y": 45
       }
+    },
+    {
+      "type": "row",
+      "title": "WAF",
+      "id": 15,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "CloudFront WAF 허용 · 차단",
+          "description": "Web ACL nova-prod-cloudfront. 5분 합. 경보: 차단 급증(monitoring 스택)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "A",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "허용",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"AllowedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "B",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "차단",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "C",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "카운트(차단 안 함)",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"CountedRequests\" WebACL=\"nova-prod-cloudfront\" Rule=\"ALL\"', 'Sum', 300)",
+              "statistic": "Average"
+            }
+          ],
+          "id": 16,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 54
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "ALB WAF 허용 · 차단",
+          "description": "Web ACL nova-prod-alb. 5분 합. 경보: 차단 급증(monitoring 스택)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never"
+              },
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "A",
+              "queryMode": "Metrics",
+              "region": "default",
+              "id": "",
+              "period": "300",
+              "label": "허용",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"AllowedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "B",
+              "queryMode": "Metrics",
+              "region": "default",
+              "id": "",
+              "period": "300",
+              "label": "차단",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "C",
+              "queryMode": "Metrics",
+              "region": "default",
+              "id": "",
+              "period": "300",
+              "label": "카운트(차단 안 함)",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Region,Rule,WebACL} MetricName=\"CountedRequests\" WebACL=\"nova-prod-alb\" Rule=\"ALL\"', 'Sum', 300)",
+              "statistic": "Average"
+            }
+          ],
+          "id": 17,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 54
+          }
+        },
+        {
+          "type": "bargauge",
+          "title": "차단 규칙 (CloudFront, 기간 합)",
+          "description": "어느 규칙이 차단했는지. 정상 요청이 걸리면(오탐) 그 규칙을 카운트 모드로 돌려 본다",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "A",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "${PROP('Dim.Rule')}",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Rule,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\" NOT Rule=\"ALL\"', 'Sum', 3600)",
+              "statistic": "Average"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "sum"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 18,
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 0,
+            "y": 62
+          }
+        },
+        {
+          "type": "bargauge",
+          "title": "차단 국가 (CloudFront, 기간 합)",
+          "description": "",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "A",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "${PROP('Dim.Country')}",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Country,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\"', 'Sum', 3600)",
+              "statistic": "Average"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "sum"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 19,
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 8,
+            "y": 62
+          }
+        },
+        {
+          "type": "bargauge",
+          "title": "차단 공격 유형 (CloudFront, 기간 합)",
+          "description": "관리형 규칙이 분류한 공격 유형(봇 · LFI · RFI 등)",
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
+              },
+              "refId": "A",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "${PROP('Dim.Attack')}",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/WAFV2,Attack,WebACL} MetricName=\"BlockedRequests\" WebACL=\"nova-prod-cloudfront\"', 'Sum', 3600)",
+              "statistic": "Average"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "sum"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ],
+          "id": 20,
+          "gridPos": {
+            "h": 9,
+            "w": 8,
+            "x": 16,
+            "y": 62
+          }
+        }
+      ]
     },
     {
       "type": "row",
       "title": "인증서",
       "id": 28,
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 71
+        "y": 54
       },
-      "panels": []
-    },
-    {
-      "type": "bargauge",
-      "title": "인증서 만료까지 남은 날",
-      "description": "ACM 인증서(서울 · us-east-1). DNS 검증이면 자동 갱신된다. 30일 아래로 내려가면 갱신이 막힌 것이다(검증 레코드 삭제 등)",
-      "datasource": {
-        "type": "cloudwatch",
-        "uid": "cloudwatch"
-      },
-      "targets": [
+      "panels": [
         {
+          "type": "bargauge",
+          "title": "인증서 만료까지 남은 날",
+          "description": "ACM 인증서(서울 · us-east-1). DNS 검증이면 자동 갱신된다. 30일 아래로 내려가면 갱신이 막힌 것이다(검증 레코드 삭제 등)",
           "datasource": {
             "type": "cloudwatch",
             "uid": "cloudwatch"
           },
-          "refId": "A",
-          "queryMode": "Metrics",
-          "region": "default",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.CertificateArn')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/CertificateManager,CertificateArn} MetricName=\"DaysToExpiry\"', 'Minimum', 86400)",
-          "statistic": "Average"
-        },
-        {
-          "datasource": {
-            "type": "cloudwatch",
-            "uid": "cloudwatch"
-          },
-          "refId": "B",
-          "queryMode": "Metrics",
-          "region": "us-east-1",
-          "id": "",
-          "period": "300",
-          "label": "${PROP('Dim.CertificateArn')}",
-          "metricQueryType": 0,
-          "metricEditorMode": 1,
-          "expression": "SEARCH('{AWS/CertificateManager,CertificateArn} MetricName=\"DaysToExpiry\"', 'Minimum', 86400)",
-          "statistic": "Average"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "d",
-          "min": 0,
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
+          "targets": [
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
               },
-              {
-                "color": "orange",
-                "value": 14
+              "refId": "A",
+              "queryMode": "Metrics",
+              "region": "default",
+              "id": "",
+              "period": "300",
+              "label": "${PROP('Dim.CertificateArn')}",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/CertificateManager,CertificateArn} MetricName=\"DaysToExpiry\"', 'Minimum', 86400)",
+              "statistic": "Average"
+            },
+            {
+              "datasource": {
+                "type": "cloudwatch",
+                "uid": "cloudwatch"
               },
-              {
-                "color": "green",
-                "value": 30
-              }
-            ]
-          },
-          "max": 400
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "gradient",
-        "showUnfilled": true,
-        "valueMode": "color",
-        "namePlacement": "left",
-        "sizing": "auto",
-        "minVizHeight": 12,
-        "maxVizHeight": 22,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
+              "refId": "B",
+              "queryMode": "Metrics",
+              "region": "us-east-1",
+              "id": "",
+              "period": "300",
+              "label": "${PROP('Dim.CertificateArn')}",
+              "metricQueryType": 0,
+              "metricEditorMode": 1,
+              "expression": "SEARCH('{AWS/CertificateManager,CertificateArn} MetricName=\"DaysToExpiry\"', 'Minimum', 86400)",
+              "statistic": "Average"
+            }
           ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "transformations": [
-        {
-          "id": "sortBy",
+          "fieldConfig": {
+            "defaults": {
+              "unit": "d",
+              "min": 0,
+              "color": {
+                "mode": "thresholds"
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 14
+                  },
+                  {
+                    "color": "green",
+                    "value": 30
+                  }
+                ]
+              },
+              "max": 400
+            },
+            "overrides": []
+          },
           "options": {
-            "sort": [
-              {
-                "field": "Value",
-                "desc": false
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color",
+            "namePlacement": "left",
+            "sizing": "auto",
+            "minVizHeight": 12,
+            "maxVizHeight": 22,
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "transformations": [
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [
+                  {
+                    "field": "Value",
+                    "desc": false
+                  }
+                ]
               }
-            ]
+            }
+          ],
+          "id": 29,
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 55
           }
         }
-      ],
-      "id": 29,
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 72
-      }
+      ]
     }
   ],
   "annotations": {

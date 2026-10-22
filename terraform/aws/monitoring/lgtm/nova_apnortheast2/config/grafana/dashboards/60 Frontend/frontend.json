@@ -1017,266 +1017,6 @@
     },
     {
       "type": "row",
-      "title": "핵심 동작",
-      "collapsed": false,
-      "panels": [],
-      "id": 16,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 40
-      }
-    },
-    {
-      "type": "table",
-      "title": "동작별 소요 시간 · API 실패",
-      "description": "버튼에 이름(data-faro-user-action-name)을 단 동작만 센다. 소요 시간은 누른 뒤 그 동작이 일으킨 요청 · 화면 변화가 끝나기까지. API 실패율은 그 동작에서 나간 호출 중 5xx 비율",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "ms"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p95"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "ms"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "orange",
-                      "value": 1000
-                    },
-                    {
-                      "color": "red",
-                      "value": 3000
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "API 실패율"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "orange",
-                      "value": 0.01
-                    },
-                    {
-                      "color": "red",
-                      "value": 0.05
-                    }
-                  ]
-                }
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "sortBy": [
-          {
-            "displayName": "p95",
-            "desc": true
-          }
-        ],
-        "cellHeight": "sm"
-      },
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true
-            },
-            "renameByName": {
-              "event_data_userActionName": "동작",
-              "Value #A": "횟수",
-              "Value #B": "p50",
-              "Value #C": "p95",
-              "Value #D": "API 실패율"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "A",
-          "expr": "sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt [$__range]))",
-          "legendFormat": "",
-          "queryType": "instant",
-          "instant": true,
-          "range": false
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "B",
-          "expr": "quantile_over_time(0.5, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__range]) by (event_data_userActionName)",
-          "legendFormat": "",
-          "queryType": "instant",
-          "instant": true,
-          "range": false
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "C",
-          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__range]) by (event_data_userActionName)",
-          "legendFormat": "",
-          "queryType": "instant",
-          "instant": true,
-          "range": false
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "D",
-          "expr": "(sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | event_data_http_response_status_code >= 500 | label_format event_data_userActionName=\"{{.action_name}}\" [$__range])) or 0 * sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | label_format event_data_userActionName=\"{{.action_name}}\" [$__range]))) / sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | label_format event_data_userActionName=\"{{.action_name}}\" [$__range]))",
-          "legendFormat": "",
-          "queryType": "instant",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "id": 17,
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 41
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "동작별 소요 시간 p95",
-      "description": "핵심 동작이 사용자 기준으로 얼마나 걸리는지",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms",
-          "min": 0,
-          "custom": {
-            "fillOpacity": 10,
-            "showPoints": "never"
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "A",
-          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__auto]) by (event_data_userActionName)",
-          "legendFormat": "{{event_data_userActionName}}"
-        }
-      ],
-      "id": 18,
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 48
-      },
-      "interval": "5m"
-    },
-    {
-      "type": "row",
       "title": "API 체감 시간",
       "collapsed": false,
       "panels": [],
@@ -1285,7 +1025,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 40
       }
     },
     {
@@ -1342,7 +1082,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 57
+        "y": 41
       },
       "interval": "5m"
     },
@@ -1462,174 +1202,269 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 57
+        "y": 41
       }
     },
     {
       "type": "row",
-      "title": "사용 환경",
-      "collapsed": false,
-      "panels": [],
-      "id": 22,
+      "title": "핵심 동작",
+      "collapsed": true,
+      "panels": [
+        {
+          "type": "table",
+          "title": "동작별 소요 시간 · API 실패",
+          "description": "버튼에 이름(data-faro-user-action-name)을 단 동작만 센다. 소요 시간은 누른 뒤 그 동작이 일으킨 요청 · 화면 변화가 끝나기까지. API 실패율은 그 동작에서 나간 호출 중 5xx 비율",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto"
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p50"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "p95"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "orange",
+                          "value": 1000
+                        },
+                        {
+                          "color": "red",
+                          "value": 3000
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "API 실패율"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percentunit"
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "orange",
+                          "value": 0.01
+                        },
+                        {
+                          "color": "red",
+                          "value": 0.05
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "sortBy": [
+              {
+                "displayName": "p95",
+                "desc": true
+              }
+            ],
+            "cellHeight": "sm"
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "renameByName": {
+                  "event_data_userActionName": "동작",
+                  "Value #A": "횟수",
+                  "Value #B": "p50",
+                  "Value #C": "p95",
+                  "Value #D": "API 실패율"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "refId": "A",
+              "expr": "sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt [$__range]))",
+              "legendFormat": "",
+              "queryType": "instant",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "refId": "B",
+              "expr": "quantile_over_time(0.5, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__range]) by (event_data_userActionName)",
+              "legendFormat": "",
+              "queryType": "instant",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "refId": "C",
+              "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__range]) by (event_data_userActionName)",
+              "legendFormat": "",
+              "queryType": "instant",
+              "instant": true,
+              "range": false
+            },
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "refId": "D",
+              "expr": "(sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | event_data_http_response_status_code >= 500 | label_format event_data_userActionName=\"{{.action_name}}\" [$__range])) or 0 * sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | label_format event_data_userActionName=\"{{.action_name}}\" [$__range]))) / sum by (event_data_userActionName) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | action_name!=\"\" | label_format event_data_userActionName=\"{{.action_name}}\" [$__range]))",
+              "legendFormat": "",
+              "queryType": "instant",
+              "instant": true,
+              "range": false
+            }
+          ],
+          "id": 17,
+          "gridPos": {
+            "h": 7,
+            "w": 24,
+            "x": 0,
+            "y": 50
+          }
+        },
+        {
+          "type": "timeseries",
+          "title": "동작별 소요 시간 p95",
+          "description": "핵심 동작이 사용자 기준으로 얼마나 걸리는지",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "min": 0,
+              "custom": {
+                "fillOpacity": 10,
+                "showPoints": "never"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "refId": "A",
+              "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.user.action\" | logfmt | unwrap event_data_userActionDuration | __error__=\"\" [$__auto]) by (event_data_userActionName)",
+              "legendFormat": "{{event_data_userActionName}}"
+            }
+          ],
+          "id": 18,
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 57
+          },
+          "interval": "5m"
+        }
+      ],
+      "id": 16,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 49
       }
-    },
-    {
-      "type": "piechart",
-      "title": "브라우저",
-      "description": "세션 시작 기준",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "values": false
-        },
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "donut"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "A",
-          "expr": "sum by (browser_name) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" | logfmt [$__range]))",
-          "legendFormat": "{{browser_name}}"
-        }
-      ],
-      "id": 23,
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 0,
-        "y": 66
-      },
-      "maxDataPoints": 1
-    },
-    {
-      "type": "piechart",
-      "title": "운영체제",
-      "description": "세션 시작 기준",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "values": false
-        },
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "donut"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "A",
-          "expr": "sum by (browser_os) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" | logfmt [$__range]))",
-          "legendFormat": "{{browser_os}}"
-        }
-      ],
-      "id": 24,
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 8,
-        "y": 66
-      },
-      "maxDataPoints": 1
-    },
-    {
-      "type": "piechart",
-      "title": "모바일",
-      "description": "세션 시작 기준",
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "values": false
-        },
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "pieType": "donut"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "refId": "A",
-          "expr": "sum by (browser_mobile) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=session_start\" | logfmt [$__range]))",
-          "legendFormat": "{{browser_mobile}}"
-        }
-      ],
-      "id": 25,
-      "gridPos": {
-        "h": 7,
-        "w": 8,
-        "x": 16,
-        "y": 66
-      },
-      "maxDataPoints": 1
     }
   ]
 }

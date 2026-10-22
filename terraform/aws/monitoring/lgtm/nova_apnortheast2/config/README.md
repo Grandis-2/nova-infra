@@ -170,7 +170,7 @@ flowchart LR
 > 화면은 부하 시험 전에 찍었다. 구성을 보여 주는 용도이고, 수치에는 의미가 없다.
 
 <details>
-<summary>대시보드 화면 (11개)</summary>
+<summary>대시보드 화면 (9개)</summary>
 
 **SLO**
 
@@ -200,10 +200,6 @@ flowchart LR
 
 <img alt="엣지 · 보안" src="../../../../../../docs/architecture/img/grafana/edge.jpg" width="100%">
 
-**계정 · 비용**
-
-<img alt="계정 · 비용" src="../../../../../../docs/architecture/img/grafana/account.jpg" width="100%">
-
 **프런트 (실사용자)**
 
 <img alt="프런트 (실사용자)" src="../../../../../../docs/architecture/img/grafana/frontend.jpg" width="100%">
@@ -211,10 +207,6 @@ flowchart LR
 **LGTM 스택 · obs 호스트**
 
 <img alt="LGTM 스택 · obs 호스트" src="../../../../../../docs/architecture/img/grafana/lgtm.jpg" width="100%">
-
-**OpenTelemetry Collector**
-
-<img alt="OpenTelemetry Collector" src="../../../../../../docs/architecture/img/grafana/otelcol.jpg" width="100%">
 
 </details>
 
@@ -228,11 +220,11 @@ flowchart LR
 | `01 Overview` | 개요 (`nova-overview`) | 로그인 첫 화면. "지금 문제가 있나, 어느 서비스인가"만 답한다. 선택 기간의 요청 수 · 5xx 건수와 비율 · 0.5초 초과 비율 · 지금 5xx 를 내는 서비스 수, 서비스 현황 표(분당 요청 · 5xx 비율 · 0.5초 초과 · p95 · CPU 최대 · 인스턴스 · 힙, 5xx 순, 누르면 서비스 상세), 울리는 경보, 서비스별 5xx · CPU 최대 · 인스턴스 수 · 요청 · p95 를 같은 시간축으로. 원인은 서비스 상세 · 오픈 상황판에서 본다. SLO (`nova-slo`): 서비스별 30일 가용성 · 응답 시간, 남은 오류 예산, 소진 속도 |
 | `05 Business` | 업무 (`nova-business`) | 예약 접수가 실제로 되는지 본다. 접수 중인 회차, 일반 회원 신규 예약, 최근 20분 접수 상태(접수 중인데 0건이면 "멈춤 의심"), 거절 · 오류 비율, 결과별 · 경로별 신규 예약, 예약 상태별 수, 결제 기한 지난 예약, DLQ · 오픈 알림 대기. 오픈 상황판 (`nova-open`): 오픈 · 부하 시험 때 사용자 오류에서 원인까지 분 단위로 따라간다(앱 지표는 1분마다 보내 rate 구간(최소 2분)으로 분당 값을 그린다) — ① 서비스별 5xx · 오류 코드 · p95 ② 서비스 CPU · 태스크 수 · 미리 늘린 최소 대수 ③ Valkey 서버(엔진 CPU · 명령 처리 시간)와 앱이 본 Redis(Lettuce 명령 p99 · 실패 · 밀린 명령)를 나란히 ④ 대기열 진입 · 순번 조회 결과, 입장 속도 배율, 접수 전달 응답(5xx · 응답 없음), 입장 · 대기 인원, 제어 실패, 접수 결과, 앞단 거절, preorder 하트비트 ⑤ 읽기 캐시 적중률 · 결과, Valkey 적중 · 실패 |
 | `10 Services` | 서비스 상세 (`nova-service`) | 서비스 하나(`$service`). 맨 위 숫자(선택 기간 요청 수 · 5xx 건수 · 비율 · 0.5초 초과 · p95, 지금 CPU 최대 · 인스턴스 · DB 풀) → 원인 추적(5xx 업무 오류 코드 · 태스크별 CPU · 인스턴스 수 · 이 서비스가 본 Redis 명령 시간 · DB 커넥션 대기 · 나가는 호출 오류율(대상 서비스 · DB 별)) → API 표(선택 기간 호출 수 · 5xx 수 · 비율 · P50 · P95 · 시간 비중, 호출 수 순) → 처리 시간 구성 · 서비스 맵 · 호출 상대 → 오류 종류(예외 · 업무 오류 코드) · 로그 · 트레이스. JVM · 외부 호출 · HikariCP 는 접힌 행에 있다 |
-| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS · 비동기 흐름 (`nova-sqs`) | DB TPS · 연결 사용률 · 상위 SQL, 버퍼 풀 사용률 · 적중률 · 디스크 I/O · 풀 스캔 · 테이블 캐시 · 잠금. NCP 에서 나오지 않는 패널(processlist · innodb_metrics · RDS 서버 자원)은 맨 아래 "RDS 전용" 행에 접어 둔다. 캐시 적중률 · 메모리, 큐마다 보내는 서비스와 처리하는 서비스, 처리 오류율 · 처리 시간(트레이스) · 적체 · DLQ |
-| `30 Platform` | ECS · 컴퓨팅 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) · 계정 · 비용 (`nova-account`) | 서비스별 할당 대비 CPU · 메모리와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, NAT · obs EC2 / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), 접근 로그로 본 요청 구간(CloudFront 응답 시간 · 구간별 시간 · 캐시 결과 · 엣지 위치별, 느린 요청과 5xx 로그에서 앱 트레이스로), WAF 차단(규칙 · 국가 · 공격 유형), ALB 대상 그룹별, 인증서 만료 / Fargate 한도, 알림 전달 실패, Logs 수집량, S3 크기 |
+| `20 Data` | MySQL (`nova-mysql`) · Valkey (`nova-valkey`) · SQS · 비동기 흐름 (`nova-sqs`) | RDS MySQL: 지금 exporter 연결 · 연결 사용률 · 실행 중 스레드 · 오래 도는 쿼리 · 행 잠금 대기 · CPU · 스토리지 → DB 가 바쁜가(TPS · QPS · CPU · CPU 크레딧 잔액과 초과 사용(t4g Unlimited 과금) · 계정(서비스)별 연결 · 쿼리 상태별 스레드) → 무엇이 느린가(상위 SQL · 행 잠금 · 교착 · 버퍼 풀 적중률) → 디스크 · 메모리(접힘). Valkey: 엔진 CPU · 메모리 · 적중률 · 명령 수 · 응답 지연(Lua 포함) · 축출. SQS: 큐마다 보내는 서비스와 처리하는 서비스, 처리 오류율 · 처리 시간(트레이스) · 적체 · 가장 오래된 메시지 · 공정 큐의 몰린 상품 그룹 수 · DLQ |
+| `30 Platform` | 컴퓨팅 · 계정 (`nova-compute`) · 엣지 · 보안 (`nova-edge`) | 서비스별 할당 대비 CPU · 메모리(1분)와 가장 바쁜 태스크, 실행 중 · 새로 뜬 태스크, 접힌 줄에 NAT · obs EC2 와 계정 · 비용(Fargate vCPU 한도, 알림 전달 실패, Logs 수집량, S3 크기) / CloudFront(캐시 적중률 · 오리진 지연 · 오류 코드), 접근 로그로 본 요청 구간(CloudFront 응답 시간 · 구간별 시간 · 캐시 결과 · 엣지 위치별, 느린 요청과 5xx 로그에서 앱 트레이스로), ALB 대상 그룹별, 접힌 줄에 WAF 차단(규칙 · 국가 · 공격 유형) · 인증서 만료 |
 | `40 API` | API 상세 (`nova-api`) | API 하나(서비스 · 메서드 · 경로). 선택 기간 호출 수 · 5xx 수 · 비율 · 4xx 비율 · p95 · 0.5초 초과 → 응답 코드별 요청 · p50/p95/p99 · 지난주 같은 시각 비교 → 느린 · 오류 트레이스 → 시간 구성 · 이 API 안에서 오래 걸린 호출 · 느린 DB 쿼리 → 서비스의 5xx 업무 오류 코드 · WARN/ERROR 로그. 서비스 상세의 API 표에서 경로를 누르면 온다 |
-| `60 Frontend` | 프런트 · 실사용자 (`nova-frontend`) | 브라우저(Faro)가 보낸 데이터로 본 사용자 체감 성능. 세션 · JS 오류 · LCP · INP · CLS p75, 페이지별 웹 바이탈, 오류 종류 · 메시지 Top · 최근 오류, 핵심 동작(버튼 이름)별 소요 시간 · API 실패율, 브라우저와 서버가 잰 API p95, 느린 API, 브라우저 · OS · 모바일 비율. 세션을 샘플링하므로 수치는 전체가 아니다 |
-| `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) · OpenTelemetry Collector (`nova-otelcol`) | obs 가 데이터를 빠뜨리지 않는지, 디스크 · 메모리가 모자라지 않는지. 카디널리티 · 한도(시계열 · 스트림 한도 사용률, 시계열 많은 지표 · job Top 10, 게이트웨이 전송 큐) |
+| `60 Frontend` | 프런트 · 실사용자 (`nova-frontend`) | 브라우저(Faro)가 보낸 데이터로 본 사용자 체감 성능. 세션 · JS 오류 · LCP · INP · CLS p75, 페이지별 웹 바이탈, 오류 종류 · 메시지 Top · 최근 오류, 브라우저와 서버가 잰 API p95, 느린 API, 접힌 줄에 핵심 동작(버튼 이름)별 소요 시간 · API 실패율. 세션을 샘플링하므로 수치는 전체가 아니다 |
+| `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) | obs 가 데이터를 빠뜨리지 않는지, 디스크 · 메모리가 모자라지 않는지. 카디널리티 · 한도(시계열 · 스트림 한도 사용률, 시계열 많은 지표 · job Top 10, 게이트웨이 전송 큐) |
 
 - Grafana 는 폴더를 이름순으로만 정렬하므로 폴더 이름 앞에 번호를 붙여 순서를 정한다. 번호는 10 단위로 띄워서 나중에 사이에 폴더를 끼울 수 있게 했다.
 
@@ -253,7 +245,6 @@ flowchart LR
 - 태스크 수는 두 가지로 본다. 활성 태스크는 `AWS/ECS` 의 `LiveTaskCount`(뜨는 중 · 내려가는 중 포함)이고, 새로 뜬 태스크는 `target_info` 에 처음 보인 instance 수다. 새로 뜬 태스크에는 배포 · 스케일 아웃 · 장애 재시작이 모두 들어간다.
   태스크가 뜨지 못하면 CloudWatch 경보(태스크 0개 · ECS 이벤트)가 알린다.
 - CloudFront 배포는 `Product=nova` 태그로, NAT · obs 인스턴스는 이름 태그로 찾는다. 대시보드에 ID 를 적지 않았으므로 리소스를 다시 만들거나 ASG 가 인스턴스를 교체해도 대시보드가 그대로 동작한다.
-- `otelcol.json` 은 grafana.com 15983 rev 31 을 가져왔다. 원본과 다른 곳은 uid · `nova` 태그 · 데이터소스(Mimir) · job(`otel-gateway`) 기본값 네 군데뿐이고, 새 리비전으로 바꿀 때도 여기만 다시 맞추면 된다. obs Collector 를 보려면 job 목록에서 `otelcol-contrib` 을 고른다.
 
 </details>
 
@@ -655,7 +646,7 @@ preorder 가 1분마다 회차 일정을 보고 waitingroom · preorder 의 최�
 
 ### obs 수집 실패
 
-OpenTelemetry Collector 대시보드(job `otel-gateway`)에서 로그, 트레이스, 지표 중 어느 신호에서 거부나 내보내기 실패가 났는지 본다. 큐가 차 있으면(`otelcol_exporter_queue_size`) obs 가 데이터를 받지 못하는 상태다. `memory_limiter` 때문에 거부했다면 수신량이 갑자기 늘었는지 보고, 내보내기에 실패했다면 Loki · Tempo · Mimir 가 정상인지 본다.
+LGTM 대시보드의 "거부 · 실패" 줄에서 수신기 · 신호(로그, 트레이스, 지표)별로 어디서 거부나 내보내기 실패가 났는지 보고, "카디널리티 · 한도" 줄의 게이트웨이 전송 큐를 본다. 큐가 차 있으면(`otelcol_exporter_queue_size`) obs 가 데이터를 받지 못하는 상태다. `memory_limiter` 때문에 거부했다면 수신량이 갑자기 늘었는지 보고, 내보내기에 실패했다면 Loki · Tempo · Mimir 가 정상인지 본다.
 
 ### obs 저장소 거부
 

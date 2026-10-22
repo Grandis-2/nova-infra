@@ -440,7 +440,7 @@
     {
       "type": "timeseries",
       "title": "응답 지연",
-      "description": "서버 안에서 명령을 처리한 시간. 앱의 Redis timeout(300~500ms)과 견줘 본다",
+      "description": "서버 안에서 명령을 처리한 시간. 앱의 Redis timeout(300~500ms)과 견줘 본다 Lua(Eval) 명령 처리 시간도 함께 본다 — 대기열은 Lua 스크립트를 많이 쓴다.",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -509,6 +509,28 @@
           },
           "matchExact": true,
           "statistic": "p99",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "C",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "",
+          "label": "Lua(Eval) 명령 최대",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/ElastiCache",
+          "metricName": "EvalBasedCmdsLatency",
+          "dimensions": {
+            "CacheClusterId": "$node"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
           "expression": ""
         }
       ],

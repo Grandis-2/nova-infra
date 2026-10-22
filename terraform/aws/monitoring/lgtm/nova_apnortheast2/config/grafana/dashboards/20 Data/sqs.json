@@ -704,6 +704,64 @@
       }
     },
     {
+      "id": 15,
+      "type": "timeseries",
+      "title": "공정 큐: 몰린 상품 그룹 수",
+      "description": "preorder-register · preorder-cancel 은 상품 id 를 메시지 그룹으로 붙여 보낸다(표준 큐의 공정 큐). 한 상품이 몰려 처리량을 독차지하면 그 그룹을 '시끄러운 그룹'으로 센다. 0 보다 크면 그 상품 오픈이 다른 상품 처리를 늦추고 있을 수 있다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "60",
+          "label": "${PROP('Dim.QueueName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/SQS,QueueName} MetricName=\"ApproximateNumberOfNoisyGroups\" (QueueName=\"preorder-register\" OR QueueName=\"preorder-cancel\")', 'Maximum', 60)",
+          "statistic": "Maximum"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "type": "row",
       "title": "DLQ",
       "id": 13,
@@ -712,7 +770,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 35
+        "y": 43
       },
       "panels": []
     },
@@ -784,7 +842,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 44
       }
     }
   ],
