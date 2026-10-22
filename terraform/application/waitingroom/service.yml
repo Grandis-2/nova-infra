@@ -1,7 +1,7 @@
 # 대기열 입장 판정 + POST /api/v1/preorders 중계 (Spring Cloud Gateway)
 image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상 또는 버전 태그(0.0.N-rM)
-cpu: 1024
-memory: 2048
+cpu: 2048                      # 1대가 첫 몰림을 받는다. JIT 예열(CPU 의 절반)을 한 번만 치르게 1대를 키웠다(부하 시험 10-22)
+memory: 4096                   # Fargate 는 vCPU 2 에 최소 4 GiB
 port: 8085
 management_port: 9085          # 앱 기본값(WaitingroomDefaults)과 맞춘다
 deployment: blue_green
