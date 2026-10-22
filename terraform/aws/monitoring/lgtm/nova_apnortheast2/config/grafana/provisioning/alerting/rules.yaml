@@ -160,7 +160,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "preorder 가 회차 일정에 맞춰 waitingroom · preorder 최소 대수를 10분 동안 {{ with .Values.B }}{{ .Value }}{{ end }} 번 바꾸지 못했다 — 오픈 전이면 미리 늘리지 못한 채 몰림을 맞는다"
+          summary: "preorder 가 회차 일정에 맞춰 waitingroom · preorder 최소 대수를 10분 동안 약 {{ with .Values.B }}{{ printf `%.0f` .Value }}{{ end }} 번 바꾸지 못했다 — 오픈 전이면 미리 늘리지 못한 채 몰림을 맞는다"
           runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#회차-증설-실패"
         data:
           - refId: A
@@ -169,9 +169,9 @@ groups:
             model:
               refId: A
               instant: true
-              # 1분마다 맞추고 실패하면 다음 주기에 다시 한다. 한두 번은 넘기고 계속 실패할 때만 본다.
-              # increase 는 창 경계를 외삽해 소수가 나오므로 반올림해 횟수로 본다
-              expr: "round(sum(increase(preorder_scaling_failures_total[10m])))"
+              # 1분마다 맞추고 실패하면 다음 주기에 다시 한다. 한두 번은 넘기고 3번 이상 실패할 때만 본다.
+              # increase 는 창 경계를 외삽해 2번이 2.2 처럼 나오므로 기준을 2.5 로 둔다(반올림 없이 비교)
+              expr: "sum(increase(preorder_scaling_failures_total[10m]))"
           - refId: B
             datasourceUid: __expr__
             model:
@@ -186,7 +186,7 @@ groups:
               type: threshold
               expression: B
               conditions:
-                - evaluator: {type: gt, params: [2]}
+                - evaluator: {type: gt, params: [2.5]}
       - uid: nova-frontend-errors
         title: 프런트 JS 오류 급증
         condition: C

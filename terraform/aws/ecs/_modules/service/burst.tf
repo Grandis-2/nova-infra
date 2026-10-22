@@ -287,10 +287,16 @@ resource "aws_cloudwatch_metric_alarm" "at_max" {
   tags = var.tags
 }
 
-# 오토스케일링이 없는 서비스(max ≤ min, 예: singleton 배치)는 늘릴 수 없으니 CPU 가 오래 높으면 바로 사람을 부른다.
-# 오토스케일링이 있는 서비스는 증설 경보가 늘리고, 다 늘린 뒤에는 위의 증설 한계 경보가 울린다
+# 늘릴 수 없는 서비스(max ≤ min 이거나 늘리는 정책이 하나도 없음, 예: singleton 배치)는 CPU 가 오래 높으면 바로 사람을 부른다.
+# 늘릴 수 있는 서비스는 증설 경보 · 대상 추적이 늘리고, 다 늘린 뒤에는 위의 증설 한계 경보가 울린다
+locals {
+  can_scale_out = local.burst_on && (
+    var.cpu_target > 0 || var.request_count_target > 0 || var.queue_backlog != null || length(local.burst) > 0
+  )
+}
+
 resource "aws_cloudwatch_metric_alarm" "cpu_fixed" {
-  count = var.create_service && !local.burst_on ? 1 : 0
+  count = var.create_service && !local.can_scale_out ? 1 : 0
 
   alarm_name          = "${var.name}-cpu-high"
   alarm_description   = "${var.name} has no auto scaling and its CPU has been above 85% for 15 minutes. Check for a stuck job, or raise cpu in service.yml"

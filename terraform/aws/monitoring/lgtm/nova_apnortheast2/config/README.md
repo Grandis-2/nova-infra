@@ -320,7 +320,7 @@ flowchart LR
 | JVM 힙 사용률 | 태스크별 힙 사용 / 한도 > 90% | 10분 | warning |
 | 메시지 처리 오류율 | 큐별 처리 스팬 중 오류 비율 > 5% (10분에 6건 넘게 처리한 큐만) | 10분 | warning |
 | 포기한 예약 동기화 작업 | 작업 종류(`jobType`)별 DEAD_LETTER 작업 수 `preorder_sync_dead_letter` > 0 | 1분 | warning |
-| 회차 증설 실패 | preorder 가 최소 대수를 바꾸지 못한 횟수 `preorder_scaling_failures_total` 10분 > 2 | 5분 | warning |
+| 회차 증설 실패 | preorder 가 최소 대수를 바꾸지 못한 횟수 `preorder_scaling_failures_total` 10분 3번 이상(외삽을 감안해 > 2.5) | 5분 | warning |
 | 프런트 JS 오류 급증 | 브라우저 오류 15분 > 30건 그리고 지난주 같은 시각의 3배 초과 (Loki) | 5분 | warning |
 | 프런트 LCP 악화 | LCP p75 30분 > 4초 (측정 30건 이상일 때만, Loki) | 15분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
