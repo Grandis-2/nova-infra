@@ -75,6 +75,8 @@ nova:
       enabled: true
   # 회차 일정에 맞춘 최소 대수(service.yml 의 scales). 오픈 15분 전부터 30분 뒤까지 waitingroom · preorder 최소 대수를 올린다.
   # 대상 · 기본 대수 · 최대 대수는 인프라가 넣으므로 적지 않는다. 실패는 preorder.scaling.failures(경보 '회차 증설 실패')
+  # 끌 때: 앱이 마지막에 넣은 최소 대수가 남고 Terraform 은 되돌리지 않는다(app_min). 회차 구간 밖(최소 대수가 기본값일 때) 끄거나,
+  # 끈 뒤 두 서비스의 최소 대수를 service.yml 의 min 으로 직접 맞춘다
   scaling:
     enabled: true
     # 오픈 때 preorder 대수. ⌈waitingroom max-global-credit ÷ accept-per-second⌉ 이상이고 service.yml 의 max 이하여야 한다(ecs 스택이 plan 에서 확인)
