@@ -18,6 +18,8 @@ locals {
   alb_suffix    = data.terraform_remote_state.ecs.outputs.alb_arn_suffix
   cluster_name  = data.terraform_remote_state.ecs.outputs.cluster_name
   service_names = data.terraform_remote_state.ecs.outputs.service_names
+  # 배치 태스크 group (ecs 출력). singleton 서비스(service:…)와 Scheduler 단발 태스크(family:…)
+  batch_task_groups = try(data.terraform_remote_state.ecs.outputs.batch_task_groups, [])
 
   queues         = data.terraform_remote_state.sqs.outputs.queues
   sched_dlq_name = data.terraform_remote_state.sqs.outputs.scheduler_dlq.name
@@ -291,14 +293,14 @@ resource "aws_cloudwatch_metric_alarm" "dlq" {
   alarm_actions = [aws_sns_topic.alerts.arn]
 }
 
-# 배치 태스크가 비정상 종료하면 알린다. batch 가 멈추면 만료 처리가 통째로 서지만
-# ECS 가 새로 띄우므로 겉으로는 잘 드러나지 않는다.
+# 배치 태스크가 비정상 종료하면 알린다. 상시 배치(정합성 검사)는 ECS 가 새로 띄우고, 단발 배치(사진 정리)는
+# 다음 날까지 다시 돌지 않으므로 둘 다 겉으로는 잘 드러나지 않는다.
 #
-# group 으로 배치 서비스만 거르고, 배포 때 정상 종료 코드(143 = SIGTERM)는 뺀다.
-# 거르지 않으면 롤링 배포 때마다 경보가 울린다.
+# group 으로 배치 태스크만 거르고(ecs 출력 batch_task_groups), 정상 종료(0)와 배포 · Spot 회수 때의 종료 코드
+# (143 = SIGTERM)는 뺀다. 이미지를 못 받는 등 컨테이너가 뜨지 못한 태스크는 종료 코드가 없어 stopCode 로 잡는다.
 resource "aws_cloudwatch_event_rule" "batch_failure" {
-  # batch 가 deploy: false 면 감시할 서비스가 없다
-  count = contains(keys(local.service_names), "batch") ? 1 : 0
+  # 배치가 모두 deploy: false 면 감시할 것이 없다
+  count = length(local.batch_task_groups) > 0 ? 1 : 0
 
   name        = "${local.name_prefix}-batch-task-failed"
   description = "Batch task stopped abnormally"
@@ -309,10 +311,11 @@ resource "aws_cloudwatch_event_rule" "batch_failure" {
     detail = {
       lastStatus = ["STOPPED"]
       clusterArn = [data.terraform_remote_state.ecs.outputs.cluster_arn]
-      group      = ["service:${local.service_names["batch"]}"]
-      containers = {
-        exitCode = [{ "anything-but" = [0, 143] }]
-      }
+      group      = local.batch_task_groups
+      "$or" = [
+        { containers = { exitCode = [{ "anything-but" = [0, 143] }] } },
+        { stopCode = ["TaskFailedToStart"] },
+      ]
     }
   })
 }

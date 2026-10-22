@@ -1,5 +1,5 @@
 # 정합성 검사. 관리자 실행 요청을 5초마다 가져가야 해서 상시로 띄운다. 항상 1개만 띄운다
-deploy: false                   # be 가 nova/<이 폴더 이름> 에 이미지를 올린 뒤 true 로 바꾼다(2단계)
+deploy: true
 cpu: 512
 memory: 1024
 port: 0

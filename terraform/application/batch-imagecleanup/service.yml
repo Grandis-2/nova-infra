@@ -1,5 +1,5 @@
 # 안 쓰는 사진 정리. Scheduler 가 하루 한 번 띄우고, 정리를 마치면 태스크가 종료한다
-deploy: false                   # be 가 nova/<이 폴더 이름> 에 이미지를 올린 뒤 true 로 바꾼다(2단계)
+deploy: true
 cpu: 512
 memory: 1024
 port: 0
