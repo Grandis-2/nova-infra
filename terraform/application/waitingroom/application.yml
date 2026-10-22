@@ -15,9 +15,12 @@ waitingroom:
     previous: ${WAITING_TOKEN_PREVIOUS:}
     rollout-ends-at: ${WAITING_TOKEN_ROLLOUT_ENDS_AT:}
   admission:
-    # 기본 입장 속도(초당 인원). 운영 중에는 관리자 API 로 바꾼다
-    global-credit: 15
-    product-cap: 15
+    # 기본 입장 속도(초당 인원, 전역 · 상품별). 운영 중에는 관리자 API 로 바꾼다
+    global-credit: 50
+    product-cap: 50
+    # 관리자가 올릴 수 있는 입장 속도의 최댓값. 회차 오픈 때 preorder 대수(nova.scaling.preorder.surge)가 이만큼을 받아야 한다 —
+    # surge ≥ ⌈이 값 ÷ preorder 의 nova.capacity.heartbeat.accept-per-second⌉ 를 ecs 스택이 plan 에서 확인한다
+    max-global-credit: 150
   schedule:
     queue: waitingroom-events # 회차 일정 수신
     resync-queue: preorder-events # 일정을 하나도 모를 때 재발행 요청

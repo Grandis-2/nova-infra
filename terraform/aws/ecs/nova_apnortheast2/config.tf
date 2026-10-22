@@ -146,6 +146,20 @@ locals {
   _db_conn_max = try(data.terraform_remote_state.database.outputs.max_connections, null)
 }
 
+# 회차 오픈 때 preorder 대수(be nova.scaling.preorder.surge)가 대기열이 허용하는 최대 입장 속도를 받아야 한다.
+#   surge ≥ ⌈waitingroom.admission.max-global-credit ÷ nova.capacity.heartbeat.accept-per-second⌉ 이고 surge ≤ preorder 의 scaling.max
+# 값이 application.yml 에 없으면 be 코드 기본값(surge 3 · max-global-credit 1500 · accept-per-second 100)으로 본다
+locals {
+  _admission_check = alltrue([for k in ["preorder", "waitingroom"] : contains(keys(local.deployed_services), k)])
+  _preorder_cfg    = try(yamldecode(local._cfg_text["preorder"]), {})
+  _waitingroom_cfg = try(yamldecode(local._cfg_text["waitingroom"]), {})
+  _surge           = try(tonumber(local._preorder_cfg.nova.scaling.preorder.surge), 3)
+  _accept_per_sec  = try(tonumber(local._preorder_cfg.nova.capacity.heartbeat["accept-per-second"]), 100)
+  _max_credit      = try(tonumber(local._waitingroom_cfg.waitingroom.admission["max-global-credit"]), 1500)
+  _surge_need      = ceil(local._max_credit / local._accept_per_sec)
+  _preorder_max    = try(local.deployed_services["preorder"].max, 0)
+}
+
 resource "terraform_data" "config_check" {
   lifecycle {
     # deploy: true 인데 설정이 비어 있으면 인프라 계산값만 받고 기동에 실패한다
@@ -164,6 +178,10 @@ resource "terraform_data" "config_check" {
     precondition {
       condition     = length(local._secret_reserved) == 0
       error_message = "비밀(secrets.sops.yml · generated_secrets) 키가 인프라 환경변수나 service.yml 의 environment 와 겹친다: ${join(", ", local._secret_reserved)}"
+    }
+    precondition {
+      condition     = !local._admission_check || (local._surge >= local._surge_need && local._surge <= local._preorder_max)
+      error_message = "회차 오픈 때 preorder 대수(nova.scaling.preorder.surge ${local._surge})가 맞지 않는다: 최대 입장 속도 ${local._max_credit}/초 ÷ 태스크당 접수 ${local._accept_per_sec}/초 = ${local._surge_need}대 이상이고 preorder scaling.max ${local._preorder_max} 이하여야 한다. surge · max 를 올리거나 waitingroom 의 max-global-credit 을 낮춘다."
     }
     precondition {
       condition     = local._db_conn_max == null || local._db_conn_need <= local._db_conn_max
