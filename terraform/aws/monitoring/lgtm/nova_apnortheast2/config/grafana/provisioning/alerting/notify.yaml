@@ -29,6 +29,19 @@ contactPoints:
             region: ${AWS_REGION}
           subject: '{{ template "chatbot.title" . }}'
           message: '{{ template "chatbot.message" . }}'
+  # warning 은 울릴 때만 보낸다. 할 일이 없는 해소 알림이 쌍으로 와서 채널이 시끄러웠다. critical 은 해소도 보낸다
+  - orgId: 1
+    name: chatbot-sns-warning
+    receivers:
+      - uid: chatbot-sns-warning
+        type: sns
+        disableResolveMessage: true
+        settings:
+          topic_arn: ${SNS_TOPIC_ARN}
+          sigv4:
+            region: ${AWS_REGION}
+          subject: '{{ template "chatbot.title" . }}'
+          message: '{{ template "chatbot.message" . }}'
 
 policies:
   - orgId: 1
@@ -37,3 +50,7 @@ policies:
     group_wait: 30s
     group_interval: 5m
     repeat_interval: 4h
+    routes:
+      - receiver: chatbot-sns-warning
+        object_matchers:
+          - ["severity", "=", "warning"]

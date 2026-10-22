@@ -13,7 +13,8 @@
 #   warning   6시간 & 30분 > 6배     (닷새 안에 다 쓴다)
 #   긴 창에 요청이 1시간 60건(초당 0.0167) 미만이면 보지 않는다. 몇 건의 오류로 비율이 튀어 울리는 것을 막는다.
 #
-# 평소 대비 경보: 기준선은 지난 3주 같은 요일 · 같은 시각의 평균(offset 1w · 2w · 3w). 3주치가 없으면 지난주 하나로 본다.
+# 평소 대비 경보: 기준선은 지난 3주 같은 요일 · 같은 시각의 가운데 값(offset 1w · 2w · 3w 의 quantile 0.5). 한 주에만 튄 값(부하 시험 등)이
+# 평소가 되지 않게 평균 대신 가운데 값을 쓰고, 3주치가 모두 있을 때만 본다. 30분에 300건(초당 0.1666) 이상 오는 서비스만 본다.
 #   원본 HTTP 지표(90일 보존)로 계산해 기록 규칙이 쌓이기를 기다리지 않는다.
 #
 # 경보마다 runbook_url 로 README 의 "경보 대응" 항목을 건다. summary 는 Grafana 템플릿이다(달러 기호를 쓰지 않는다).
@@ -343,7 +344,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "최근 30분 요청이 지난 3주 같은 시각 평균의 30% 아래다(현재 / 평소 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}). 평소 30분에 30건 넘게 오는 시간대만 본다 — 앞단(CloudFront · WAF · ALB) 차단이나 클라이언트 문제를 먼저 본다"
+          summary: "최근 30분 요청이 지난 3주 같은 시각의 가운데 값의 30% 아래다(현재 / 평소 {{ with .Values.B }}{{ humanizePercentage .Value }}{{ end }}). 3주 기록이 모두 있고 평소 30분에 300건 넘게 오는 시간대만 본다 — 앞단(CloudFront · WAF · ALB) 차단이나 클라이언트 문제를 먼저 본다"
           runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#요청-급감"
         data:
           - refId: A
@@ -352,7 +353,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: '(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m])) / ((sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w))) / 3 or sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w))) < 0.3) and (((sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)) + sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w))) / 3 or sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w))) > 0.0167)'
+              expr: '(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m])) / quantile by (job) (0.5, label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)), "week", "1w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)), "week", "2w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w)), "week", "3w", "", "")) < 0.3) and on (job) (quantile by (job) (0.5, label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)), "week", "1w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)), "week", "2w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w)), "week", "3w", "", "")) >= 0.1666) and on (job) (count by (job) (label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 1w)), "week", "1w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 2w)), "week", "2w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*"}[30m] offset 3w)), "week", "3w", "", "")) == 3)'
           - refId: B
             datasourceUid: __expr__
             model:
@@ -377,7 +378,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "최근 30분 P99 가 지난 3주 같은 시각 평균의 2배를 넘고 0.5초 이상이다(현재 / 평소 {{ with .Values.B }}{{ humanize .Value }}{{ end }}배)"
+          summary: "최근 30분 P99 가 지난 3주 같은 시각의 가운데 값의 2배를 넘고 0.5초 이상이다(현재 / 평소 {{ with .Values.B }}{{ humanize .Value }}{{ end }}배). 3주 기록이 모두 있고 최근 30분에 300건 넘게 온 서비스만 본다"
           runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#응답-시간-급증"
         data:
           - refId: A
@@ -386,7 +387,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: '(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m]))) / ((histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 1w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 2w))) + histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 3w)))) / 3 or histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 1w)))) > 2) and (histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m]))) > 0.5)'
+              expr: '(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m]))) / quantile by (job) (0.5, label_replace(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 1w))), "week", "1w", "", "") or label_replace(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 2w))), "week", "2w", "", "") or label_replace(histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 3w))), "week", "3w", "", "")) > 2) and on (job) (histogram_quantile(0.99, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m]))) > 0.5) and on (job) (sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m])) >= 0.1666) and on (job) (count by (job) (label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 1w)), "week", "1w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 2w)), "week", "2w", "", "") or label_replace(sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace="nova", http_route!~"/actuator.*", http_route!="/api/v1/notifications/stream"}[30m] offset 3w)), "week", "3w", "", "")) == 3)'
           - refId: B
             datasourceUid: __expr__
             model:
