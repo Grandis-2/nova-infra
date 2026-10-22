@@ -267,6 +267,7 @@ flowchart LR
   TraceQL 에는 Grafana 가 값을 그대로 넣고, 큰따옴표 문자열은 `\*` 같은 이스케이프를 받지 않는다. 그래서 ``span.http.route=~`${route:regex}` `` 처럼 regex 형식으로 만든 값을 백틱 문자열에 넣는다.
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
   개요와 MySQL 대시보드는 주로 Mimir 지표를 읽어서 1분마다 새로고침한다. 개요는 자주 여는 화면이라 CloudWatch 패널을 두 개(ALB 연결 · DLQ)만 둔다.
+  오픈 상황판은 예외로 1분마다 새로고침한다. 오픈 · 부하 시험 동안 1~2분짜리 몰림을 따라가려고 여는 화면이라 늦으면 쓸모가 없다. CloudWatch 패널 6개(ECS CPU · 태스크 수, Valkey 4개)는 노드 · 서비스 수만큼 지표를 읽으므로 평소에는 열어 두지 않는다.
 - 태스크 수는 두 가지로 본다. 활성 태스크는 `AWS/ECS` 의 `LiveTaskCount`(뜨는 중 · 내려가는 중 포함)이고, 새로 뜬 태스크는 `target_info` 에 처음 보인 instance 수다. 새로 뜬 태스크에는 배포 · 스케일 아웃 · 장애 재시작이 모두 들어간다.
   태스크가 뜨지 못하면 CloudWatch 경보(태스크 0개 · ECS 이벤트)가 알린다.
 - CloudFront 배포는 `Product=nova` 태그로, NAT · obs 인스턴스는 이름 태그로 찾는다. 대시보드에 ID 를 적지 않았으므로 리소스를 다시 만들거나 ASG 가 인스턴스를 교체해도 대시보드가 그대로 동작한다.
