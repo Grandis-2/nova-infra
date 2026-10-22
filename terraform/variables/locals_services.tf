@@ -24,7 +24,7 @@ locals {
   _service_fields = [
     "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "stop_timeout", "scaling",
     "health", "routes", "jwt", "calls", "db", "extra_databases", "redis", "queues", "uploads", "generated_secrets", "environment",
-    "profiling", "upload_cleanup", "schedule", "db_account",
+    "profiling", "upload_cleanup", "schedule", "db_account", "scales",
   ]
 
   # 형식 검사. 오류가 있으면 services.name 계산에서 해당 폴더 이름과 함께 plan 을 멈춘다
@@ -63,6 +63,8 @@ locals {
       length(try(s.routes, [])) > 0 || try(s.health, null) == null || try(tostring(s.health.matcher), "200") == "200" ? "" : "routes 없이 쓰는 health 의 matcher 는 200 만 된다",
       # 컨테이너 헬스체크 명령(bash)에 그대로 들어가므로 경로 문자를 제한한다
       try(s.health, null) == null || can(regex("^/[A-Za-z0-9/._-]*$", tostring(s.health.path))) ? "" : "health.path 는 /로 시작하고 영문 · 숫자 · / . _ - 만 쓴다",
+      # 앱이 최소 대수를 바꾸려면 대상에 오토스케일링(max > min)이 걸려 있어야 한다
+      [for t in try(s.scales, []) : contains(keys(local._service_raw), t) && try(tonumber(local._service_raw[t].scaling.max) > try(tonumber(local._service_raw[t].scaling.min), try(tonumber(local._service_raw[t].scaling.desired), 1)), false) ? "" : "scales 의 '${t}' 는 없는 서비스이거나 scaling.max > min 이 아님"],
       [for p, to in try(s.calls, {}) : contains(keys(local._service_raw), to) ? "" : "calls 의 '${to}' 는 없는 서비스"],
       [for p, to in try(s.calls, {}) : try(tonumber(local._service_raw[to].port), 0) > 0 ? "" : "calls 의 '${to}' 는 포트가 없는 서비스(port: 0)"],
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && length([for x in local._all_priorities : x if x == try(r.priority, -1)]) > 1 ? "route priority ${try(r.priority, "?")} 가 다른 규칙과 겹침" : ""],
@@ -137,6 +139,7 @@ locals {
       upload_cleanup    = try(s.upload_cleanup, false) == true                            # 업로드 버킷의 사진 지우기 권한 (정리 배치)
       schedule          = try(tostring(s.schedule), null)                                 # EventBridge Scheduler 식(Asia/Seoul). 있으면 서비스 대신 태스크 정의만 만든다
       environment       = { for e, v in try(s.environment, {}) : e => tostring(v) }
+      scales            = [for t in try(s.scales, []) : tostring(t)] # 이 서비스(앱)가 최소 대수를 바꾸는 서비스. 권한(iam)과 대상 값(ecs)을 만든다
     }
   }
 
@@ -166,6 +169,9 @@ locals {
 
   # Scheduler 가 RunTask 로 띄우는 단발 태스크 (schedule 이 있는 것). ecs 는 서비스 없이 태스크 정의만 만든다
   scheduled_services = { for k, v in local.deployed_services : k => v if v.schedule != null }
+
+  # 앱이 최소 대수를 바꾸는 서비스. Terraform 은 처음 만들 때만 min 을 넣고 그 뒤로는 되돌리지 않는다
+  app_scaled_services = toset(flatten([for k, v in local.deployed_services : v.scales]))
 
   # ALB 타깃 그룹이 필요한 서비스
   alb_services = { for k, v in local.services : k => v if length(v.routes) > 0 }

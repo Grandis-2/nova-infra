@@ -13,6 +13,10 @@ scaling:
   requests_per_task: 1500     # 1대가 1분에 받는 요청이 넘으면 바로 늘린다(부하 시험 10-21: 1대 분당 약 2,100건에 CPU 84%)
                               # ALB 로 직접 오는 조회 · 폴링만 센다. 접수(POST)는 waitingroom 이 Service Connect 로 넘겨 여기 없고 CPU 경보가 맡는다
 
+# 회차 일정을 보고 이 서비스들의 최소 대수를 오픈 15분 전부터 올린다(be nova.scaling). 권한과 대상 이름 · 기본 대수 · 최대 대수를 인프라가 넣는다.
+# 대상의 min 은 처음 만들 때만 Terraform 이 넣고 그 뒤는 앱이 맞춘다
+scales: [waitingroom, preorder]
+
 health:
   port: 9083
   path: /actuator/health/readiness

@@ -57,6 +57,19 @@ locals {
         "nova.upload.cdn-base-url" = data.terraform_remote_state.cdn.outputs.image_base_url
         "nova.upload.region"       = var.aws_region
       } : {},
+      # 회차 일정에 맞춰 최소 대수를 바꿀 대상(scales). 기본 대수 · 최대 대수는 대상 service.yml 의 min · max 와 같아야 해서 여기서 넣는다.
+      # 켜고 끄기(nova.scaling.enabled)만 application.yml 에 둔다
+      length(v.scales) > 0 ? merge(
+        {
+          "nova.scaling.cluster" = aws_ecs_cluster.this.name
+          "nova.scaling.region"  = var.aws_region
+        },
+        merge([for t in v.scales : {
+          "nova.scaling.${t}.service"  = "${local.name_prefix}-${local.services[t].name}"
+          "nova.scaling.${t}.baseline" = tostring(local.services[t].min)
+          "nova.scaling.${t}.max"      = tostring(local.services[t].max)
+        }]...),
+      ) : {},
     )
   }
 
