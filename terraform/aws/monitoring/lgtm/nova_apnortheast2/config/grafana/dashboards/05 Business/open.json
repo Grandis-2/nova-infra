@@ -1,0 +1,1699 @@
+{
+  "title": "nova · 오픈 상황판",
+  "uid": "nova-open",
+  "description": "사전예약 오픈 · 부하 시험 때 사용자 오류에서 원인까지 1분 단위로 따라가는 화면 (NV-756)",
+  "tags": [
+    "nova",
+    "business",
+    "open"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "links": [
+    {
+      "title": "nova 대시보드",
+      "type": "dashboards",
+      "tags": [
+        "nova"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**읽는 순서** — 오픈 · 부하 시험 때 위에서 아래로 내려가며 본다. 모든 패널은 1분 단위다(5분 평균은 1~2분짜리 몰림을 지운다).\n\n1. **사용자가 겪은 것**: 어느 서비스가 5xx 를 냈고 어떤 오류 코드인가 → 2. **왜**: 그 서비스 CPU 가 찼나, 태스크는 언제 늘었나 → 3. **의존 대상 탓인가**: Redis 서버가 바빴나(서버 쪽) vs 앱이 Redis 를 늦게 받았나(앱 쪽) → 4. **대기열 · 접수 동작**: 입장 속도를 줄였나, 접수 결과는 → 5. **캐시**"
+      }
+    },
+    {
+      "id": 2,
+      "type": "row",
+      "title": "1. 사용자가 겪은 것 — 누가 오류를 냈나",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "panels": []
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "서비스별 5xx (분당)",
+      "description": "앱이 돌려준 5xx 를 서비스별로 쌓았다. 서비스끼리 Service Connect 로 주고받은 것도 들어간다. 같은 시각에 두 서비스가 함께 오르면 앞단(예: waitingroom)이 뒷단(preorder) 오류를 그대로 전한 것일 수 있다 — 아래 오류 코드로 가른다. 경보: CloudWatch <서비스>-5xx (ALB 기준, 1분 50건 · 2%)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[1m]))",
+          "legendFormat": "{{job}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "오류 코드별 (업무 오류 로그, 분당)",
+      "description": "앱이 업무 오류로 답한 코드(GlobalExceptionHandler 의 '업무 오류 CODE'). DEPENDENCY_UNAVAILABLE 은 의존 대상(Redis · 다른 서비스)을 제때 못 부른 것 — 3번 줄에서 서버 탓인지 앱 탓인지 본다. 4xx 성 코드(중복 · 매진)도 여기 보인다",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "expr": "sum by (service_name, code) (count_over_time({service_namespace=\"nova\"} |= \"업무 오류\" | regexp \"업무 오류 (?P<code>[A-Z_]+):\" [1m]))",
+          "legendFormat": "{{service_name}} {{code}}",
+          "queryType": "range"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 4
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "응답 시간 p95 (서비스별)",
+      "description": "0.5초(SLO 기준)를 넘으면 사용자가 느리다고 느낀다. 5xx 없이 이 값만 오르면 포화 직전이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[1m])))",
+          "legendFormat": "{{job}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 4
+      }
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "2. 왜 — 서비스가 찼나, 증설은 언제 붙었나",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "CPU (서비스별 가장 바쁜 태스크, 1분)",
+      "description": "85% 를 넘으면 그 태스크는 요청 · Redis 응답을 제때 처리하지 못한다(Redis 클라이언트 시간 초과 → 503). 새 태스크는 뜬 직후 1~2분 JVM 예열로 CPU 가 치솟는다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "60",
+          "label": "${PROP('Dim.ServiceName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"CPUUtilization\" ClusterName=\"nova-prod\"', 'Maximum', 60)",
+          "statistic": "Maximum"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 13
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "태스크 수 (서비스별)",
+      "description": "계단이 오른 시각이 새 태스크가 실제로 뜬 시각이다. 몰림이 시작된 시각과의 차이가 증설 지연이다(10-22 시험: 3분 뒤 결정, 4~6분 뒤 투입). 짧은 몰림은 미리 늘려 둬야 한다(아래 최소 대수)",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "60",
+          "label": "${PROP('Dim.ServiceName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ECS,ClusterName,ServiceName} MetricName=\"LiveTaskCount\" ClusterName=\"nova-prod\"', 'Maximum', 60)",
+          "statistic": "Maximum"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 13
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "회차 일정으로 미리 늘린 최소 대수",
+      "description": "preorder 가 회차 일정(오픈 15분 전 ~ 30분 뒤)으로 계산한 최소 대수(NV-754). 태스크 수가 이 값보다 낮으면 아직 뜨는 중이다. nova.scaling.enabled 가 꺼져 있으면 계산만 하고 넣지는 않는다. 실패: 경보 '회차 증설 실패'",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "max by (service) (preorder_scaling_floor)",
+          "legendFormat": "{{service}} 최소",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum(increase(preorder_scaling_failures_total[1m])) or vector(0)",
+          "legendFormat": "실패",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "3. 의존 대상 탓인가 — Redis 서버 vs 앱이 본 Redis",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Valkey 서버: 엔진 CPU",
+      "description": "서버 쪽. Valkey 는 명령을 스레드 하나로 처리하고, 이 값이 그 스레드 사용률이다. 낮은데 앱이 Redis 시간 초과를 냈다면 앱(태스크 CPU 포화) 탓이다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "60",
+          "label": "${PROP('Dim.CacheClusterId')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName=\"EngineCPUUtilization\"', 'Maximum', 60)",
+          "statistic": "Maximum"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Valkey 서버: 명령 처리 시간",
+      "description": "서버 쪽. 명령 하나를 서버 안에서 처리한 시간(마이크로초). 대기열은 Lua(Eval)를 많이 쓴다. 수십 µs 면 정상이다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "60",
+          "label": "${PROP('MetricName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName=(\"GetTypeCmdsLatency\" OR \"SetTypeCmdsLatency\" OR \"EvalBasedCmdsLatency\")', 'Maximum', 60)",
+          "statistic": "Maximum"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 22
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "앱이 본 Redis 명령: p99 (서비스별)",
+      "description": "앱 쪽. 앱이 Redis 명령을 보내고 답을 받기까지(Spring Boot 의 Lettuce 관측 지표 lettuce_seconds). 서버 명령 처리 시간(µs)과 차이가 크면 그 차이는 Redis 가 아니라 앱 안에서 기다린 시간이다(태스크 CPU 포화 · 이벤트 루프 막힘)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le, job) (rate(lettuce_seconds_bucket[1m])))",
+          "legendFormat": "{{job}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 22
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "앱이 본 Redis 명령: 실패 · 밀린 명령",
+      "description": "앱 쪽. 실패로 끝난 명령(분당, 시간 초과 포함)과 지금 답을 기다리는 명령 수. 서버가 한가한데 밀린 명령이 쌓이면 앱이 응답을 처리하지 못하는 것이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (job) (increase(lettuce_seconds_count{error!=\"none\"}[1m])) or vector(0)",
+          "legendFormat": "실패 {{job}}",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (job) (max_over_time(lettuce_active_active[1m]))",
+          "legendFormat": "대기 중 {{job}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 22
+      }
+    },
+    {
+      "id": 15,
+      "type": "row",
+      "title": "4. 대기열 · 접수 — 시스템이 어떻게 대응했나",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "panels": []
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "대기열 진입 결과 (분당)",
+      "description": "waitingroom 진입 요청의 결과. ADMITTED · WAITING 은 정상, 그 밖은 거절 코드다. DEPENDENCY_UNAVAILABLE 은 대기열 저장소(Redis)를 제때 못 쓴 것",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(waitingroom_entry_total[1m]))",
+          "legendFormat": "{{outcome}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "순번 조회 결과 (분당)",
+      "description": "대기 중인 사용자가 순번을 묻는 폴링의 결과. 오류 코드가 보이면 기다리던 사용자가 실패를 본 것이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(waitingroom_status_total[1m]))",
+          "legendFormat": "{{outcome}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 31
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "입장 속도 배율 (브레이크)",
+      "description": "1 이면 정상 속도. preorder 접수 전달이 느리거나(5xx · 실패 · 느림) 나빠지면 0.5 → 0.25 → 0.125 로 줄여 뒷단을 지킨다. 내려가 있으면 뒷단(preorder)이 병목이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "min(waitingroom_brake_factor)",
+          "legendFormat": "배율",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 31
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "접수 전달 결과 (waitingroom → preorder, 분당)",
+      "description": "대기열이 preorder 로 넘긴 접수의 응답 코드. 5xx · 시간 초과가 늘면 브레이크가 걸린다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (code) (increase(waitingroom_relay_observed_total[1m]))",
+          "legendFormat": "{{code}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 39
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "입장 · 대기 인원 (상품별)",
+      "description": "입장(분당)과 아직 기다리는 인원. 대기 인원이 줄지 않고 입장이 0 이면 배율 · 크레딧을 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (product) (increase(waitingroom_admitted_total[1m]))",
+          "legendFormat": "입장 {{product}}",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum by (product) (max by (product, instance) (waitingroom_queue_waiting))",
+          "legendFormat": "대기 {{product}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 39
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "대기열 제어 실패 (루프별, 분당)",
+      "description": "대기열 리더의 하트비트 · 배분 루프가 Redis 시간 초과 등으로 실패한 횟수. 계속되면 입장이 멈춘다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (loop) (increase(waitingroom_control_failures_total[1m]))",
+          "legendFormat": "{{loop}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 39
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "사전예약 접수 결과 (분당)",
+      "description": "preorder 가 받은 접수의 결과. rejected 에는 중복 접수(이미 진행 중인 예약) · 매진이 들어간다 — 부하 시험에서 같은 고객을 다시 쓰면 여기서 보인다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (result) (increase(nova_preorder_created_total[1m]))",
+          "legendFormat": "{{result}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 47
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "접수 앞단 거절 (분당)",
+      "description": "preorder 가 동시 처리 한도(bulkhead)를 넘어 바로 거절한 접수. 늘면 preorder 가 병목이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum(increase(preorder_accept_bulkhead_rejected_total[1m])) or vector(0)",
+          "legendFormat": "거절",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 47
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "preorder 살아 있는 태스크 (하트비트)",
+      "description": "preorder 태스크가 공유 Redis 에 5초마다 남기는 하트비트 기준. ECS 태스크 수와 다르면 일부 태스크가 Redis 에 못 쓰고 있다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "max(preorder_capacity_tasks_alive)",
+          "legendFormat": "살아 있음",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "B",
+          "expr": "sum(increase(preorder_capacity_heartbeat_failures_total[1m])) or vector(0)",
+          "legendFormat": "하트비트 실패",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 47
+      }
+    },
+    {
+      "id": 25,
+      "type": "row",
+      "title": "5. 캐시 — 같은 요청을 DB 까지 보내고 있나",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "panels": []
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "읽기 캐시 적중률 (캐시별)",
+      "description": "hit · hit_refresh(바로 주고 뒤에서 갱신) 비율. 몰림 첫 1~2분은 새 태스크의 메모리 캐시가 비어 낮다. 계속 낮으면 TTL 이나 캐시 키를 본다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (cache) (rate(nova_read_cache_requests_total{outcome=~\"hit|hit_refresh\"}[1m])) / sum by (cache) (rate(nova_read_cache_requests_total[1m]))",
+          "legendFormat": "{{cache}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 56
+      }
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "읽기 캐시 결과 (분당)",
+      "description": "load = DB 에서 읽음, wait = 같은 키를 다른 요청이 읽는 중이라 기다림. wait 가 많으면 같은 키에 몰린 것이다(기다림 5초를 넘으면 503)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "sum by (cache, outcome) (increase(nova_read_cache_requests_total[1m]))",
+          "legendFormat": "{{cache}} {{outcome}}",
+          "range": true
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 56
+      }
+    },
+    {
+      "id": 28,
+      "type": "timeseries",
+      "title": "Valkey 적중 · 실패 (분당)",
+      "description": "Redis 키 조회의 적중 · 실패(대기열 키 포함). 실패가 함께 늘면 Redis 캐시 키가 만료됐거나 세대가 올라간 직후다",
+      "datasource": {
+        "type": "cloudwatch",
+        "uid": "cloudwatch"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 1,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "A",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "60",
+          "label": "${PROP('MetricName')}",
+          "metricQueryType": 0,
+          "metricEditorMode": 1,
+          "expression": "SEARCH('{AWS/ElastiCache,CacheClusterId} MetricName=(\"CacheHits\" OR \"CacheMisses\")', 'Sum', 60)",
+          "statistic": "Sum"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 56
+      }
+    }
+  ]
+}
