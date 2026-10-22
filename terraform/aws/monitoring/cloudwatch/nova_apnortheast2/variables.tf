@@ -11,15 +11,9 @@ variable "slack_channel_id" {
 }
 
 variable "alb_5xx_threshold" {
-  description = "5분 동안 ALB 가 돌려준 5xx 개수 임계치"
+  description = "5분 동안 ALB 가 직접 만든 5xx(대상 없음 · 시간 초과) 개수 임계치"
   type        = number
   default     = 20
-}
-
-variable "latency_p95_threshold" {
-  description = "응답 시간 p95 임계치(초). 목표는 500ms"
-  type        = number
-  default     = 0.5
 }
 
 variable "queue_age_threshold_seconds" {
@@ -32,8 +26,10 @@ variable "queue_age_threshold_overrides" {
   description = "큐별 문턱(초). 일부러 지연시켜 다시 보내는 큐는 그 지연보다 길게 둔다"
   type        = map(number)
   default = {
-    # worker 는 취소가 한 세대(4차례) 내내 실패하면 15분 지연을 두고 다시 보낸다
-    "preorder-cancel" = 1200
+    # worker 는 등록 · 취소가 한 세대(4차례) 내내 실패하면 약 12분(±20%, 최대 14.4분) 뒤 다음 세대로 다시 보낸다.
+    # 등록은 3세대, 취소는 8세대 뒤 포기한다(be worker.retry). 지연 중인 메시지도 나이가 쌓일 수 있어 그 간격보다 길게 둔다
+    "preorder-register" = 1200
+    "preorder-cancel"   = 1200
     # worker 가 지우지 않고 가시성 시간을 늘려 다시 받는다(대기 1m+5m+15m+30m+1h, 합계 약 1시간 51분 뒤 5회 수신으로 DLQ)
     "draw-register" = 7200
     # member 의 관리자 알림 소비자가 나오기 전까지 preorder · order 의 관리자 알림이 쌓이기만 한다. 보관 기간(4일)과 같게 두어 울리지 않게 하고,

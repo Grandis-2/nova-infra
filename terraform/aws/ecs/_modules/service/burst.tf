@@ -10,7 +10,8 @@
 #   backlog  태스크 하나에 밀린 메시지가 queue_backlog 목표의 2배를 1번 넘으면
 #
 # 늘리는 폭은 지금 대수에 비례한다: 기준 ~ 기준의 2배(cpu 는 +20%p) 구간이면 +100%, 그 위면 +200% (최소 1대, max 까지).
-# 경보가 울려 있는 동안 1분마다 다시 판단해 더 늘린다. 경보 상태가 바뀔 때마다 alarm_topic_arn(Slack)에 알린다.
+# 경보가 울려 있는 동안 1분마다 다시 판단해 더 늘린다. 증설을 시작할 때만 alarm_topic_arn(Slack)에 알린다 — 증설 시각을 남기려는 것이고,
+# 끝났다는 알림(OK)은 할 일이 없어 보내지 않는다.
 # max 까지 늘렸는데도 CPU 가 높으면 맨 아래 증설 한계 경보가 사람을 부른다.
 # ─────────────────────────────────────────────────────────────
 
@@ -94,7 +95,6 @@ resource "aws_cloudwatch_metric_alarm" "burst_cpu" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["cpu"].arn, var.alarm_topic_arn])
-  ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
 }
@@ -163,7 +163,6 @@ resource "aws_cloudwatch_metric_alarm" "burst_requests" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["requests"].arn, var.alarm_topic_arn])
-  ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
 }
@@ -220,7 +219,6 @@ resource "aws_cloudwatch_metric_alarm" "burst_backlog" {
   }
 
   alarm_actions = compact([aws_appautoscaling_policy.burst["backlog"].arn, var.alarm_topic_arn])
-  ok_actions    = compact([var.alarm_topic_arn])
 
   tags = var.tags
 }
@@ -281,6 +279,39 @@ resource "aws_cloudwatch_metric_alarm" "at_max" {
     expression  = "IF(tasks >= ${var.max_capacity} AND cpu > ${local.limit_cpu}, 1, 0)"
     label       = "At max tasks under load"
     return_data = true
+  }
+
+  alarm_actions = compact([var.alarm_topic_arn])
+  ok_actions    = compact([var.alarm_topic_arn])
+
+  tags = var.tags
+}
+
+# 늘릴 수 없는 서비스(max ≤ min 이거나 늘리는 정책이 하나도 없음, 예: singleton 배치)는 CPU 가 오래 높으면 바로 사람을 부른다.
+# 늘릴 수 있는 서비스는 증설 경보 · 대상 추적이 늘리고, 다 늘린 뒤에는 위의 증설 한계 경보가 울린다
+locals {
+  can_scale_out = local.burst_on && (
+    var.cpu_target > 0 || var.request_count_target > 0 || var.queue_backlog != null || length(local.burst) > 0
+  )
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_fixed" {
+  count = var.create_service && !local.can_scale_out ? 1 : 0
+
+  alarm_name          = "${var.name}-cpu-high"
+  alarm_description   = "${var.name} has no auto scaling and its CPU has been above 85% for 15 minutes. Check for a stuck job, or raise cpu in service.yml"
+  namespace           = "AWS/ECS"
+  metric_name         = "CPUUtilization"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = 85
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    ClusterName = var.cluster_name
+    ServiceName = var.name
   }
 
   alarm_actions = compact([var.alarm_topic_arn])
