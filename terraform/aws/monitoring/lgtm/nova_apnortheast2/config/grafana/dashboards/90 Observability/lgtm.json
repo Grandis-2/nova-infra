@@ -1,7 +1,7 @@
 {
   "uid": "nova-lgtm",
   "title": "nova · LGTM 스택 · obs 호스트",
-  "description": "obs 태스크(Collector · Loki · Tempo · Mimir · Grafana · Pyroscope)와 그 EC2 호스트의 상태. Collector 세부는 OpenTelemetry Collector 대시보드",
+  "description": "obs 태스크(Collector · Loki · Tempo · Mimir · Grafana · Pyroscope)와 그 EC2 호스트의 상태. Collector 거부 · 전송 실패 · 전송 큐는 아래 '거부 · 실패' · '카디널리티 · 한도' 줄",
   "tags": [
     "nova",
     "obs"
@@ -1290,7 +1290,7 @@
     {
       "type": "timeseries",
       "title": "Collector 거부 · 전송 실패",
-      "description": "거부는 memory_limiter 가 받기를 막은 것, 전송 실패는 15분 다시 보내도 Loki · Tempo · Mimir 가 받지 못한 것, 큐 가득은 게이트웨이 전송 큐가 차서 버린 것. 자세한 건 OpenTelemetry Collector 대시보드",
+      "description": "거부는 memory_limiter 가 받기를 막은 것, 전송 실패는 15분 다시 보내도 Loki · Tempo · Mimir 가 받지 못한 것, 큐 가득은 게이트웨이 전송 큐가 차서 버린 것. 수신기 · 신호별로는 아래 'Collector 거부 · 전송 실패' 시계열, 큐는 '게이트웨이 전송 큐'",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"

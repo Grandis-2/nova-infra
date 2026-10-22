@@ -55,6 +55,81 @@
   "panels": [
     {
       "type": "stat",
+      "title": "exporter 연결",
+      "description": "1 이면 obs 의 mysqld_exporter 가 DB 에 붙어 있다. 0 이거나 비면 엔진 지표가 모두 멈춘다. 경보: MySQL 수집 끊김",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "끊김"
+                },
+                "1": {
+                  "text": "정상"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mimir"
+          },
+          "refId": "A",
+          "expr": "mysql_up{job=\"mysqld\"}",
+          "legendFormat": ""
+        }
+      ],
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
       "title": "연결 사용률",
       "description": "현재 연결 / max_connections. 서비스 태스크 수 × Hikari 풀이 여기로 모인다. 경보: 80% 초과 10분",
       "datasource": {
@@ -113,9 +188,9 @@
       ],
       "id": 4,
       "gridPos": {
-        "x": 0,
+        "x": 3,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 4
       }
     },
@@ -179,9 +254,9 @@
       ],
       "id": 5,
       "gridPos": {
-        "x": 4,
+        "x": 6,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 4
       }
     },
@@ -246,9 +321,9 @@
       ],
       "id": 12,
       "gridPos": {
-        "x": 8,
+        "x": 9,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 4
       }
     },
@@ -550,7 +625,7 @@
     {
       "type": "timeseries",
       "title": "CPU (RDS, 1분)",
-      "description": "RDS 인스턴스 CPU. t4g 는 버스트형이라 크레딧이 바닥나면 기준 성능으로 떨어진다(오른쪽)",
+      "description": "RDS 인스턴스 CPU(1분). t4g 는 Unlimited 라 크레딧이 없어도 묶이지 않는다 — 높으면 그대로 바쁜 것이다. 오른쪽 크레딧 패널은 비용 신호다",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -648,8 +723,8 @@
     },
     {
       "type": "timeseries",
-      "title": "CPU 크레딧 잔액",
-      "description": "버스트형(t4g) CPU 크레딧. 0 에 가까우면 CPU 가 기준치로 묶여 쿼리가 느려진다 — 몰림 뒤 회복이 늦으면 여기를 본다",
+      "title": "CPU 크레딧 (잔액 · 초과 사용)",
+      "description": "RDS t4g 는 늘 Unlimited 모드라 잔액이 0 이어도 CPU 가 묶이지 않고 계속 버스트한다. 대신 초과 사용분(surplus)이 쌓여 요금이 붙는다 — 잔액이 0 이고 초과 사용이 늘면 평소 부하가 인스턴스 기준 성능을 넘는다는 뜻(크기를 올릴지 검토). 크레딧 지표는 5분마다 나온다",
       "datasource": {
         "type": "cloudwatch",
         "uid": "cloudwatch"
@@ -685,7 +760,7 @@
           "queryMode": "Metrics",
           "region": "default",
           "id": "",
-          "period": "60",
+          "period": "300",
           "label": "잔액",
           "metricQueryType": 0,
           "metricEditorMode": 0,
@@ -696,6 +771,28 @@
           },
           "matchExact": true,
           "statistic": "Minimum",
+          "expression": ""
+        },
+        {
+          "datasource": {
+            "type": "cloudwatch",
+            "uid": "cloudwatch"
+          },
+          "refId": "B",
+          "queryMode": "Metrics",
+          "region": "default",
+          "id": "",
+          "period": "300",
+          "label": "초과 사용(과금)",
+          "metricQueryType": 0,
+          "metricEditorMode": 0,
+          "namespace": "AWS/RDS",
+          "metricName": "CPUSurplusCreditBalance",
+          "dimensions": {
+            "DBInstanceIdentifier": "$rds"
+          },
+          "matchExact": true,
+          "statistic": "Maximum",
           "expression": ""
         }
       ],
