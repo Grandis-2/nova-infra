@@ -39,6 +39,7 @@ nova:
     # 회차 변경은 preorder 의 일정 변경 알림(catalog-events)을 받아 비운다 — preorder 의 schedule-notice.enabled 를 켠 뒤에 켠다
     # 알림을 놓쳤을 때(DLQ) 조기 마감 · 다시 열기 · 일정 변경이 늦게 보이는 시간은 최대 이 값이다(상세 · 홍보는 앞단 HTTP 캐시 5초가 더해지고, 서버 시계 차는 어디나 더해진다)
     # catalog-events-dlq 경보가 울리면 DLQ 를 다시 흘리거나, 앱이 세대를 올릴 때와 같은 스크립트로 한 번 올린다(키가 없을 때도 맞다. 생 INCR 은 쓰지 않는다)
-    # NOW_MS 는 지금 시각의 epoch 밀리초(13자리)다. 초가 아니다 — NOW_MS=$(python3 -c 'import time;print(int(time.time()*1000))'). 13자리 숫자가 아니면 아무것도 쓰지 않고 거절한다
-    #   EVAL "if not string.match(ARGV[1],'^%d+$') or #ARGV[1]~=13 then return redis.error_reply('ARGV[1] must be epoch ms (13 digits)') end if redis.call('EXISTS',KEYS[1])==0 then redis.call('SET',KEYS[1],ARGV[1]) end return redis.call('INCR',KEYS[1])" 1 catalog:cache:gen:preorder-campaigns $NOW_MS
+    # 셸에서 친다(대화형 valkey-cli 면 $NOW_MS 자리에 숫자를 직접 넣는다). NOW_MS 는 지금 시각의 epoch 밀리초(13자리)다. 초가 아니다. 13자리 숫자가 아니면 아무것도 쓰지 않고 거절한다
+    #   NOW_MS=$(python3 -c 'import time;print(int(time.time()*1000))')
+    #   valkey-cli <접속 옵션> EVAL "if not string.match(ARGV[1],'^[1-9]%d+$') or #ARGV[1]~=13 then return redis.error_reply('ARGV[1] must be epoch ms (13 digits)') end if redis.call('EXISTS',KEYS[1])==0 then redis.call('SET',KEYS[1],ARGV[1]) end return redis.call('INCR',KEYS[1])" 1 catalog:cache:gen:preorder-campaigns "$NOW_MS"
     preorder-campaign-ttl: 30m
