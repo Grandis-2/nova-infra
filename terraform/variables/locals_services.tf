@@ -63,8 +63,9 @@ locals {
       length(try(s.routes, [])) > 0 || try(s.health, null) == null || try(tostring(s.health.matcher), "200") == "200" ? "" : "routes 없이 쓰는 health 의 matcher 는 200 만 된다",
       # 컨테이너 헬스체크 명령(bash)에 그대로 들어가므로 경로 문자를 제한한다
       try(s.health, null) == null || can(regex("^/[A-Za-z0-9/._-]*$", tostring(s.health.path))) ? "" : "health.path 는 /로 시작하고 영문 · 숫자 · / . _ - 만 쓴다",
-      # 앱이 최소 대수를 바꾸려면 대상에 오토스케일링(max > min)이 걸려 있어야 한다
+      # 앱이 최소 대수를 바꾸려면 대상이 ECS 서비스로 떠 있고(deploy · schedule 없음) 오토스케일링(max > min)이 걸려 있어야 한다
       [for t in try(s.scales, []) : contains(keys(local._service_raw), t) && try(tonumber(local._service_raw[t].scaling.max) > try(tonumber(local._service_raw[t].scaling.min), try(tonumber(local._service_raw[t].scaling.desired), 1)), false) ? "" : "scales 의 '${t}' 는 없는 서비스이거나 scaling.max > min 이 아님"],
+      [for t in try(s.scales, []) : !contains(keys(local._service_raw), t) || (try(tobool(local._service_raw[t].deploy), true) && try(local._service_raw[t].schedule, null) == null) ? "" : "scales 의 '${t}' 는 ECS 서비스가 없음(deploy: false 이거나 schedule 단발 태스크)"],
       [for p, to in try(s.calls, {}) : contains(keys(local._service_raw), to) ? "" : "calls 의 '${to}' 는 없는 서비스"],
       [for p, to in try(s.calls, {}) : try(tonumber(local._service_raw[to].port), 0) > 0 ? "" : "calls 의 '${to}' 는 포트가 없는 서비스(port: 0)"],
       [for r in try(s.routes, []) : can(tonumber(r.priority)) && length([for x in local._all_priorities : x if x == try(r.priority, -1)]) > 1 ? "route priority ${try(r.priority, "?")} 가 다른 규칙과 겹침" : ""],
