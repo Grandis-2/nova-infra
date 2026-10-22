@@ -71,7 +71,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "round(sum(increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\"}[$__range])))",
+          "expr": "round(sum(increase(http_server_request_duration_seconds_count{job=\"nova/$service\", http_route!~\"/actuator.*\"}[$__range]))) or vector(0)",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -598,7 +598,7 @@
     {
       "id": 1009,
       "type": "timeseries",
-      "title": "5xx 업무 오류 코드 (분당)",
+      "title": "5xx 업무 오류 코드 (구간당 건수)",
       "description": "이 서비스가 5xx 업무 오류로 답한 코드(로그 '업무 오류 CODE'). DEPENDENCY_UNAVAILABLE 은 의존 대상(Redis · 다른 서비스)을 제때 못 부른 것 — 오른쪽 CPU · Redis 패널로 서버 탓인지 이 서비스 탓인지 가른다. 4xx 업무 거절은 로그가 없어 응답 코드별 요청에서 본다",
       "datasource": {
         "type": "loki",
@@ -617,7 +617,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "sum by (code) (count_over_time({service_name=\"$service\", service_namespace=\"nova\"} |= \"업무 오류\" | regexp \"업무 오류 (?P<code>[A-Z_]+):\" [1m]))",
+          "expr": "sum by (code) (count_over_time({service_name=\"$service\", service_namespace=\"nova\"} |= \"업무 오류\" | regexp \"업무 오류 (?P<code>[A-Z_]+):\" [$__auto]))",
           "legendFormat": "{{code}}",
           "queryType": "range"
         }
@@ -828,7 +828,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(lettuce_seconds_bucket{job=\"nova/$service\"}[2m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(lettuce_seconds_bucket{job=\"nova/$service\"}[$__rate_interval])))",
           "legendFormat": "p99 (초)",
           "instant": false,
           "range": true
@@ -839,7 +839,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "sum(rate(lettuce_seconds_count{job=\"nova/$service\", error=~\".+\", error!=\"none\"}[2m])) * 60 or vector(0)",
+          "expr": "sum(rate(lettuce_seconds_count{job=\"nova/$service\", error=~\".+\", error!=\"none\"}[$__rate_interval])) * 60 or vector(0)",
           "legendFormat": "실패 / 분",
           "instant": false,
           "range": true
@@ -850,7 +850,7 @@
             "uid": "mimir"
           },
           "refId": "C",
-          "expr": "sum(max_over_time(lettuce_active_active{job=\"nova/$service\"}[2m]))",
+          "expr": "sum(max_over_time(lettuce_active_active{job=\"nova/$service\"}[$__rate_interval]))",
           "legendFormat": "대기 중",
           "instant": false,
           "range": true
@@ -970,7 +970,7 @@
       "id": 1014,
       "type": "timeseries",
       "title": "나가는 호출 오류율 (대상별)",
-      "description": "이 서비스가 부른 DB · 다른 서비스 · SQS 호출 중 오류 비율(샘플링 전 전체 스팬). 어느 의존 대상에서 실패하는지 본다. Redis 는 스팬이 없어 왼쪽 Redis 패널로 본다",
+      "description": "이 서비스가 부른 대상(다른 서비스 · DB · SQS 등, 서비스 그래프 기준)별 호출 실패 비율. 실패가 없는 대상은 0 으로 보인다. Redis 는 스팬이 없어 왼쪽 Redis 패널로 본다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -988,10 +988,10 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (span_name, db_system) (rate(traces_spanmetrics_calls_total{job=\"nova/$service\", span_kind=~\"SPAN_KIND_(CLIENT|PRODUCER)\", status_code=\"STATUS_CODE_ERROR\"}[2m])) / sum by (span_name, db_system) (rate(traces_spanmetrics_calls_total{job=\"nova/$service\", span_kind=~\"SPAN_KIND_(CLIENT|PRODUCER)\"}[2m]))",
-          "legendFormat": "{{db_system}} {{span_name}}",
+          "range": true,
           "instant": false,
-          "range": true
+          "legendFormat": "{{server}}",
+          "expr": "(sum by (server) (rate(traces_service_graph_request_failed_total{client=\"$service\"}[$__rate_interval])) or 0 * sum by (server) (rate(traces_service_graph_request_total{client=\"$service\"}[$__rate_interval]))) / sum by (server) (rate(traces_service_graph_request_total{client=\"$service\"}[$__rate_interval]))"
         }
       ],
       "fieldConfig": {
@@ -1055,7 +1055,7 @@
     {
       "type": "table",
       "title": "API (선택 기간)",
-      "description": "API(경로)별 선택 기간 호출 수 · 5xx 수 · 비율 · P50 · P95 · 이 서비스 전체 처리 시간 중 비중. 호출 수 순. 경로를 누르면 그 API 의 상세로 간다. 시간 비중이 큰 API 가 최적화 효과가 크다",
+      "description": "API(경로)별 선택 기간 호출 수 · 5xx 수 · 비율 · P50 · P95 · 이 서비스 전체 처리 시간 중 비중. 호출 수 순. 경로를 누르면 트러블슈팅(그 API 의 지연 분포 · 느린 · 오류 요청)으로 간다. 시간 비중이 큰 API 가 최적화 효과가 크다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
