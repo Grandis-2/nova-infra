@@ -15,13 +15,13 @@
 | NAT | NAT Gateway, AZ마다 하나 | NAT 인스턴스(fck-nat t4g.micro) AZ마다 하나 | 약 70달러 + 처리 요금 | vpc `nat_mode = "gateway"` |
 | obs 호스트 크기 | t4g.large (2 vCPU · 8 GiB) | t4g.medium (2 vCPU · 4 GiB), 컨테이너 메모리 한도를 실측으로 다시 나눔. 부하 시험 기간(2026-10-19부터 2~3일)에는 large 로 잠시 되돌린다 | 약 30달러 | ecs `obs_instance_type`, lgtm `obs_memory` |
 | mock 최소 대수 | 2대 | 1대 | 약 30달러 | `application/mock/service.yml` 의 `scaling.min` |
-| waitingroom · preorder 크기 | 2 vCPU · 4 GiB | 1 vCPU · 2 GiB, 몰리면 오토스케일링 | 약 20달러 | 각 `service.yml` 의 `cpu` · `memory` |
+| preorder 크기 | 2 vCPU · 4 GiB | 1 vCPU · 2 GiB, 몰리면 오토스케일링. waitingroom 은 첫 몰림을 1대가 받아 목표 크기로 되돌렸다(부하 시험 2026-10-22) | 약 10달러 | `application/preorder/service.yml` 의 `cpu` · `memory` |
 | Atlantis 진입로 | 전용 ALB | 메인 ALB를 같이 쓰고 CloudFront 뒤에 둠 | 약 20달러 | atlantis-deploy 저장소 |
 | Valkey | 복제본 + 자동 장애조치 (Multi-AZ) | 노드 1개 | 약 20달러 | elasticache `multi_az = true` |
 | 엣지 로그 Lambda → 게이트웨이 | 내부 NLB | 게이트웨이 태스크 IP를 가리키는 DNS 레코드 | 약 16달러 | lgtm `gateway.tf` |
 | VPC Flow Logs | 켬 | 끔 | 트래픽에 비례 | vpc `enable_flow_logs = true` |
 
-모두 합하면 한 달에 약 680달러를 절감합니다. 현재 운영비는 한 달에 약 230달러입니다.
+모두 합하면 한 달에 약 670달러를 절감합니다. 현재 운영비는 한 달에 약 240달러입니다.
 
 금액은 서울 리전 정가로 계산한 추정치이며, 트래픽, 태스크 수, 크레딧에 따라 달라집니다.
 
