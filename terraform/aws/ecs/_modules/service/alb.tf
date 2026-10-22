@@ -148,8 +148,10 @@ resource "aws_lb_listener_rule" "blue_green" {
   }
 }
 
-# 이 서비스가 직접 돌려준 5xx — 어느 서비스가 사용자에게 오류를 냈는지 이름으로 알린다.
+# 이 서비스가 ALB 로 돌려준 5xx — 어느 서비스가 사용자에게 오류를 냈는지 이름으로 알린다.
 # 계정 전체 ALB 5xx(monitoring)는 ALB 가 만든 것(대상 없음 · 시간 초과)만 세고, 앱이 낸 5xx 는 여기서 본다.
+# Service Connect 로 서비스끼리 주고받은 5xx(예: waitingroom → preorder 접수 전달)는 ALB 를 지나지 않아 세지 않는다.
+# 그 오류가 사용자에게 가면 앞단 서비스 이름으로 울리고, 원인 서비스는 Grafana SLO 경보 · 서비스 대시보드(앱 지표)로 본다.
 # 부하 시험처럼 1~2분만 몰려도 보이게 1분 지표 한 번으로 울리되, 몇 건의 오류로 튀지 않게 건수와 비율을 함께 본다.
 locals {
   error_alarm_min_count = 50 # 1분 5xx 건수
@@ -168,9 +170,10 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
     }
   }
 
-  alarm_name          = "${var.name}-5xx"
-  alarm_description   = "${var.name} returned 5xx to users: at least ${local.error_alarm_min_count} in a minute and over ${local.error_alarm_ratio}% of its requests. See the service dashboard for error codes (DEPENDENCY_UNAVAILABLE = a dependency or Redis call timed out), CPU and task count"
-  evaluation_periods  = 1
+  alarm_name        = "${var.name}-5xx"
+  alarm_description = "${var.name} returned 5xx to users through the ALB: at least ${local.error_alarm_min_count} in a minute and over ${local.error_alarm_ratio}% of its requests. See the service dashboard for error codes (DEPENDENCY_UNAVAILABLE = a dependency or Redis call timed out), CPU and task count"
+  # 1분 지표가 늦게 도착하면 FILL 이 그 분을 0 으로 채운다. 두 분을 보고 그중 한 번이면 울려 늦은 지표도 잡는다
+  evaluation_periods  = 2
   datapoints_to_alarm = 1
   threshold           = local.error_alarm_ratio
   comparison_operator = "GreaterThanThreshold"

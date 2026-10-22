@@ -4,7 +4,8 @@
 # 경보는 사람이 바로 조치할 것만 만든다. 할 일 없는 경보는 무시하게 되고 진짜 장애를 놓친다.
 #
 #   사용자가 이미 아프다 : ALB 가 만든 5xx, 태스크 0개, CloudFront 5xx (edge.tf)
-#                          서비스가 낸 5xx · 증설 한계는 ecs 모듈(<서비스>-5xx · -at-max), 응답 시간 · 가용성은 Grafana SLO 경보
+#                          서비스가 낸 5xx · 증설 한계 · 늘릴 수 없는 서비스의 CPU 는 ecs 모듈(<서비스>-5xx · -at-max · -cpu-high),
+#                          응답 시간 · 가용성은 Grafana SLO 경보
 #   곧 아파진다          : 큐 적체, Valkey, RDS(var.rds_instance_ids. NCP DB 는 NCP Cloud Insight 알림)
 #   조용히 실패했다      : DLQ 적재, 배치 태스크 비정상 종료
 #   공격 · 차단          : WAF 차단 급증 (edge.tf)
@@ -291,15 +292,17 @@ resource "aws_cloudwatch_event_target" "batch_failure" {
 
   # Chatbot 은 ECS 이벤트 원문을 Slack 에 그리지 못한다. 사용자 정의 알림 형식으로 바꿔 보낸다
   input_transformer {
-    # 종료 코드로 원인을 가른다. batch-imagecleanup 의 2 는 예외가 아니라 삭제 대기가 며칠째 남아 멈췄다는 뜻이다(1 = 예외)
+    # 종료 코드로 원인을 가른다. batch-imagecleanup 의 2 는 예외가 아니라 삭제 대기가 며칠째 남아 멈췄다는 뜻이다(1 = 예외).
+    # 뜨지 못한 태스크(stopCode TaskFailedToStart)는 컨테이너가 없어 종료 코드 자리가 비고, 이유는 stoppedReason 에 있다
     input_paths = {
       group  = "$.detail.group"
       task   = "$.detail.taskArn"
       reason = "$.detail.stoppedReason"
+      stop   = "$.detail.stopCode"
       exit   = "$.detail.containers[0].exitCode"
     }
     input_template = <<-EOT
-      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally: <group>", "description": "exit code <exit> (imagecleanup: 2 = deletions blocked for days, 1 = exception). <reason>. Task <task>"}}
+      {"version": "1.0", "source": "custom", "content": {"title": "Batch task stopped abnormally: <group>", "description": "<stop>: <reason>. Exit code (only when the container ran): <exit> (imagecleanup 2 = deletions blocked for days, 1 = exception). Task <task>"}}
     EOT
   }
 }
