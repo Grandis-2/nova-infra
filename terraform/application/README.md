@@ -89,7 +89,7 @@ be의 `application.yml.example`을 복사해 운영 값으로 고칩니다. 공�
 - `uploads: true` 또는 `upload_cleanup: true`이면 `nova.upload.bucket`, `nova.upload.cdn-base-url`, `nova.upload.region`
 - `scales`가 있으면 `nova.scaling.cluster`, `nova.scaling.region`, `nova.scaling.<대상>.service` · `baseline`(min) · `max`
 
-비밀 값이나 `localhost`를 적으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
+비밀 값이나 `localhost`를 적으면 plan이 실패합니다. preorder `nova.scaling.enabled`가 켜져 있으면 입장 속도와 preorder 대수도 봅니다. 회차 오픈 때 대수(`nova.scaling.preorder.surge`, 기본 3)가 ⌈waitingroom `waitingroom.admission.max-global-credit` ÷ preorder `nova.capacity.heartbeat.accept-per-second`⌉ 보다 작거나 preorder `scaling.max` 보다 크거나, 평소 대수(`scaling.min`) × `accept-per-second` 가 `global-credit` 보다 작으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
 
 ## 비밀
 

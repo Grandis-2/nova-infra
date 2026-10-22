@@ -146,6 +146,26 @@ locals {
   _db_conn_max = try(data.terraform_remote_state.database.outputs.max_connections, null)
 }
 
+# 입장 속도와 preorder 대수가 맞는지 본다(preorder 의 nova.scaling.enabled 가 켜졌을 때만 — 꺼지면 앱이 대수를 바꾸지 않는다)
+#   오픈 때: surge ≥ ⌈waitingroom.admission.max-global-credit ÷ nova.capacity.heartbeat.accept-per-second⌉ 그리고 surge ≤ preorder scaling.max
+#   평소  : 기본 대수(scaling.min) × accept-per-second ≥ waitingroom.admission.global-credit
+# 값이 없거나 null 이면 be 코드 기본값(surge 3 · max-global-credit 1500 · global-credit 150 · accept-per-second 100)으로 본다
+locals {
+  _preorder_cfg    = try(yamldecode(local._cfg_text["preorder"]), {})
+  _waitingroom_cfg = try(yamldecode(local._cfg_text["waitingroom"]), {})
+  _admission_check = (
+    alltrue([for k in ["preorder", "waitingroom"] : contains(keys(local.deployed_services), k)])
+    && try(local._preorder_cfg.nova.scaling.enabled, false) == true
+  )
+  _surge          = coalesce(try(tonumber(local._preorder_cfg.nova.scaling.preorder.surge), null), 3)
+  _accept_per_sec = coalesce(try(tonumber(local._preorder_cfg.nova.capacity.heartbeat["accept-per-second"]), null), 100)
+  _max_credit     = coalesce(try(tonumber(local._waitingroom_cfg.waitingroom.admission["max-global-credit"]), null), 1500)
+  _credit         = coalesce(try(tonumber(local._waitingroom_cfg.waitingroom.admission["global-credit"]), null), 150)
+  _surge_need     = ceil(local._max_credit / local._accept_per_sec)
+  _preorder_min   = try(local.deployed_services["preorder"].min, 0)
+  _preorder_max   = try(local.deployed_services["preorder"].max, 0)
+}
+
 resource "terraform_data" "config_check" {
   lifecycle {
     # deploy: true 인데 설정이 비어 있으면 인프라 계산값만 받고 기동에 실패한다
@@ -164,6 +184,14 @@ resource "terraform_data" "config_check" {
     precondition {
       condition     = length(local._secret_reserved) == 0
       error_message = "비밀(secrets.sops.yml · generated_secrets) 키가 인프라 환경변수나 service.yml 의 environment 와 겹친다: ${join(", ", local._secret_reserved)}"
+    }
+    precondition {
+      condition     = !local._admission_check || local._preorder_min * local._accept_per_sec >= local._credit
+      error_message = "평소 입장 속도(waitingroom global-credit ${local._credit}/초)를 preorder 기본 대수 ${local._preorder_min} × 태스크당 접수 ${local._accept_per_sec}/초가 받지 못한다. global-credit 을 낮추거나 preorder scaling.min 을 올린다."
+    }
+    precondition {
+      condition     = !local._admission_check || (local._surge >= local._surge_need && local._surge <= local._preorder_max)
+      error_message = "회차 오픈 때 preorder 대수(nova.scaling.preorder.surge ${local._surge})가 맞지 않는다: 최대 입장 속도 ${local._max_credit}/초 ÷ 태스크당 접수 ${local._accept_per_sec}/초 = ${local._surge_need}대 이상이고 preorder scaling.max ${local._preorder_max} 이하여야 한다. surge · max 를 올리거나 waitingroom 의 max-global-credit 을 낮춘다."
     }
     precondition {
       condition     = local._db_conn_max == null || local._db_conn_need <= local._db_conn_max
