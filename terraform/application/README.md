@@ -1,6 +1,6 @@
 # application
 
-폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM 역할, 보안 그룹, ECS 서비스가 함께 만들어집니다. DB 계정만은 직접 만듭니다([새 서비스 추가](#새-서비스-추가) 참고).
+폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM 역할, 보안 그룹, ECS 서비스가 함께 만들어집니다. `deploy: false`이면 ECS 서비스를 띄우지 않고, `schedule`을 쓰면 서비스 대신 정해진 시각에 태스크만 띄웁니다. DB 계정만은 직접 만듭니다([새 서비스 추가](#새-서비스-추가) 참고).
 
 ```
 application/<서비스>/
@@ -15,7 +15,8 @@ application/<서비스>/
 | --- | --- |
 | `cpu`, `memory`, `port`, `deployment`, `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
 | `schedule` | ECS 서비스 없이 태스크 정의와, 정해진 시각에 태스크를 한 번 띄우는 스케줄 (ecs, scheduler) |
-| `routes`, `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
+| `routes` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
+| `health` | `routes`가 있으면 ALB 대상 그룹의 헬스체크, 없으면 컨테이너 헬스체크 (ecs) |
 | `calls`, `jwt` | 호출 대상 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup, ecs) |
 | `db`, `db_account`, `extra_databases` | DB 보안 그룹 규칙, DB 주소, 계정 비밀 주입 (securitygroup, ecs). 계정 비밀은 rds 스택에 있습니다 |
 | `redis`, `queues`, `uploads`, `upload_cleanup` | 캐시 보안 그룹 규칙, 큐와 버킷 권한이 든 태스크 역할 (securitygroup, iam) |
@@ -91,7 +92,7 @@ be의 `application.yml.example`을 복사해 운영 값으로 고칩니다. 공�
 
 비밀 값이나 `localhost`를 적으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
 
-preorder의 `nova.scaling.enabled`가 켜져 있으면 입장 속도와 preorder 대수가 맞는지도 검사합니다. 다음 중 하나라도 맞으면 plan이 실패합니다.
+preorder와 waitingroom이 모두 배포 대상(`deploy: true`)이고 preorder의 `nova.scaling.enabled`가 켜져 있으면, 입장 속도와 preorder 대수가 맞는지도 검사합니다. 다음 중 하나라도 맞으면 plan이 실패합니다.
 
 - 회차 오픈 때 대수(`nova.scaling.preorder.surge`, 기본 3)가 ⌈waitingroom의 `waitingroom.admission.max-global-credit` ÷ preorder의 `nova.capacity.heartbeat.accept-per-second`⌉보다 작다
 - 그 대수가 preorder의 `scaling.max`보다 크다

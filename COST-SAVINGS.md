@@ -13,7 +13,7 @@
 | DB | RDS for MySQL Multi-AZ | RDS for MySQL 단일 AZ(db.t4g.large) | 약 120달러 | rds `main.tf`의 `multi_az = true` |
 | Container Insights | 켬 (태스크 단위 지표) | 끔. 무료 `AWS/ECS` 지표와 ECS 이벤트 경보로 대신 | 약 75달러 | ecs `container_insights = "enhanced"` |
 | NAT | NAT Gateway, AZ마다 하나 | NAT 인스턴스(fck-nat t4g.micro) AZ마다 하나 | 약 70달러 + 처리 요금 | vpc `nat_mode = "gateway"` |
-| obs 호스트 크기 | t4g.large (2 vCPU, 8 GiB) | t4g.medium (2 vCPU, 4 GiB). 컨테이너 메모리 한도는 실측으로 다시 나눔. 지금은 부하 시험 때문에 t4g.large로 올려 두었고, 시험이 끝나면 medium으로 내린다 | 약 30달러 | ecs `obs_instance_type`, lgtm `obs_memory` |
+| obs 호스트 크기 | t4g.large (2 vCPU, 8 GiB) | t4g.medium (2 vCPU, 4 GiB). 컨테이너 메모리 한도는 실측으로 다시 나눔. 부하 시험 기간에만 t4g.large로 올리고, 끝나면 medium으로 되돌린다 | 약 30달러 | ecs `obs_instance_type`, lgtm `obs_memory` |
 | mock 최소 대수 | 2대 | 1대 | 약 30달러 | `application/mock/service.yml`의 `scaling.min` |
 | preorder 크기 | 2 vCPU, 4 GiB | 1 vCPU, 2 GiB. 몰리면 오토스케일링으로 버틴다. waitingroom은 첫 몰림을 한 대가 받아야 해서 목표 크기 그대로 둔다 | 약 10달러 | `application/preorder/service.yml`의 `cpu`, `memory` |
 | Atlantis 진입로 | 전용 ALB | 메인 ALB를 같이 쓰고 CloudFront 뒤에 둠 | 약 20달러 | atlantis-deploy 저장소 |
