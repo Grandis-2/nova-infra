@@ -1488,7 +1488,7 @@
       "id": 26,
       "type": "timeseries",
       "title": "읽기 캐시 적중률 (캐시별)",
-      "description": "hit · hit_refresh(바로 주고 뒤에서 갱신) 비율. 몰림 첫 1~2분은 새 태스크의 메모리 캐시가 비어 낮다. 계속 낮으면 TTL 이나 캐시 키를 본다",
+      "description": "hit · hit_refresh(바로 주고 뒤에서 갱신) · local(같은 세대의 인스턴스 사본으로 답함, 상품 상세 · 홍보 본문 · 회차) 비율. 몰림 첫 1~2분은 새 태스크의 메모리 캐시가 비어 낮다. 계속 낮으면 TTL 이나 캐시 키를 본다",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
@@ -1541,7 +1541,7 @@
             "uid": "mimir"
           },
           "refId": "A",
-          "expr": "sum by (cache) (rate(nova_read_cache_requests_total{outcome=~\"hit|hit_refresh\"}[$__rate_interval])) / sum by (cache) (rate(nova_read_cache_requests_total[$__rate_interval]))",
+          "expr": "sum by (cache) (rate(nova_read_cache_requests_total{outcome=~\"hit|hit_refresh|local\"}[$__rate_interval])) / sum by (cache) (rate(nova_read_cache_requests_total[$__rate_interval]))",
           "legendFormat": "{{cache}}",
           "range": true
         }
@@ -1557,7 +1557,7 @@
       "id": 27,
       "type": "timeseries",
       "title": "읽기 캐시 결과 (분당)",
-      "description": "load = 캐시에 없어 원본을 부름(DB 또는 다른 서비스 — catalog 의 사전예약 회차는 preorder 호출), wait = 같은 키를 다른 요청이 읽는 중이라 기다림. wait 가 많으면 같은 키에 몰린 것이다(기다림 5초를 넘으면 503)",
+      "description": "load = 캐시에 없어 원본을 부름(DB 또는 다른 서비스 — catalog 의 사전예약 회차는 preorder 호출), wait = 같은 키를 다른 요청이 읽는 중이라 기다림, local = Redis 에서 세대만 읽고 값은 인스턴스 사본으로 답함(적중), held = Redis 장애 중 사본으로 답함. wait 가 많으면 같은 키에 몰린 것이다(기다림 5초를 넘으면 503)",
       "datasource": {
         "type": "prometheus",
         "uid": "mimir"
