@@ -80,7 +80,9 @@ processors:
       metric:
         - 'resource.attributes["service.name"] == "k6" and IsMatch(metric.name, "^k6_(iteration_duration|group_duration|data_sent|data_received|http_req_(blocked|connecting|tls_handshaking|sending|waiting|receiving))$$")'
   # k6 데이터 포인트 속성은 남길 것만 고른다. url · group 같은 태그가 다시 켜져도 여기서 버린다.
-  #   test_id 시험 ID · instance 태스크 번호(리소스 속성이 안 먹을 때의 대안) · error_code 오류 코드 카운터 · check 검사 이름
+  #   test_id 시험 ID · instance 태스크 번호(리소스 속성이 안 먹을 때의 대안) · error_code k6 내장 HTTP 오류 번호 · check 검사 이름
+  #   outcome entry_outcome · rush_outcome 의 결과(판정에 쓴다) · code error_code 카운터의 업무 오류 코드
+  #   flow · reason skipped 의 흐름 · 이유 · pool members_exhausted 의 회원 풀. 모두 스크립트가 정한 값이라 종류가 적다
   #   condition  Rate 지표(http_req_failed · checks)를 k6 가 카운터 하나에 zero · nonzero 로 나눠 낸다. 빠지면 비율을 못 구한다
   # name 이 http(s):// 로 시작하면 스크립트가 tags.name 을 빠뜨린 것이다(k6 는 URL 원문을 넣는다). ID 마다 시계열이 생기지 않게 하나로 모은다.
   # 속성을 버리거나 바꾸면 서로 다른 스트림이 같은 라벨이 되므로 같은 라벨끼리 합친다. 카운터 · 히스토그램은 더하고 게이지는 큰 쪽을 남긴다
@@ -89,7 +91,7 @@ processors:
     metric_statements:
       - context: datapoint
         statements:
-          - 'keep_keys(datapoint.attributes, ["status", "method", "name", "scenario", "expected_response", "test_id", "instance", "error_code", "check", "condition"]) where resource.attributes["service.name"] == "k6"'
+          - 'keep_keys(datapoint.attributes, ["status", "method", "name", "scenario", "expected_response", "test_id", "instance", "error_code", "check", "condition", "outcome", "code", "flow", "reason", "pool"]) where resource.attributes["service.name"] == "k6"'
           - 'set(datapoint.attributes["name"], "(unnamed)") where resource.attributes["service.name"] == "k6" and IsMatch(datapoint.attributes["name"], "^https?://")'
       - context: metric
         statements:
