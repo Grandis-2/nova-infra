@@ -1,6 +1,6 @@
 # nova 관측 스택
 
-직접 운영하는 Grafana LGTM 스택으로, nova 의 로그, 트레이스, 지표, 프로파일을 한곳에 모으고 경보를 보낸다.
+nova 의 로그, 트레이스, 지표, 프로파일을 한곳에 모으고 경보를 보내는 Grafana LGTM 스택이다. 관리형 서비스 대신 직접 운영한다.
 
 > 경로는 모두 저장소 루트 기준이다. 이 스택의 Terraform 은 `terraform/aws/monitoring/lgtm/nova_apnortheast2/` 에, obs 설정 파일은 그 아래 `config/` 에 있다.
 
@@ -13,7 +13,7 @@
 
 - **OTel 게이트웨이**: 앱이 보낸 데이터를 받아 가공한 뒤 저장소로 넘긴다.
 - **브라우저 수집기**: 프런트가 브라우저에서 보낸 데이터를 받아 게이트웨이로 넘긴다.
-- **obs**: EC2 한 대에서 Loki · Tempo · Mimir · Pyroscope · Grafana 를 실행한다.
+- **obs**: EC2 한 대에서 Loki, Tempo, Mimir, Pyroscope, Grafana 를 실행한다.
 
 | 데이터 | 저장 | 보존 |
 |---|---|---|
@@ -34,7 +34,7 @@ obs 는 재배포할 때마다 몇 분씩 멈춘다. 데이터를 받는 Collect
 <summary>자세히</summary>
 
 Mimir 는 30분 늦게 도착한 샘플까지 받는다(`out_of_order_time_window`). 쌓아 둔 요청을 여러 개 한꺼번에 다시 보내면 샘플 순서가 섞이는데, 이 설정이 없으면 Mimir 가 그 샘플을 버린다. Mimir 를 2분 내렸다 올려서 확인했다.
-서비스가 하나 늘고 데이터 경로도 한 단계 길어지는 비용이 있다. obs Collector 가 긁는 LGTM 자체 · MySQL · 호스트 지표는 수집 대상도 같이 내려가므로 그동안 비어 있다.
+대신 운영할 서비스가 하나 늘고 데이터가 한 단계를 더 거친다. obs Collector 가 긁는 LGTM 자체 지표와 MySQL, 호스트 지표는 긁을 대상도 같이 내려가므로 그동안 비어 있다.
 
 </details>
 
@@ -65,7 +65,7 @@ flowchart LR
 
 - span metrics(`traces_spanmetrics_*`)는 서버 · 클라이언트 · 메시지 스팬을 `span_name` · `span_kind` · `status_code` 와 HTTP 상태 · DB · 메시징 종류로 나눠 센다. 사용자 ID 같은 값은 차원에서 빼고, 조합이 2000개를 넘으면 넘친 몫을 overflow 시계열 하나로 합친다.
 - 서비스 그래프(`traces_service_graph_*`)는 클라이언트 스팬과 서버 스팬을 짝지어 간선을 만든다. DB · SQS · 외부 API 처럼 계측되지 않은 상대는 `db.name` · `server.address` 같은 속성으로 가상 노드를 만든다. Grafana 서비스 맵(Tempo 데이터소스의 `serviceMap`)이 이 지표를 읽는다.
-- 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 메모리에 두므로 게이트웨이에 2 GiB 를 준다(부하 시험 기간에는 4 GiB).
+- 짝을 기다리는 간선(최대 5000개, 10초)과 지표 상태를 메모리에 두므로 게이트웨이에 4 GiB 를 준다.
 - 샘플링된 트레이스로도 TraceQL 지표(`{...} | rate() by (span.http.route)`, `quantile_over_time`)를 볼 수 있다. Tempo 의 `local-blocks` 프로세서가 최근 블록에서 바로 계산하고 결과는 저장하지 않는다. Traces Drilldown 이 이 지표를 쓴다. 표본으로 계산한 값이므로 비율과 분포만 보고, 정확한 수는 span metrics 로 확인한다.
 
 </details>
@@ -137,7 +137,7 @@ flowchart LR
 
 **데이터 손실은 허용하되 드러낸다.**
 
-게이트웨이에는 디스크 큐가 없다(Fargate 디스크는 태스크와 함께 사라진다). 메모리 사용량이 `memory_limiter`(평소 1536 MiB, 부하 시험 기간 3072 MiB)를 넘으면 수신을 거부하고, 15분 넘게 보내지 못한 데이터는 버린다. 이 데이터를 감사 기록이나 정본(outbox 등)의 근거로 쓰면 안 된다.
+게이트웨이에는 디스크 큐가 없다(Fargate 디스크는 태스크와 함께 사라진다). 메모리 사용량이 `memory_limiter`(3072 MiB)를 넘으면 수신을 거부하고, 15분 넘게 보내지 못한 데이터는 버린다. 이 데이터를 감사 기록이나 정본(outbox 등)의 근거로 쓰면 안 된다.
 빠진 데이터는 지표(`otelcol_receiver_refused_*`, `*_discarded_*`)와 경보로 드러낸다.
 
 **카디널리티는 설정으로 제한한다.**
@@ -167,18 +167,26 @@ flowchart LR
 
 ![개요 대시보드](../../../../../../docs/architecture/img/grafana/overview.jpg)
 
-> 화면은 부하 시험 전에 찍었다. 구성을 보여 주는 용도이고, 수치에는 의미가 없다.
+> 화면은 2026-10-22 21:45~22:02 부하 시험 구간이다(프런트만 최근 7일). 서비스 · API 상세는 waitingroom, `GET /api/v1/preorders/queue` 를 골랐다.
 
 <details>
-<summary>대시보드 화면 (9개)</summary>
+<summary>대시보드 화면 (11개)</summary>
 
 **SLO**
 
 <img alt="SLO" src="../../../../../../docs/architecture/img/grafana/slo.jpg" width="100%">
 
+**오픈 상황판**
+
+<img alt="오픈 상황판" src="../../../../../../docs/architecture/img/grafana/open.jpg" width="100%">
+
 **서비스 상세**
 
 <img alt="서비스 상세" src="../../../../../../docs/architecture/img/grafana/service.jpg" width="100%">
+
+**API 상세**
+
+<img alt="API 상세" src="../../../../../../docs/architecture/img/grafana/api.jpg" width="100%">
 
 **MySQL**
 
@@ -226,17 +234,13 @@ flowchart LR
 | `60 Frontend` | 프런트 · 실사용자 (`nova-frontend`) | 브라우저(Faro)가 보낸 데이터로 본 사용자 체감 성능. 세션 · JS 오류 · LCP · INP · CLS p75, 페이지별 웹 바이탈, 오류 종류 · 메시지 Top · 최근 오류, 브라우저와 서버가 잰 API p95, 느린 API, 접힌 줄에 핵심 동작(버튼 이름)별 소요 시간 · API 실패율. 세션을 샘플링하므로 수치는 전체가 아니다 |
 | `90 Observability` | LGTM 스택 · obs 호스트 (`nova-lgtm`) | obs 가 데이터를 빠뜨리지 않는지, 디스크 · 메모리가 모자라지 않는지. 카디널리티 · 한도(시계열 · 스트림 한도 사용률, 시계열 많은 지표 · job Top 10, 게이트웨이 전송 큐) |
 
-- Grafana 는 폴더를 이름순으로만 정렬하므로 폴더 이름 앞에 번호를 붙여 순서를 정한다. 번호는 10 단위로 띄워서 나중에 사이에 폴더를 끼울 수 있게 했다.
-
-
-- 서비스 상세의 숫자는 무엇으로 셌는지에 따라 정확도가 다르다.
-  - 요청 수 · 지연 · Apdex · 엔드포인트 표는 앱의 HTTP 지표로, 시간 구성 · 나가는 호출 · 서비스 맵은 Collector 가 샘플링 전 스팬으로 만든 지표로 센다. 둘 다 모든 요청을 반영한다.
-  - 오류 · 느린 트레이스 표는 Tempo 에 남은 트레이스만 보여 준다. 오류와 1초 초과 요청은 모두 남고, 나머지는 10% 만 남는다.
-- Apdex 의 T 는 0.25초다. 만족(≤ 0.25초)과 허용(≤ 1초) 기준이 히스토그램 버킷 경계와 맞아서 근사 없이 센다.
-- 이미지 태그가 `:latest` 라서 버전 라벨이 없다. 대신 새 태스크가 처음 지표를 보낸 시점(`target_info` 의 새 instance)을 보라색 구간으로 표시해 배포 · 교체 시점을 가늠한다. 수집이 몇 분 끊겼다가 돌아온 태스크(obs 재배포 뒤)도 같이 표시된다.
-
-- URL 화면은 `/**` 를 API 로 보지 않는다. Spring 은 어느 컨트롤러에도 맞지 않는 요청(없는 경로 · 스캐너, 대개 404)을 이 이름으로 묶는다. 이런 요청은 목록 화면에서 "등록되지 않은 경로 요청" 수로만 센다.
-- 1초 초과 비율은 히스토그램 버킷 경계(1초)로 세므로 근사가 없다. 증감은 지난주 같은 구간과 비교한 배수이고, 지난주에 요청이 없었으면 칸을 비운다.
+- Grafana 는 폴더를 이름순으로만 정렬해서 폴더 이름 앞에 번호를 붙였다. 사이에 폴더를 끼울 수 있게 10 단위로 띄운다.
+- 서비스 상세와 API 상세의 숫자는 무엇으로 셌는지에 따라 정확도가 다르다.
+  - 요청 수, 지연, API 표는 앱의 HTTP 지표로 세고, 시간 구성과 나가는 호출, 서비스 맵은 Collector 가 샘플링 전 스팬으로 만든 지표로 센다. 둘 다 샘플링과 상관없이 세지만, 헬스체크(`/actuator`)와 `/**` 요청, 오류 없는 SQS 롱폴링처럼 일부러 뺀 것은 들어가지 않는다.
+  - 오류 트레이스와 느린 요청 표는 Tempo 에 남은 트레이스만 보여 준다. 오류와 1초 넘은 요청은 남기고 나머지는 10% 만 남긴다. 다만 결정을 기다리는 트레이스가 5만 건을 넘으면 오래된 것부터 결정 없이 버려지므로, 몰릴 때는 오류나 느린 요청도 빠질 수 있다.
+- 0.5초 초과 비율은 히스토그램 버킷 경계(0.5초)로 세므로 근사가 없다.
+- 이미지 태그가 `:latest` 라서 버전 라벨이 없다. 대신 새 태스크가 처음 지표를 보낸 시점(`target_info` 에 새로 보인 instance)을 보라색 구간으로 표시해 배포나 교체 시점을 가늠한다. obs 재배포 뒤처럼 수집이 몇 분 끊겼다가 돌아온 태스크도 같이 표시된다.
+- API 표는 `/**` 를 API 로 보지 않는다. Spring 은 어느 컨트롤러에도 맞지 않는 요청(없는 경로, 스캐너, 대개 404)을 이 이름으로 묶는다.
 - 경로 변수에는 정규식 문자가 든 값(`/orders/{id}`)도 있다. PromQL 에서는 `http_route=~"$route"` 로 쓴다. All 을 둔 변수는 Grafana 가 값을 정규식에 맞게 이스케이프해서 넣는다.
   TraceQL 에는 Grafana 가 값을 그대로 넣고, 큰따옴표 문자열은 `\*` 같은 이스케이프를 받지 않는다. 그래서 ``span.http.route=~`${route:regex}` `` 처럼 regex 형식으로 만든 값을 백틱 문자열에 넣는다.
 - CloudWatch 를 읽는 대시보드(Valkey · SQS · Platform)는 5분마다 새로고침한다. GetMetricData 는 조회한 지표 수만큼 과금된다.
@@ -263,7 +267,7 @@ Grafana 가 1분마다 평가해서 SNS, AWS Chatbot 을 거쳐 Slack 으로 보
 | 응답 시간 | 95% 가 0.5초 이내 | 5% (0.5초는 히스토그램 버킷 경계라 근사가 없다) |
 
 - 헬스체크(`/actuator`)는 뺀다.
-- 응답 시간 계열(0.5초 초과 · Apdex · 느린 요청 표 · 시간 구성 · 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 요청 수와 5xx 에는 남겨 두었으므로 응답 시간 SLO 의 분모(요청 수)에 이 연결이 들어가 비율이 조금 낮게 나온다. API 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
+- 응답 시간을 보는 패널(0.5초 초과, 느린 요청 표, 시간 구성, 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 응답 시간 SLO 도 분자와 분모 모두에서 이 연결을 뺀다. 요청 수와 5xx 에는 남겨 둔다. API 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
 - **기록 규칙**(`slo.yaml` 의 `nova-slo-rec`): 5분 · 30분 · 1시간 · 6시간 창마다 요청 · 5xx · 0.5초 초과 요청의 초당 수를 1분마다 미리 계산해 Mimir 에 기록한다(`nova:http_requests:rate1h` 등). Grafana 가 관리하는 기록 규칙이다. 경보와 SLO 대시보드가 이 값을 읽으므로 긴 창을 매번 다시 계산하지 않는다.
 - **소진 속도 경보**: 예산을 평소 속도의 몇 배로 쓰는지 본다. 긴 창과 짧은 창이 모두 기준을 넘어야 울린다. 문제가 끝나면 짧은 창이 먼저 기준 아래로 내려가므로 경보가 빨리 풀린다.
 
@@ -312,7 +316,7 @@ flowchart LR
 - 5xx 비율에는 고정 기준(5분 5%) 경보를 두지 않는다. SLO 가용성 소진 속도 경보가 더 일찍(1.44%) 울리면서도 덜 자주 울린다. 규칙은 파일에서 빼도 Grafana 에 남으므로 `rules.yaml` 의 `deleteRules` 로 지운다.
 - 트래픽이 없어 조회 결과가 비면 정상으로 본다(`noDataState: OK`). 조회가 실패하면 Error 상태 알림이 따로 간다.
 - 엣지는 CloudWatch 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/certs_alb.tf`)로 감시한다. 인증서 만료 14일 전(ALB · CloudFront 인증서, 트래픽과 무관)과 ALB 가 직접 만든 4xx 비율 50% 초과(원본 확인 헤더 · 리스너 규칙 어긋남)에 울린다. 4xx 경보는 5분 요청이 20건 이상일 때만 판단하고 15분 연속 넘어야 울리며, 기준값은 `alb_elb_4xx_ratio_threshold` 다.
-- RDS 의 CPU · 여유 메모리 · 남은 스토리지도 CloudWatch 경보(`rds_instance_ids`)로 본다.
+- RDS 의 CPU, 여유 메모리, 남은 스토리지 경보는 cloudwatch 스택의 `rds_instance_ids` 에 인스턴스 식별자를 넣어야 만들어진다. 지금은 비어 있어서 이 경보가 없다.
 - ECS 서비스 상태도 CloudWatch 로 감시한다(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/`). 서비스별 "태스크 0개" 경보(`AWS/ECS` `LiveTaskCount` < 1, 5분)와 ECS 이벤트 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/ecs_events.tf`)가 있다. 증설 경보(순간 폭주 `<서비스>-burst-*`: 증설을 시작할 때만 알림, 증설 한계 `<서비스>-at-max`: 최대 대수에서 CPU 가 3분 높음)는 기준값인 max 와 함께 바뀌도록 ecs 모듈(`terraform/aws/ecs/_modules/service/burst.tf`)에 있다. 서비스가 직접 돌려준 5xx(`<서비스>-5xx`: 1분에 50건 이상이고 요청의 2% 초과, 최근 2분 중 한 번)도 대상 그룹이 있는 ecs 모듈(`alb.tf`)에 있어, 어느 서비스가 사용자에게 오류를 냈는지 이름으로 온다. 계정 전체 `alb-5xx` 는 ALB 가 직접 만든 5xx(대상 없음 · 시간 초과)만 센다.
   ECS 이벤트 경보는 배포 실패(되돌림), 태스크 배치 · 설정 실패, 태스크 비정상 종료를 알린다. 비정상 종료는 필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패이고, 배포 · 스케일 인 · Spot 회수는 뺀다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식이어야 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 이 JSON 을 만든다.
@@ -425,7 +429,7 @@ sum by (server) (rate(traces_service_graph_request_failed_total{client="preorder
 앱이 보내는 OTLP 를 obs 태스크 밖에서 받는 Collector 다. obs 는 호스트 디렉터리를 쓰므로 재배포할 때 몇 분 동안 비지만, 게이트웨이는 별도 서비스라 그동안에도 데이터를 받는다.
 
 - 관측 클러스터(`nova-prod-observability`)에서 실행된다. 앱 클러스터와 Service Connect 네임스페이스가 같아서 앱은 그대로 `otel-gateway` 이름으로 보낸다.
-- Fargate(온디맨드, 0.5 vCPU · 2 GiB. 부하 시험 기간에는 1 vCPU · 4 GiB)로 실행하고 롤링 배포한다. Spot 은 회수되면 다음 태스크가 뜰 때까지 수집이 멈추므로 쓰지 않는다.
+- Fargate(온디맨드, 1 vCPU, 4 GiB)로 실행하고 롤링 배포한다. Spot 은 회수되면 다음 태스크가 뜰 때까지 수집이 멈추므로 쓰지 않는다.
 - 설정은 `terraform/aws/monitoring/lgtm/nova_apnortheast2/gateway/collector.yaml` 내용을 환경 변수로 넘긴다(`--config=env:COLLECTOR_CONFIG`). S3 에서 내려받지 않으므로 태스크 역할이 필요 없고, 설정이 바뀌면 다시 배포된다.
 - obs 의 Loki · Tempo · Mimir 로 Service Connect 를 거쳐 보낸다. 보내지 못한 데이터는 내보내기별 메모리 전송 큐(바이트 기준 128 MiB, 셋 합 384 MiB)에 모아 두고 15분까지 다시 보낸다. 큐가 차면 새로 들어오는 데이터를 버린다(`otelcol_exporter_enqueue_failed_*`).
   디스크 큐는 쓰지 않는다. Fargate 디스크는 태스크와 함께 사라지므로 게이트웨이가 교체되면 디스크 큐도 잃는다. 대비할 상황은 obs 가 재배포되는 동안이라 메모리 큐로 충분하다.
@@ -466,7 +470,7 @@ sum by (server) (rate(traces_service_graph_request_failed_total{client="preorder
 - 데이터 디렉터리는 데이터 EBS 를 bind mount 한다: loki `/loki`, tempo `/var/tempo`, mimir `/data`, pyroscope `/data`(넷 다 UID 10001), grafana `/var/lib/grafana`(UID 472). 디렉터리 목록은 ecs 스택의 `obs_data_dirs` 에 있고, obs 인스턴스가 부팅할 때 만든다. 디렉터리를 추가하면 인스턴스가 한 번 교체된다.
 - Pyroscope 는 ecs 스택에 `pyroscope` 디렉터리가 있을 때만 실행한다. 압축용 임시 디렉터리를 `TMPDIR=/data` 로 옮겨 루트 파일시스템을 읽기 전용으로 둔다.
 - 컨테이너 메모리 한도는 `terraform/aws/monitoring/lgtm/nova_apnortheast2/main.tf` 의 `obs_memory` 한 곳에서 정한다. 컨테이너 한도의 합은 태스크 메모리(`obs_task_memory`)를, 태스크 메모리는 인스턴스가 ECS 에 등록한 메모리를 넘으면 안 된다. 한도는 7일간 최대 RSS 의 1.4~2.5배로 정한다. Go 프로세스는 한도의 90% 를 `GOMEMLIMIT` 로 지정해 한도에 가까워지면 GC 를 더 자주 돌린다. 한 컨테이너가 한도를 넘으면 그 컨테이너만 재시작된다(`restartPolicy`). 재시작이 잦으면 LGTM 대시보드의 메모리(RSS)를 보고 `obs_memory` 를 다시 나눈다.
-- obs Collector 는 긁기만 하므로 192 MiB 만 준다(`memory_limiter` 160 MiB). tail sampling 과 servicegraph 는 게이트웨이(2 GiB, `memory_limiter` 1536 MiB. 부하 시험 기간에는 4 GiB · 3072 MiB)에서 처리한다.
+- obs Collector 는 긁기만 하므로 192 MiB 만 준다(`memory_limiter` 160 MiB). tail sampling 과 servicegraph 는 게이트웨이(4 GiB, `memory_limiter` 3072 MiB)에서 처리한다.
 - Grafana 는 기동할 때 Drilldown 앱(Traces · Logs · Metrics · Profiles)을 grafana.com 에서 받는다. `GF_PLUGINS_PREINSTALL` 로 버전을 고정해 재배포할 때마다 화면이 바뀌지 않게 했다. 버전을 올릴 때는 이 값을 바꾼다.
 
 </details>
@@ -611,7 +615,7 @@ preorder 가 그 메시지를 바로 가져가 작업을 DEAD_LETTER 로 바꾸�
 
 ### 회차 증설 실패
 
-preorder 가 1분마다 회차 일정을 보고 waitingroom · preorder 의 최소 대수(MinCapacity)를 맞추는데(NV-754), 그 호출이 계속 실패한다.
+preorder 는 1분마다 회차 일정을 보고 waitingroom 과 preorder 의 최소 대수(MinCapacity)를 맞춘다. 이 호출이 계속 실패하고 있다는 뜻이다.
 
 1. preorder 로그에서 "최소 대수를 맞추지 못했다"를 찾아 예외를 본다. `AccessDenied` 면 태스크 역할의 `scaling` 정책, 대상이 없다는 오류면 ECS 서비스 · 오토스케일링 대상 이름(`nova.scaling.*.service`)을 확인한다.
 2. 오픈이 15분 안에 있으면 고치기 전에 콘솔이나 CLI 로 두 서비스의 최소 대수를 직접 올린다. 앱이 다음 주기에 계산한 값으로 다시 맞추므로 되돌릴 필요는 없다.
@@ -665,7 +669,7 @@ Explore 에서 `sum by (service_name) (bytes_over_time({service_namespace="nova"
 
 ### APM 지표 라벨 조합 넘침
 
-span metrics 라벨(서비스 · 스팬 이름 · 종류 · 상태 · HTTP 상태 · DB · 메시징 시스템) 조합이 게이트웨이 상한(2000)을 넘었다. 넘친 조합은 시계열 하나로 합쳐져서 서비스 상세의 엔드포인트 · 시간 구성이 부정확해진다.
+span metrics 라벨(서비스 · 스팬 이름 · 종류 · 상태 · HTTP 상태 · DB · 메시징 시스템) 조합이 게이트웨이 상한(2000)을 넘었다. 넘친 조합은 시계열 하나로 합쳐지므로 서비스 상세의 시간 구성과 나가는 호출이 부정확해진다.
 스팬 이름에 경로 템플릿 대신 원문 URL 이 들어오는 서비스가 있는지 시계열 많은 지표 Top 10 과 Tempo 에서 확인한다. 정상적인 증가라면 `terraform/aws/monitoring/lgtm/nova_apnortheast2/gateway/collector.yaml` 의 `aggregation_cardinality_limit` 를 올린다.
 
 ### 게이트웨이 전송 큐 적체
