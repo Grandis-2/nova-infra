@@ -1,6 +1,6 @@
 # application
 
-폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM, 보안 그룹, DB 계정, ECS 서비스가 함께 만들어집니다.
+폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM 역할, 보안 그룹, ECS 서비스가 함께 만들어집니다. DB 계정만은 직접 만듭니다([새 서비스 추가](#새-서비스-추가) 참고).
 
 ```
 application/<서비스>/
@@ -9,19 +9,19 @@ application/<서비스>/
 └── secrets.sops.yml   외부 비밀 암호화본 (선택)
 ```
 
-`service.yml`의 각 필드로 다음 리소스가 만들어집니다(괄호 안은 해당 스택).
+`service.yml`의 필드마다 다음 리소스가 만들어집니다. 괄호 안은 그 리소스를 만드는 스택입니다.
 
 | 필드 | 만들어지는 것 |
 | --- | --- |
-| `cpu` · `memory` · `port` · `deployment` · `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
-| `schedule` | ECS 서비스 대신 태스크 정의만 만들고, 정해진 시각에 한 번 띄우는 스케줄 (ecs · scheduler) |
-| `routes` · `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
-| `calls` · `jwt` | 호출하는 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup · ecs) |
-| `db` · `db_account` · `extra_databases` | DB 계정과 비밀, DB 보안 그룹 규칙 (database · secretsmanager) |
-| `redis` · `queues` · `uploads` · `upload_cleanup` | 캐시 보안 그룹 규칙, 큐 · 버킷 권한이 든 태스크 역할 (securitygroup · iam) |
-| `generated_secrets` · `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager · iam) |
-| `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs · securitygroup) |
-| `scales` | 그 서비스들의 최소 대수를 바꾸는 권한과 대상 설정. 대상의 min 은 처음 만들 때만 Terraform 이 넣는다 (iam · ecs) |
+| `cpu`, `memory`, `port`, `deployment`, `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
+| `schedule` | ECS 서비스 없이 태스크 정의와, 정해진 시각에 태스크를 한 번 띄우는 스케줄 (ecs, scheduler) |
+| `routes`, `health` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
+| `calls`, `jwt` | 호출 대상 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup, ecs) |
+| `db`, `db_account`, `extra_databases` | DB 보안 그룹 규칙, DB 주소, 계정 비밀 주입 (securitygroup, ecs). 계정 비밀은 rds 스택에 있습니다 |
+| `redis`, `queues`, `uploads`, `upload_cleanup` | 캐시 보안 그룹 규칙, 큐와 버킷 권한이 든 태스크 역할 (securitygroup, iam) |
+| `generated_secrets`, `secrets.sops.yml` | Secrets Manager 비밀과 실행 역할의 읽기 권한 (secretsmanager, iam) |
+| `profiling` | 프로파일 에이전트 환경 변수와 obs 수신 포트 규칙 (ecs, securitygroup) |
+| `scales` | 적은 서비스들의 최소 대수를 바꾸는 권한과 대상 설정. 대상의 min은 처음 만들 때만 Terraform이 넣습니다 (iam, ecs) |
 
 ## service.yml
 
@@ -87,9 +87,15 @@ be의 `application.yml.example`을 복사해 운영 값으로 고칩니다. 공�
 - `spring.datasource.url`, `spring.data.redis.*`
 - `jwt.jwk-set-uri`, `calls`에 적은 속성, SQS 리전
 - `uploads: true` 또는 `upload_cleanup: true`이면 `nova.upload.bucket`, `nova.upload.cdn-base-url`, `nova.upload.region`
-- `scales`가 있으면 `nova.scaling.cluster`, `nova.scaling.region`, `nova.scaling.<대상>.service` · `baseline`(min) · `max`
+- `scales`가 있으면 `nova.scaling.cluster`, `nova.scaling.region`, `nova.scaling.<대상>.service`, `baseline`(min), `max`
 
-비밀 값이나 `localhost`를 적으면 plan이 실패합니다. preorder `nova.scaling.enabled`가 켜져 있으면 입장 속도와 preorder 대수도 봅니다. 회차 오픈 때 대수(`nova.scaling.preorder.surge`, 기본 3)가 ⌈waitingroom `waitingroom.admission.max-global-credit` ÷ preorder `nova.capacity.heartbeat.accept-per-second`⌉ 보다 작거나 preorder `scaling.max` 보다 크거나, 평소 대수(`scaling.min`) × `accept-per-second` 가 `global-credit` 보다 작으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
+비밀 값이나 `localhost`를 적으면 plan이 실패합니다. 비밀은 `${환경변수}` 자리표시로 씁니다.
+
+preorder의 `nova.scaling.enabled`가 켜져 있으면 입장 속도와 preorder 대수가 맞는지도 검사합니다. 다음 중 하나라도 맞으면 plan이 실패합니다.
+
+- 회차 오픈 때 대수(`nova.scaling.preorder.surge`, 기본 3)가 ⌈waitingroom의 `waitingroom.admission.max-global-credit` ÷ preorder의 `nova.capacity.heartbeat.accept-per-second`⌉보다 작다
+- 그 대수가 preorder의 `scaling.max`보다 크다
+- 평소 대수(`scaling.min`) × `accept-per-second`가 `global-credit`보다 작다
 
 ## 비밀
 
@@ -108,7 +114,7 @@ generated_secrets:
 | --- | --- | --- |
 | `rsa-2048` | RSA 2048비트 개인키, PKCS#8 PEM | `nova-prod/app/<서비스>/<키>` |
 | `random-48` | 무작위 48바이트, base64 (64자) | `nova-prod/app/<서비스>/<키>` |
-| `admin-bcrypt` | 영문·숫자 24자 비밀번호의 bcrypt 해시 (cost 12) | `nova-prod/app/<서비스>/<키>` (해시)<br>`nova-prod/ops/<서비스>/admin-password` (원문, 사람만 읽음) |
+| `admin-bcrypt` | 영문과 숫자 24자 비밀번호의 bcrypt 해시 (cost 12) | `nova-prod/app/<서비스>/<키>` (해시)<br>`nova-prod/ops/<서비스>/admin-password` (원문, 사람만 읽음) |
 | `shared/<이름>` | 무작위 48바이트, base64. 같은 이름을 적은 서비스가 같은 값을 씀 | `nova-prod/shared/<이름>` |
 
 - 키는 환경 변수 이름이라 대문자, 숫자, `_`만 씁니다.
@@ -133,5 +139,6 @@ scripts/app-secrets.sh decrypt member   # 다시 풀기
 ## 새 서비스 추가
 
 1. 폴더를 만들고 `service.yml`, `application.yml`을 작성합니다.
-2. 이미지가 아직 없으면 `deploy: false`로 PR을 올립니다.
-3. be가 이미지를 푸시하면 `deploy: true`로 바꿉니다.
+2. DB를 쓰면 MySQL 계정과 그 계정을 담은 비밀 `nova-prod/db/app/<서비스>`(username, password)를 직접 만들고, 비밀의 ARN을 rds 스택 `secrets.tf`의 `imported_app_secrets`에 더합니다. rds 스택은 비밀을 가져와 관리할 뿐 값을 쓰지 않습니다.
+3. 이미지가 아직 없으면 `deploy: false`로 PR을 올립니다.
+4. be가 이미지를 푸시하면 `deploy: true`로 바꿉니다.

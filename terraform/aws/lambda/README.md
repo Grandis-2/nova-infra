@@ -1,10 +1,10 @@
 # Lambda
 
-S3 이벤트처럼 가끔 생기는 일을 처리하는 함수들이다.
+S3에 파일이 생기는 것처럼 가끔 일어나는 일을 처리하는 함수를 모아 둔 스택이다.
 
 | 함수 | 언제 도는가 | 하는 일 |
 |---|---|---|
-| `nova-prod-edge-logs` | 로그 버킷 `alb/` · `cloudfront/` 에 파일이 생길 때 | ALB · CloudFront 접근 로그를 OTel 게이트웨이로 보내 Loki 에 쌓는다. 부하 시험 요청 줄(User-Agent `nova-loadtest/`)은 버린다 |
+| `nova-prod-edge-logs` | 로그 버킷의 `alb/`, `cloudfront/`에 파일이 생길 때 | ALB와 CloudFront 접근 로그를 OTel 게이트웨이로 보내 Loki에 쌓는다. 부하 시험 요청 줄(User-Agent `nova-loadtest/`)은 버린다 |
 
 ## 구조
 
@@ -13,7 +13,7 @@ functions/<함수>/              코드와 단위 시험 (저장소 루트)
 terraform/aws/lambda/
 ├── _modules/function/         함수 공통 틀
 └── nova_apnortheast2/
-    ├── <함수>.tf              함수별 권한 · 환경 변수 · 네트워크
+    ├── <함수>.tf              함수별 권한, 환경 변수, 네트워크
     └── s3_notifications.tf    S3 이벤트 연결
 ```
 
