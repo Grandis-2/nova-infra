@@ -1,6 +1,6 @@
 # application
 
-폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM 역할, 보안 그룹, ECS 서비스가 함께 만들어집니다. `deploy: false`이면 ECS 서비스를 띄우지 않고, `schedule`을 쓰면 서비스 대신 정해진 시각에 태스크만 띄웁니다. DB 계정만은 직접 만듭니다([새 서비스 추가](#새-서비스-추가) 참고).
+폴더 하나가 서비스 하나입니다. 폴더를 만들고 PR을 올리면 ECR, IAM 역할, 보안 그룹, ECS 서비스가 함께 만들어집니다. `deploy: false`이면 ECS 서비스를 띄우지 않고, `schedule`을 쓰면 서비스 대신 정해진 시각에 태스크만 띄웁니다. DB 계정은 Terraform이 만들지 않습니다. 서비스별 MySQL 계정과 그 비밀(`nova-prod/db/app/<서비스>`)은 이미 있고, rds 스택이 그 비밀을 가져와 관리합니다.
 
 ```
 application/<서비스>/
@@ -140,6 +140,6 @@ scripts/app-secrets.sh decrypt member   # 다시 풀기
 ## 새 서비스 추가
 
 1. 폴더를 만들고 `service.yml`, `application.yml`을 작성합니다.
-2. DB를 쓰면 MySQL 계정과 그 계정을 담은 비밀 `nova-prod/db/app/<서비스>`(username, password)를 직접 만들고, 비밀의 ARN을 rds 스택 `secrets.tf`의 `imported_app_secrets`에 더합니다. rds 스택은 비밀을 가져와 관리할 뿐 값을 쓰지 않습니다.
+2. 새 서비스가 DB를 쓰면 MySQL 계정과 비밀 `nova-prod/db/app/<서비스>`(username, password)를 먼저 마련하고, 그 비밀의 ARN을 rds 스택 `secrets.tf`의 `imported_app_secrets`에 더합니다.
 3. 이미지가 아직 없으면 `deploy: false`로 PR을 올립니다.
 4. be가 이미지를 푸시하면 `deploy: true`로 바꿉니다.
