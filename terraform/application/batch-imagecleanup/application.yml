@@ -23,4 +23,4 @@ spring:
 nova:
   batch:
     image-cleanup:
-      dry-run: true                # 지울 대상을 세어 로그만 남긴다. 끄면 실제로 지운다 — catalog 와 확인한 뒤 끈다
+      dry-run: false               # 실제로 지운다(10-24 끔 — 드로우 회차 만들기 시간 예산 60초 확인, 버킷 · 삭제 권한은 upload_cleanup). 켜면 대상 수만 로그로 남긴다
