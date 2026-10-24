@@ -294,6 +294,42 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.5]}
+      - uid: nova-order-payment-attention
+        title: 주문 결제 사람 확인
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "order 가 결제 · 환불 결과를 반영하다 사람이 봐야 하는 건을 알아챘다 — 사유 {{ .Labels.reason }}, 지난 1시간 약 {{ with .Values.B }}{{ printf `%.0f` .Value }}{{ end }} 건. 돈이 나간 채 주문이 끝났을 수 있다 — 결제사 기록부터 본다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#주문-결제-사람-확인"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 한 건이라도 사람이 봐야 한다. 사유마다 0 으로 미리 등록돼 첫 건도 잡힌다. 같은 결과를 다시 받으면 다시 세므로 건수는 알아챈 횟수다.
+              # increase 는 창 경계를 외삽하므로 1건이 1 보다 크거나 작게 나올 수 있어 기준을 0.5 로 둔다
+              expr: "sum by (reason) (increase(order_payment_attention_total[1h]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.5]}
       - uid: nova-frontend-errors
         title: 프런트 JS 오류 급증
         condition: C
