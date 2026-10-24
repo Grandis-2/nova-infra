@@ -32,6 +32,7 @@ calls:
   spring.http.serviceclient.payment.base-url: payment
   spring.http.serviceclient.payment-confirm.base-url: payment
   spring.http.serviceclient.payment-admin.base-url: payment   # 결제 DLQ 관리자 API 중계
+  spring.http.serviceclient.member.base-url: member     # 관리자 주문 목록 · 상세의 회원 이름
 db: shop
 redis: main                     # 토큰 폐기 여부 확인
 

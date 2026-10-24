@@ -32,6 +32,7 @@ jwt: verify
 calls:
   spring.http.serviceclient.catalog.base-url: catalog
   spring.http.serviceclient.order.base-url: order
+  spring.http.serviceclient.member.base-url: member     # 관리자 예약 목록 · 상세의 회원 이름
   external.mock.base-url: mock  # 정합성 관리자 화면의 키로 Mock 취소 · 조회. 없으면 preorder 가 기동하지 않는다
 db: shop
 redis: main
