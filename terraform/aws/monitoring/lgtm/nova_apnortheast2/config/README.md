@@ -661,10 +661,10 @@ payment 의 복구 작업이 결제 승인(CAPTURE) · 환불(REFUND) 한 건에
 
 order 가 결제 · 환불 결과를 주문에 반영하다 자동으로 끝내지 못한 건을 알아챘다. 어느 사유든 돈이 나간 채 주문이 결제되지 않았거나(취소 등), 환불이 돌아가지 않은 채다. 같은 결과를 다시 받으면 다시 세므로 건수는 사건 수보다 클 수 있다.
 
-1. order 로그에서 아래 ERROR 를 찾아 `orderId` · `providerOrderId`(결제사 주문 번호)를 본다.
-   - `UNMATCHED_APPROVAL`: "결제가 승인됐는데 주문이 받지 못했다 — 환불 확인 필요"
-   - `AMOUNT_MISMATCH`: "결제 결과를 모른 채 취소한 주문에 늦게 온 승인의 금액이 주문 총액과 다르다"
-   - `AUTO_REFUND_FAILED`: "늦은 승인의 자동 환불이 확정 실패"
+1. order 로그에서 아래 ERROR 를 찾아 `orderId` 와 결제사 주문 번호를 본다.
+   - `UNMATCHED_APPROVAL`: "결제가 승인됐는데 주문이 받지 못했다 — 환불 확인 필요". 결제사 주문 번호는 같은 줄의 `providerOrderId` 다.
+   - `AMOUNT_MISMATCH`: "결제 결과를 모른 채 취소한 주문에 늦게 온 승인의 금액이 주문 총액과 다르다". 결제사 주문 번호는 같은 줄의 `providerOrderId` 다.
+   - `AUTO_REFUND_FAILED`: "늦은 승인의 자동 환불이 확정 실패". 이 줄에는 `orderId` 만 있다. 결제사 주문 번호는 그 주문의 `orders.unconfirmed_provider_order_id`(결과를 몰라 취소할 때 남긴 결제창)다. payment 의 같은 시각 "환불 실패 — 사람 확인 필요" 로그의 `target` 도 이 주문이다.
 2. 토스 상점 관리자에서 결제사 주문 번호로 결제 상태 · 금액을 확인한다.
 3. 사유별로 본다.
    - `UNMATCHED_APPROVAL`: 승인된 결제창이 주문의 것이 아니거나(다른 결제창), 주문이 이미 사용자 취소 · 만료 등으로 끝났다. 주문 이력과 결제 기록을 맞춰 보고, 고객이 받지 못한 결제면 상점 관리자에서 환불한다.
