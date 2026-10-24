@@ -187,6 +187,113 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [2.5]}
+      - uid: nova-payment-dead-letters
+        title: 결제 DLQ 대기
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "payment-events 에서 처리하지 못한 메시지 {{ with .Values.B }}{{ printf `%.0f` .Value }}{{ end }} 건이 관리자 처리를 기다린다 — 환불 요청이면 그 주문은 취소 중에 멈춰 있다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#결제-dlq-대기"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # payment 가 DLQ 메시지를 DB 로 옮기므로 CloudWatch 의 payment-events-dlq 경보는 거의 울리지 않는다. 대신 DB 의 대기 건수를 본다.
+              # 태스크마다 같은 DB 를 세므로 합치지 않고 가장 큰 값을 쓴다
+              expr: "max(payment_dlq_waiting)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: nova-payment-refund-discarded
+        title: 버린 환불 요청
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "관리자가 payment DLQ 의 환불 요청을 지난 1시간 약 {{ with .Values.B }}{{ printf `%.0f` .Value }}{{ end }} 건 버렸다 — 다시 보내는 길이 없으니 그 주문의 환불이 끝났는지 확인한다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#버린-환불-요청"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 버린 행은 대기 수(payment_dlq_waiting)에서 빠지므로 따로 본다. 한 건이라도 본다. 외삽을 감안해 기준을 0.5 로 둔다
+              expr: "sum(increase(payment_dlq_discarded_total{eventType=\"ORDER_REFUND_REQUESTED\"}[1h]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.5]}
+      - uid: nova-payment-recovery-attention
+        title: 결제 복구 사람 확인
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "payment 복구가 {{ .Labels.type }} 거래({{ .Labels.target }})를 끝내지 못했다 — 사유 {{ .Labels.reason }}, 지난 1시간 약 {{ with .Values.B }}{{ printf `%.0f` .Value }}{{ end }} 건. 돈이 나갔거나 돌아가지 않았을 수 있다 — 결제사 기록부터 본다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#결제-복구-사람-확인"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 한 건이라도 사람이 봐야 한다. 시계열은 0 으로 미리 등록돼 첫 건도 잡히고, 1시간 창이라 그동안 경보가 이어진다.
+              # increase 는 창 경계를 외삽하므로 1건이 1 보다 크거나 작게 나올 수 있어 기준을 0.5 로 둔다
+              expr: "sum by (type, target, reason) (increase(payment_recovery_attention_total[1h]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.5]}
       - uid: nova-frontend-errors
         title: 프런트 JS 오류 급증
         condition: C

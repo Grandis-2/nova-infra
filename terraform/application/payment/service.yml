@@ -17,7 +17,9 @@ db: shop
 redis: main
 
 queues:
-  send: [order-events]
+  # payment-events 는 자기 큐다 — DLQ 되돌리기가 원래 큐로 다시 보낸다. dlq 는 DLQ 를 읽기만 해서 보내기는 여기 둔다
+  send: [order-events, payment-events]
   consume: [payment-events]
+  dlq: [payment-events]   # DLQ 메시지를 DB 로 옮긴다. 관리자 API 는 order 가 받아 /internal 로 넘긴다
 
 profiling: true                 # 프로파일(Pyroscope)을 보낸다. preorder 에서 부담을 잰 뒤 넓혔다(CPU +0.2%p, 메모리 약 60 MiB)

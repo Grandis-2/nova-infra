@@ -75,6 +75,9 @@ nova:
       visibility: 5m         # 처리 한 건보다 길게
       backoff-base: 30s      # 실패는 대개 DB 장애 — 재수신 5회(DLQ 전)가 장애 조치보다 길게(약 7분)
       backoff-max: 5m
+    dead-letter:
+      enabled: true
+      queue: payment-events-dlq
 
 # 폐기 표식 조회가 실패(Redis 장애)했을 때 401 로 닫는 경로. 내부 API 도 닫는다(호출자 order 가 빠뜨려도 여기서 막는다)
 auth:
