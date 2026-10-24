@@ -28,6 +28,10 @@ spring:
       payment-confirm:
         connect-timeout: 300ms
         read-timeout: 70s
+      # 결제 DLQ 관리자 API 중계. 되돌리기는 payment 가 SQS 로 보내는 3초(sqs.api-call-timeout)를 기다리므로 그보다 길게 둔다
+      payment-admin:
+        connect-timeout: 300ms
+        read-timeout: 5s
 
 jwt:
   issuer: nova

@@ -31,6 +31,7 @@ calls:
   spring.http.serviceclient.catalog.base-url: catalog   # 장바구니 · 드로우의 상품 정보
   spring.http.serviceclient.payment.base-url: payment
   spring.http.serviceclient.payment-confirm.base-url: payment
+  spring.http.serviceclient.payment-admin.base-url: payment   # 결제 DLQ 관리자 API 중계
 db: shop
 redis: main                     # 토큰 폐기 여부 확인
 
