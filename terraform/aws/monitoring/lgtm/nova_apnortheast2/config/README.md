@@ -626,11 +626,14 @@ preorder 는 1분마다 회차 일정을 보고 waitingroom 과 preorder 의 최
 
 ### 결제 DLQ 대기
 
-payment-events 메시지가 재수신 한도를 넘겨 DLQ 로 갔고, payment 가 그 메시지를 `payment_dead_letter_events` 표로 옮겼다. 지금 이 큐의 메시지는 환불 요청(`ORDER_REFUND_REQUESTED`)뿐이다. 남아 있으면 그 주문은 취소 중에 멈춰 있다. 메시지를 옮기므로 CloudWatch 의 `payment-events-dlq` 경보는 거의 울리지 않는다.
+payment-events 메시지가 재수신 한도를 넘겨 DLQ 로 갔고, payment 가 그 메시지를 `payment_dead_letter_events` 표로 옮겼다. 메시지를 옮기므로 CloudWatch 의 `payment-events-dlq` 경보는 거의 울리지 않는다. 이 큐의 메시지는 두 종류다.
+
+- 환불 요청(`ORDER_REFUND_REQUESTED`): 남아 있으면 그 주문은 취소 중에 멈춰 있다. 먼저 처리한다.
+- 승인 중 알림(`ORDER_PAYMENT_AUTHORIZING`): 승인 요청이 payment 에 닿지 않은 결제창을 복구에 넘기는 알림이다. 넘길 수 있는 때는 결제창 확인 뒤 10분까지다. 그 안이면 되돌려 넘길 수 있고, 지났으면 되돌려도 넘기지 않고 끝난다(해는 없다). 지난 알림은 버린다 — 결제창은 35분 뒤 만료로 정리된다.
 
 1. 관리자 화면의 이벤트 DLQ(결제) 또는 `GET /api/v1/admin/orders/payment-dead-letters?status=OPEN` 으로 건을 본다. 사유가 `PROCESSING_FAILED` 면 `messageId` 로 payment 로그에서 처리 실패 예외를 찾는다.
 2. 원인(DB 장애 · 배포 오류 등)이 풀렸으면 `POST .../{deadLetterId}/redrive` 또는 `POST .../redrive-batch` 로 되돌린다. 결과는 행의 상태(`SUCCEEDED` · `REDRIVE_FAILED`)로 남는다.
-3. `UNREADABLE_BODY` 면 되돌려도 다시 실패한다. `UNKNOWN_EVENT_TYPE` 은 payment 가 그 종류를 받도록 배포된 뒤라면 되돌릴 수 있다. 환불 요청을 버리기 전에는 그 주문의 결제 상태부터 확인한다 — order 에는 환불 요청을 다시 보내는 길이 없다. 버린 뒤의 절차는 [버린 환불 요청](#버린-환불-요청)을 따른다.
+3. `UNREADABLE_BODY` 면 되돌려도 다시 실패한다. `UNKNOWN_EVENT_TYPE` 은 payment 가 그 종류를 받도록 배포된 뒤라면 되돌릴 수 있다. 승인 중 알림은 결제창 확인 뒤 10분이 지났으면 버리고, 안 지났으면 되돌린다. 환불 요청을 버리기 전에는 그 주문의 결제 상태부터 확인한다 — order 에는 환불 요청을 다시 보내는 길이 없다. 버린 뒤의 절차는 [버린 환불 요청](#버린-환불-요청)을 따른다.
 
 ### 버린 환불 요청
 
