@@ -258,6 +258,42 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.5]}
+      - uid: nova-payment-recovery-attention
+        title: 결제 복구 사람 확인
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "payment 복구가 {{ .Labels.type }} 거래({{ .Labels.target }})를 끝내지 못했다 — 사유 {{ .Labels.reason }}, 지난 1시간 약 {{ with .Values.B }}{{ printf `%.0f` .Value }}{{ end }} 건. 돈이 나갔거나 돌아가지 않았을 수 있다 — 결제사 기록부터 본다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#결제-복구-사람-확인"
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 3600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 한 건이라도 사람이 봐야 한다. 시계열은 0 으로 미리 등록돼 첫 건도 잡히고, 1시간 창이라 그동안 경보가 이어진다.
+              # increase 는 창 경계를 외삽하므로 1건이 1 보다 크거나 작게 나올 수 있어 기준을 0.5 로 둔다
+              expr: "sum by (type, target, reason) (increase(payment_recovery_attention_total[1h]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.5]}
       - uid: nova-frontend-errors
         title: 프런트 JS 오류 급증
         condition: C
