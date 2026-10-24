@@ -75,6 +75,7 @@ auth:
       - /api/v1/admin/**
       - /api/v1/session/refresh
       - /api/v1/me/**
+      - /internal/customers/names   # order · preorder 관리자 화면의 회원 이름(관리자 토큰). 내부 주소로 바로 오는 요청도 닫는다
 
 jwt:
   issuer: nova
