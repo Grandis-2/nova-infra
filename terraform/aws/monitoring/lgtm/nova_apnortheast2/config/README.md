@@ -299,6 +299,8 @@ flowchart LR
 | 메시지 처리 오류율 | 큐별 처리 스팬 중 오류 비율 > 5% (10분에 6건 넘게 처리한 큐만) | 10분 | warning |
 | 포기한 예약 동기화 작업 | 작업 종류(`jobType`)별 DEAD_LETTER 작업 수 `preorder_sync_dead_letter` > 0 | 1분 | warning |
 | 회차 증설 실패 | preorder 가 최소 대수를 바꾸지 못한 횟수 `preorder_scaling_failures_total` 10분 3번 이상(외삽을 감안해 > 2.5) | 5분 | warning |
+| 결제 DLQ 대기 | payment 가 DB 로 옮긴 DLQ 메시지 중 처리를 기다리는 수 `payment_dlq_waiting` > 0 | 1분 | warning |
+| 버린 환불 요청 | 관리자가 버린 payment DLQ 환불 요청 `payment_dlq_discarded_total{eventType="ORDER_REFUND_REQUESTED"}` 1시간 1건 이상(> 0.5) | 1분 | warning |
 | 프런트 JS 오류 급증 | 브라우저 오류 15분 > 30건 그리고 지난주 같은 시각의 3배 초과 (Loki) | 5분 | warning |
 | 프런트 LCP 악화 | LCP p75 30분 > 4초 (측정 30건 이상일 때만, Loki) | 15분 | warning |
 | 서비스 지표 끊김 | 지난 1시간 안에 지표를 보내던 서비스가 지금 `target_info` 를 보내지 않음 | 5분 | critical |
@@ -620,6 +622,22 @@ preorder 는 1분마다 회차 일정을 보고 waitingroom 과 preorder 의 최
 1. preorder 로그에서 "최소 대수를 맞추지 못했다"를 찾아 예외를 본다. `AccessDenied` 면 태스크 역할의 `scaling` 정책, 대상이 없다는 오류면 ECS 서비스 · 오토스케일링 대상 이름(`nova.scaling.*.service`)을 확인한다.
 2. 오픈이 15분 안에 있으면 고치기 전에 콘솔이나 CLI 로 두 서비스의 최소 대수를 직접 올린다. 앱이 다음 주기에 계산한 값으로 다시 맞추므로 되돌릴 필요는 없다.
 3. "최대 대수를 넘어 최대로 맞춘다" 경고가 함께 있으면 service.yml 의 `scaling.max` 를 올린다.
+
+### 결제 DLQ 대기
+
+payment-events 메시지가 재수신 한도를 넘겨 DLQ 로 갔고, payment 가 그 메시지를 `payment_dead_letter_events` 표로 옮겼다. 지금 이 큐의 메시지는 환불 요청(`ORDER_REFUND_REQUESTED`)뿐이다. 남아 있으면 그 주문은 취소 중에 멈춰 있다. 메시지를 옮기므로 CloudWatch 의 `payment-events-dlq` 경보는 거의 울리지 않는다.
+
+1. 관리자 화면의 이벤트 DLQ(결제) 또는 `GET /api/v1/admin/orders/payment-dead-letters?status=OPEN` 으로 건을 본다. 사유가 `PROCESSING_FAILED` 면 `messageId` 로 payment 로그에서 처리 실패 예외를 찾는다.
+2. 원인(DB 장애 · 배포 오류 등)이 풀렸으면 `POST .../{deadLetterId}/redrive` 또는 `POST .../redrive-batch` 로 되돌린다. 결과는 행의 상태(`SUCCEEDED` · `REDRIVE_FAILED`)로 남는다.
+3. `UNREADABLE_BODY` 면 되돌려도 다시 실패한다. `UNKNOWN_EVENT_TYPE` 은 payment 가 그 종류를 받도록 배포된 뒤라면 되돌릴 수 있다. 환불 요청을 버리기 전에는 그 주문의 결제 상태부터 확인한다 — order 에는 환불 요청을 다시 보내는 길이 없다. 버린 뒤의 절차는 [버린 환불 요청](#버린-환불-요청)을 따른다.
+
+### 버린 환불 요청
+
+관리자가 payment DLQ 에서 환불 요청(`ORDER_REFUND_REQUESTED`)을 버렸다. order 에는 환불 요청을 다시 보내는 길이 없어서, 그 주문은 취소 중에 멈춘 채 환불되지 않는다.
+
+1. payment 로그에서 "환불 요청을 버렸다"를 찾아 `aggregateId`(주문 id) · 버린 사람 · `note` 를 본다.
+2. 그 주문의 결제가 환불됐는지 토스 상점 관리자에서 확인한다. 이미 환불됐으면(상점 관리자에서 직접 취소 등) 끝이다.
+3. 환불되지 않았으면 상점 관리자에서 환불하고, 주문 · 결제 기록 정리는 개발자가 한다(앱에 아직 관리자 기능이 없다).
 
 ### JVM 힙 사용률
 
