@@ -32,6 +32,10 @@ spring:
       payment-admin:
         connect-timeout: 300ms
         read-timeout: 5s
+      # 관리자 환불 조치 중계. payment 가 결제사 조회(최대 63초)를 기다리므로 그보다 길게 둔다 — 앞단 CloudFront 는 60초에 끊지만 조치는 끝까지 진행된다
+      payment-refund-admin:
+        connect-timeout: 300ms
+        read-timeout: 70s
 
 jwt:
   issuer: nova
