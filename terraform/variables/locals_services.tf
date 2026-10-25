@@ -24,7 +24,7 @@ locals {
   _service_fields = [
     "name", "deploy", "image_tag", "cpu", "memory", "port", "management_port", "deployment", "spot", "stop_timeout", "scaling",
     "health", "routes", "jwt", "calls", "db", "extra_databases", "redis", "queues", "uploads", "generated_secrets", "environment",
-    "profiling", "upload_cleanup", "schedule", "db_account", "scales",
+    "profiling", "upload_cleanup", "schedule", "db_account", "scales", "lb_algorithm",
   ]
 
   # 형식 검사. 오류가 있으면 services.name 계산에서 해당 폴더 이름과 함께 plan 을 멈춘다
@@ -43,6 +43,8 @@ locals {
       [for f in ["profiling", "upload_cleanup"] : contains(["true", "false", "null"], jsonencode(try(s[f], false))) ? "" : "${f} 는 true | false"],
       try(s.deployment, "rolling") != "blue_green" || length(try(s.routes, [])) > 0 ? "" : "blue_green 은 routes 가 필요",
       length(try(s.routes, [])) == 0 || can(tonumber(s.health.port)) ? "" : "routes 가 있으면 health(port, path) 가 필요",
+      try(s.lb_algorithm, null) == null || contains(["round_robin", "least_outstanding_requests"], try(tostring(s.lb_algorithm), "")) ? "" : "lb_algorithm 은 round_robin | least_outstanding_requests",
+      try(s.lb_algorithm, null) == null || length(try(s.routes, [])) > 0 ? "" : "lb_algorithm 은 routes 가 있는 서비스만 쓴다",
       [for r in try(s.routes, []) : length(try(r.paths, [])) + length(try(r.methods, [])) <= 4 ? "" : "route ${try(r.priority, "?")}: paths + methods 는 4개 이하"],
       # Fargate 의 stopTimeout 상한은 120초다
       try(s.stop_timeout, null) == null || (can(tonumber(s.stop_timeout)) && try(tonumber(s.stop_timeout) >= 2 && tonumber(s.stop_timeout) <= 120, false)) ? "" : "stop_timeout 은 2~120(초)",
@@ -116,6 +118,8 @@ locals {
         path    = tostring(s.health.path)
         matcher = try(tostring(s.health.matcher), "200")
       }, null)
+      # ALB 타깃 그룹의 요청 분배 방식. 비우면 round_robin(ALB 기본값)
+      lb_algorithm = try(coalesce(tostring(s.lb_algorithm), "round_robin"), "round_robin")
       routes = [for r in try(s.routes, []) : {
         priority = try(tonumber(r.priority), -1) # 빠지면 위 검사가 폴더 이름과 함께 알린다
         paths    = [for p in try(r.paths, []) : tostring(p)]
