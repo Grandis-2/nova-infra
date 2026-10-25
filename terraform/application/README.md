@@ -16,6 +16,7 @@ application/<서비스>/
 | `cpu`, `memory`, `port`, `deployment`, `scaling` | ECS 서비스, 태스크 정의, 오토스케일링 (ecs) |
 | `schedule` | ECS 서비스 없이 태스크 정의와, 정해진 시각에 태스크를 한 번 띄우는 스케줄 (ecs, scheduler) |
 | `routes` | ALB 대상 그룹과 리스너 규칙, Blue/Green 전환 (ecs) |
+| `lb_algorithm` | ALB 대상 그룹의 요청 분배 방식 (ecs) |
 | `health` | `routes`가 있으면 ALB 대상 그룹의 헬스체크, 없으면 컨테이너 헬스체크 (ecs) |
 | `calls`, `jwt` | 호출 대상 서비스로 가는 보안 그룹 규칙과 Service Connect 주소 (securitygroup, ecs) |
 | `db`, `db_account`, `extra_databases` | DB 보안 그룹 규칙, DB 주소, 계정 비밀 주입 (securitygroup, ecs). 계정 비밀은 rds 스택에 있습니다 |
@@ -59,6 +60,7 @@ routes:                   # ALB 경로. 우선순위가 낮을수록 먼저 매�
   - priority: 90
     paths: ["/api/v1/*"]
     methods: []           # 비우면 전체. paths + methods는 4개 이하
+lb_algorithm: round_robin # round_robin | least_outstanding_requests (routes 필요). 후자는 처리 중 요청이 적은 태스크로 보냄
 
 jwt: none                 # sign | verify | none (verify면 member 접근 자동 허용)
 calls:                    # Spring 속성: 호출할 서비스

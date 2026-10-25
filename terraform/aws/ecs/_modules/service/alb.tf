@@ -30,6 +30,10 @@ resource "aws_lb_target_group" "this" {
 
   deregistration_delay = 30 # 배포 · 스케일인 때 지연을 줄인다
 
+  # round_robin 은 느려진 대상에도 같은 몫을 보낸다. least_outstanding_requests 는 처리 중 요청이 적은 대상에 보내
+  # 한 대만 막혔을 때 그 대상으로 가는 몫이 줄어든다
+  load_balancing_algorithm_type = var.lb_algorithm
+
   # 넣을 때는 빠르게, 뺄 때는 신중하게. 새로 등록된 태스크는 첫 검사 1번만 통과하면 요청을 받으므로(healthy_threshold 는
   # 비정상이던 대상이 돌아올 때 쓰인다) 간격을 줄이면 그 첫 검사를 기다리는 시간이 최대 15초에서 5초로 준다.
   # 부하가 몰리면 정상 태스크도 readiness 응답이 몇 초씩 늦을 수 있어 25초(5번) 연속 실패해야 뺀다 —

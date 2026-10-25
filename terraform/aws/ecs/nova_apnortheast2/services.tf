@@ -61,6 +61,7 @@ module "service" {
   service_key          = each.key
   routes               = each.value.routes
   health               = each.value.health
+  lb_algorithm         = each.value.lb_algorithm
   vpc_id               = local.vpc_id
   listener_arn         = local.routing_listener_arn
   alb_arn_suffix       = aws_lb.this.arn_suffix

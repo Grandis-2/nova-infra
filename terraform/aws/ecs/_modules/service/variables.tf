@@ -241,6 +241,17 @@ variable "health" {
   default = null
 }
 
+variable "lb_algorithm" {
+  description = "타깃 그룹의 요청 분배 방식 (service.yml 의 lb_algorithm). round_robin | least_outstanding_requests"
+  type        = string
+  default     = "round_robin"
+
+  validation {
+    condition     = contains(["round_robin", "least_outstanding_requests"], var.lb_algorithm)
+    error_message = "lb_algorithm 은 round_robin | least_outstanding_requests 다."
+  }
+}
+
 variable "vpc_id" {
   description = "타깃 그룹을 만들 VPC"
   type        = string
