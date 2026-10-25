@@ -31,7 +31,9 @@ resource "aws_lb_target_group" "this" {
   deregistration_delay = 30 # 배포 · 스케일인 때 지연을 줄인다
 
   # round_robin 은 느려진 대상에도 같은 몫을 보낸다. least_outstanding_requests 는 처리 중 요청이 적은 대상에 보내
-  # 한 대만 막혔을 때 그 대상으로 가는 몫이 줄어든다
+  # 한 대만 느려졌을 때 그 대상으로 가는 몫이 줄어든다. 반대로 오류를 빨리 돌려주는 대상(예: 그 태스크만 회로가 열림)은
+  # 처리 중 요청이 적게 잡혀 더 받는다 — 서비스별 5xx 경보(아래 target_5xx)가 1분 50건 · 2% 를 넘으면 울리지만 몫을 줄이지는 않는다.
+  # 새로 등록된 대상은 처리 중 요청이 다른 대상만큼 찰 때까지 한꺼번에 받는다. slow_start 와는 같이 쓸 수 없다(AWS 가 거절한다)
   load_balancing_algorithm_type = var.lb_algorithm
 
   # 넣을 때는 빠르게, 뺄 때는 신중하게. 새로 등록된 태스크는 첫 검사 1번만 통과하면 요청을 받으므로(healthy_threshold 는
