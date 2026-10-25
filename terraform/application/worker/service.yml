@@ -20,7 +20,7 @@ health:
 scaling:
   desired: 1
   min: 1
-  max: 4                      # worker 하나가 mock 최대 5대 몫(16 × 5)까지 보낸다
+  max: 6                      # worker 하나가 mock 최대 5대 몫(16 × 5)까지 보낸다
   backlog:
     queues: [preorder-register, preorder-cancel, draw-register]   # 세 큐의 합. 어느 하나만 쌓여도 늘어난다
     per_task: 50              # 추정값. 부하 시험 뒤 다시 정한다

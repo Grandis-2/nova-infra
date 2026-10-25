@@ -10,7 +10,7 @@ deployment: blue_green
 scaling:
   desired: 1
   min: 1
-  max: 4
+  max: 8
 
 health:
   port: 9084
