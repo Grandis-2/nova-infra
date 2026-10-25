@@ -27,6 +27,10 @@ routes:
     # 규칙을 새로 만들면 routes 길이가 바뀌어 ECS 서비스가 교체된다(replace_triggered_by — 서비스가 잠깐 내려간다). 경로는 기존 규칙 안에서 늘린다
     paths: ["/api/v1/promotions*", "/api/v1/admin/promotions*", "/api/v1/admin/images*", "/api/v1/*banners*"]
 
+# 처리 중 요청이 적은 태스크로 보낸다. 부하 시험(10-25 rush 3회)에서 4대 중 1대만 막혀(처리 중 요청 약 200) 그 대상의 응답이
+# 대부분 0.5초를 넘었는데, round_robin 이 그 대상에도 1/4 을 계속 보내 상품 조회의 약 24%가 0.5초를 넘었다
+lb_algorithm: least_outstanding_requests
+
 jwt: verify
 calls:
   spring.http.serviceclient.order.base-url: order        # 내 주문상품 확인(리뷰) · 재고(목록 · 상세)
