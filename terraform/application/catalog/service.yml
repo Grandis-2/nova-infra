@@ -1,8 +1,10 @@
 # 상품 · 옵션 · 카테고리 · 리뷰
 deploy: true
 image_tag: latest               # release 가 올린 최신. 되돌리려면 커밋 해시 앞 6자리 이상 또는 버전 태그(0.0.N-rM)
-cpu: 1024
-memory: 2048
+# 2 vCPU. 1 vCPU 에서는 같은 부하라도 태스크에 따라 CPU 가 포화됐고(부하 시험 10-25 rush 2회: 정상 태스크 p95 0.02초 · CPU 약 60%,
+# 포화 태스크 p95 1~2초), 증설로 뜬 태스크는 JIT 예열과 요청이 1 vCPU 를 나눠 써 5분 넘게 p95 2~4초였다(waitingroom 과 같은 이유)
+cpu: 2048
+memory: 4096
 port: 8082
 management_port: 9082          # 앱 기본값(CatalogDefaults)과 맞춘다
 deployment: blue_green
@@ -10,8 +12,10 @@ deployment: blue_green
 scaling:
   desired: 2
   min: 2                      # 1대면 20초대 몰림에 CPU 가 막혀 같은 태스크의 상세까지 초 단위로 늦었고(부하 시험 10-22), 전부 Spot 이라 회수되면 비었다
-  max: 4                      # 상품 조회는 사전예약이 열릴 때 같이 몰린다
-  requests_per_task: 1400     # 1대가 1분에 받는 요청이 넘으면 바로 늘린다(부하 시험 10-21: 1대 분당 약 2,000건에 CPU 100%)
+  max: 6                      # 상품 조회는 사전예약이 열릴 때 같이 몰린다. 4대에서 2 → 4 증설이 바로 상한에 닿았다(부하 시험 10-25)
+  # 1대가 1분에 받는 요청이 넘으면 바로 늘린다. 1 vCPU 1대는 초당 약 250~420건(분당 1.5만~2.5만)에서 포화됐다(부하 시험 10-25,
+  # 느린 쪽 태스크). 2 vCPU 로 그 두 배를 보고 약 70% 에 둔다. 공개 조회 캐시(edge cache_paths.yml) 적용 뒤 같은 rush 로 다시 잰다
+  requests_per_task: 20000
 
 health:
   port: 9082
