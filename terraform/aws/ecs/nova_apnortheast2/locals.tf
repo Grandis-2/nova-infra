@@ -41,6 +41,21 @@ locals {
   # TLS 모드는 db_ssl_mode 로 정한다
   jdbc_params = "serverTimezone=UTC&characterEncoding=UTF-8&sslMode=${var.db_ssl_mode}"
 
+  # ── JVM 옵션 ───────────────────────────────────────────────
+  # JDK_JAVA_OPTIONS 하나로 넣는다. JAVA_TOOL_OPTIONS 는 이미지가 힙 옵션에 쓴다(otel.tf 머리말).
+  #   -javaagent          OTel 에이전트를 켠 서비스만 (otel.tf)
+  #   ActiveProcessorCount Fargate 는 1 vCPU 태스크에도 CPU 2개를 보여 준다. 그대로 두면 JVM CPU 지표(jvm.cpu.recent_utilization)가
+  #                       1 vCPU 를 다 써도 0.5 에서 멈추고(부하 시험 10-25: catalog 포화 태스크가 0.50 에 붙었다), GC · JIT 스레드도
+  #                       2개 기준으로 잡힌다. 태스크 vCPU 로 맞춘다
+  #   UseG1GC             CPU 가 1개로 보이면 JVM 이 기본 GC 를 Serial 로 바꾼다. 지금까지 쓰던 G1 을 그대로 쓴다
+  jvm_options = {
+    for k, v in local.deployed_services : k => join(" ", compact([
+      local.otel_enabled[k] ? "-javaagent:/otel/javaagent.jar" : "",
+      "-XX:ActiveProcessorCount=${max(1, floor(v.cpu / 1024))}",
+      "-XX:+UseG1GC",
+    ]))
+  }
+
   # ── 환경변수 ───────────────────────────────────────────────
   # 앱 설정은 SPRING_APPLICATION_JSON 하나로 넣는다 (config.tf). 그 외는 service.yml 의 environment
   service_env = {
@@ -49,6 +64,7 @@ locals {
         SPRING_PROFILES_ACTIVE  = var.spring_profile
         AWS_REGION              = var.aws_region
         SPRING_APPLICATION_JSON = local.service_config_json[k]
+        JDK_JAVA_OPTIONS        = local.jvm_options[k]
       },
       local.otel_env[k], # otel.tf. service.yml 의 environment 가 같은 이름이면 그쪽이 이긴다
       v.environment,
