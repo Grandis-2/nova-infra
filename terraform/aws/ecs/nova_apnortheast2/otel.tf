@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # OTel Java 에이전트 — 로그 · 트레이스 · 지표를 OTel 게이트웨이(monitoring 스택 gateway.tf)로 보낸다 (NV-425, NV-543)
 #
-# jar 은 be 이미지 /otel/javaagent.jar 에 있다 (be NV-356). 켜는 것은 JDK_JAVA_OPTIONS 하나다.
+# jar 은 be 이미지 /otel/javaagent.jar 에 있다 (be NV-356). 켜는 것은 JDK_JAVA_OPTIONS 의 -javaagent 하나다(locals.tf jvm_options).
 #   JAVA_TOOL_OPTIONS 는 주지 않는다. 이미지가 그 변수에 힙 옵션(MaxRAMPercentage 등)을 넣어 두어서, 여기서 주면 덮여 사라진다.
 #   JDK_JAVA_OPTIONS 는 이미지가 쓰지 않는 변수라 겹치지 않는다. 없으면 jar 자체가 로드되지 않는다.
 #   이미지의 AOT 캐시는 학습 · 실행 모두 --add-modules=java.instrument 로 맞춰 두어 에이전트를 켜도 쓰인다.
@@ -43,7 +43,6 @@ locals {
 
   otel_env = {
     for k, v in local.deployed_services : k => local.otel_enabled[k] ? {
-      JDK_JAVA_OPTIONS            = "-javaagent:/otel/javaagent.jar"
       OTEL_SERVICE_NAME           = v.name
       OTEL_RESOURCE_ATTRIBUTES    = "deployment.environment=${var.env},service.namespace=nova"
       OTEL_EXPORTER_OTLP_ENDPOINT = local.otel_endpoint

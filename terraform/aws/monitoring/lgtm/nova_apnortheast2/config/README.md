@@ -335,7 +335,7 @@ flowchart LR
 에이전트는 be 이미지에 든 `/otel/javaagent.jar` 다. `terraform/aws/ecs/nova_apnortheast2/otel.tf` 가 `otel_services`(지금은 `["*"]`, 배포하는 모든 서비스)에 든 서비스에 아래 환경 변수를 넣는다.
 
 ```
-JDK_JAVA_OPTIONS=-javaagent:/otel/javaagent.jar
+JDK_JAVA_OPTIONS=-javaagent:/otel/javaagent.jar -XX:ActiveProcessorCount=<태스크 vCPU> -XX:+UseG1GC   # ecs locals.tf jvm_options
 OTEL_SERVICE_NAME=<svc>
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment=prod,service.namespace=nova
 OTEL_LOGS_EXPORTER=otlp
