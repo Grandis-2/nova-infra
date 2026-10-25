@@ -81,10 +81,11 @@ nova:
     enabled: true
     # 오픈 때 preorder 대수. ⌈waitingroom max-global-credit ÷ accept-per-second⌉ 이상이고 service.yml 의 max 이하여야 한다(ecs 스택이 plan 에서 확인)
     preorder:
-      surge: 3
-    # 태스크 하나가 맡는 예상 방문자 수(waitingroom 대수 = ⌈예상 방문자 ÷ 이 값⌉). 임시값 — NV-761 실측 뒤 바꾼다
+      surge: 5
+    # 태스크 하나가 맡는 예상 방문자 수(waitingroom 대수 = ⌈예상 방문자 ÷ 이 값⌉). 2 vCPU 1대가 10초에 5,000명 진입을
+    # 받지 못했다(부하 시험 10-26 rush) — 몰림이 오픈 직후 10초에 들어온다고 보고 1대에 1,000명으로 둔다
     waitingroom:
-      visitors-per-task: 5000
+      visitors-per-task: 1000
   # 태스크 하나가 버티는 초당 접수 수(공유 Redis 하트비트로 waitingroom 이 읽는다). 임시값 — NV-761 실측 뒤 바꾼다
   capacity:
     heartbeat:
