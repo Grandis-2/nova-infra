@@ -1,9 +1,10 @@
 spring:
   data:
     redis:
-      # 명령 하나가 배분 회차(1초)를, 연결이 리더 리스(2초)를 넘겨 붙들지 않게(앱 기본값과 같다)
-      timeout: 500ms
-      connect-timeout: 1s
+      # 몰림 때 CPU 가 밀려 늦은 응답을 503 으로 끊지 않게 넉넉히 두되, 판정 재료 받기 주기의 시한(1.5초)은 넘기지 않는다.
+      # 500ms 에서는 Valkey 가 한가한데도 앱 CPU 포화로 응답이 늦어 210건이 503 이었다(부하 시험 10-26 rush)
+      timeout: 1500ms
+      connect-timeout: 1s     # 연결이 리더 리스(2초)를 넘겨 붙들지 않게
 # jwt.jwk-set-uri · jwk-set-allow-http 는 인프라가 member 주소로 채운다(service.yml 의 jwt: verify)
 jwt:
   issuer: nova # member 와 같은 값이어야 검증이 통과한다
