@@ -1242,7 +1242,7 @@ groups:
               refId: A
               instant: true
               # 인스턴스마다 같은 값이라 상태별 max 를 더한다(contracts/admin-alert-events.md). 첫 갱신 전 NaN 은 비교가 거짓이다
-              expr: "sum(max by (status) (order_status_count))"
+              expr: "sum(max by (status) (order_status_count{status=~\"PREPARING_ITEMS|READY_TO_SHIP\"}))"
           - refId: B
             datasourceUid: __expr__
             model:
