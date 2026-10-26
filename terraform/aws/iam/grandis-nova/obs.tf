@@ -5,6 +5,7 @@
 #   ECS Exec                  Grafana 포트 포워딩 (ssmmessages)
 #   obs-config 버킷          init 컨테이너가 설정 파일(monitoring 스택의 lgtm/)을 받는다
 #   SNS 경보 토픽            Grafana 경보를 monitoring 스택의 토픽(→ Chatbot → Slack)으로 보낸다
+#   SNS 관리자 알림 토픽     관리자 알림 경보를 sqs 스택의 토픽(→ admin-alert-grafana 큐 → member)으로 보낸다
 #   CloudWatch 읽기          Grafana CloudWatch 데이터소스(SQS · ElastiCache · ECS · ALB · CloudFront 지표 조회)
 # 실행 역할 nova-prod-obs-execution
 #   이미지 pull · 로그, Grafana admin 비밀번호와 mysqld_exporter DB 비밀번호를 컨테이너에 넣는다
@@ -53,7 +54,7 @@ data "aws_iam_policy_document" "obs" {
   statement {
     sid       = "AlertsPublish"
     actions   = ["sns:Publish"]
-    resources = [local.alerts_topic_arn]
+    resources = [local.alerts_topic_arn, data.terraform_remote_state.sqs.outputs.admin_alert_topic.arn]
   }
 
   # Grafana CloudWatch 데이터소스(지표만. Logs Insights 는 쓰지 않는다 — 조회한 데이터 양만큼 과금된다).

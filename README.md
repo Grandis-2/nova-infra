@@ -34,7 +34,7 @@ nova는 판매를 시작하자마자 10초 사이에 예약 5,000건이 몰리�
 </picture>
 
 - **요청 경로**: 사용자의 API 요청은 CloudFront와 WAF를 지나 ALB로 들어오고, ECS Fargate의 서비스가 처리합니다. ALB는 CloudFront가 붙인 비밀 헤더가 있는 요청만 받으므로, CloudFront를 우회해서 들어올 수 없습니다.
-- **데이터 계층**: RDS for MySQL과 ElastiCache Valkey는 db 서브넷에 Multi-AZ로 둡니다. 서비스끼리는 SQS 큐 10개로 이벤트를 주고받습니다.
+- **데이터 계층**: RDS for MySQL과 ElastiCache Valkey는 db 서브넷에 Multi-AZ로 둡니다. 서비스끼리는 SQS 큐 10개로 이벤트를 주고받고, Grafana가 판정한 관리자 알림은 SNS를 거쳐 큐 하나(`admin-alert-grafana`)로 member에 넘깁니다.
 - **관측과 배포**: 관측 스택은 앱과 분리된 ECS 클러스터에서, Atlantis는 별도 저장소와 전용 ALB로 운영합니다.
 
 ## 핵심 설계 결정

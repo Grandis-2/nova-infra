@@ -1,18 +1,27 @@
 # 경보 알림 — Grafana → SNS → AWS Chatbot → Slack (monitoring 스택의 알림 주제와 Chatbot 설정을 같이 쓴다).
-# SNS_TOPIC_ARN · AWS_REGION 은 Grafana 컨테이너 환경 변수다. 자격 증명은 SDK 기본 체인(ECS 태스크 역할, sns:Publish)이다.
+# 관리자 알림 — admin_alert_type 라벨이 붙은 규칙(rules.yaml 의 admin-alert 그룹)은 sqs 스택의 관리자 알림 주제 → admin-alert-grafana 큐 → member 로 간다.
+# SNS_TOPIC_ARN · ADMIN_ALERT_TOPIC_ARN · AWS_REGION 은 Grafana 컨테이너 환경 변수다. 자격 증명은 SDK 기본 체인(ECS 태스크 역할, sns:Publish)이다.
 #
 # Chatbot 은 SNS 메시지가 사용자 지정 알림 형식(JSON)일 때만 그대로 보여 준다:
 #   {"version":"1.0","source":"custom","content":{"textType":"client-markdown","title":…,"description":…}}
-# 템플릿이 JSON 을 손으로 만든다. 값에 들어가는 " \ 와 줄바꿈 · 탭은 chatbot.clean 이 바꿔 JSON 이 깨지지 않게 한다.
+# 템플릿이 JSON 을 손으로 만든다. 값에 들어가는 " \ 와 제어 문자(줄바꿈 · 탭 등)는 chatbot.clean 이 바꿔 JSON 이 깨지지 않게 한다.
 apiVersion: 1
 
 templates:
   - orgId: 1
     name: chatbot
     template: |
-      {{ define "chatbot.clean" }}{{ reReplaceAll "[\\r\\n\\t]+" " " (reReplaceAll "[\"\\\\]" "'" .) }}{{ end }}
+      {{ define "chatbot.clean" }}{{ reReplaceAll "[\\x00-\\x1f]+" " " (reReplaceAll "[\"\\\\]" "'" .) }}{{ end }}
       {{ define "chatbot.title" }}{{ if eq .Status "firing" }}[경보]{{ else }}[해소]{{ end }} {{ template "chatbot.clean" .CommonLabels.alertname }}{{ with .CommonLabels.job }} · {{ template "chatbot.clean" . }}{{ end }} ({{ len .Alerts }}건){{ end }}
       {{ define "chatbot.message" }}{"version":"1.0","source":"custom","content":{"textType":"client-markdown","title":"{{ template "chatbot.title" . }}","description":"{{ range .Alerts }}• *{{ template "chatbot.clean" .Labels.alertname }}*{{ with .Labels.job }} `{{ template "chatbot.clean" . }}`{{ end }}{{ with .Annotations.summary }} — {{ template "chatbot.clean" . }}{{ end }}{{ with .Annotations.runbook_url }} <{{ . }}|대응 순서>{{ end }}\n{{ end }}"}}{{ end }}
+  # 관리자 알림 허브(member)가 읽는 메시지. 모양은 be contracts/admin-alert-grafana.md 가 정한다. 라벨 · 주석을 모두 싣는다(값은 주석 metric_*).
+  # 정책이 알림마다 그룹을 나누므로(group_by '...') 한 메시지에 알림은 늘 하나다. 첫 알림만 싣는다.
+  # 알림 템플릿은 환경 변수로 펼치지 않지만 rules.yaml 과 같게 달러 기호를 쓰지 않는다. 그래서 range 의 순번 대신 늘 있는 키(alertname · summary)를 앞에 두고 나머지 앞에 쉼표를 붙인다.
+  - orgId: 1
+    name: admin
+    template: |
+      {{ define "admin.time" }}{{ .UTC.Format "2006-01-02T15:04:05Z07:00" }}{{ end }}
+      {{ define "admin.message" }}{{ with index .Alerts 0 }}{"version":"1","alerts":[{"status":"{{ .Status }}","fingerprint":"{{ .Fingerprint }}","startsAt":"{{ template "admin.time" .StartsAt }}","endsAt":"{{ template "admin.time" .EndsAt }}","labels":{"alertname":"{{ template "chatbot.clean" .Labels.alertname }}"{{ range .Labels.SortedPairs }}{{ if ne .Name "alertname" }},"{{ template "chatbot.clean" .Name }}":"{{ template "chatbot.clean" .Value }}"{{ end }}{{ end }}},"annotations":{"summary":"{{ template "chatbot.clean" .Annotations.summary }}"{{ range .Annotations.SortedPairs }}{{ if ne .Name "summary" }},"{{ template "chatbot.clean" .Name }}":"{{ template "chatbot.clean" .Value }}"{{ end }}{{ end }}}}]}{{ end }}{{ end }}
 
 contactPoints:
   - orgId: 1
@@ -43,6 +52,20 @@ contactPoints:
           subject: '{{ template "chatbot.title" . }}'
           message: '{{ template "chatbot.message" . }}'
 
+  # 해소도 보낸다 — 허브가 해소 알림을 남기고 알림을 닫는다. SNS → SQS 원문 전달이라 subject 는 큐에 남지 않는다
+  - orgId: 1
+    name: admin-alert-sns
+    receivers:
+      - uid: admin-alert-sns
+        type: sns
+        disableResolveMessage: false
+        settings:
+          topic_arn: ${ADMIN_ALERT_TOPIC_ARN}
+          sigv4:
+            region: ${AWS_REGION}
+          subject: admin-alert
+          message: '{{ template "admin.message" . }}'
+
 policies:
   - orgId: 1
     receiver: chatbot-sns
@@ -51,6 +74,23 @@ policies:
     group_interval: 5m
     repeat_interval: 4h
     routes:
+      # 관리자 알림은 허브로 보내고(continue) 아래 경로도 본다. 값만 바뀐 것은 새 알림이 아니라서, 허브가 숫자를 갱신하도록 다시 보낸다.
+      # repeat_interval 이 group_interval 과 같아 재전송은 약 2분마다다(한 번 걸러 보냄).
+      # Datasource* 경보는 허브로 보내지 않는다. admin-alert 그룹은 KeepLast 라 생기지 않지만, 상태를 바꾸면 root(Slack)로 간다
+      - receiver: admin-alert-sns
+        object_matchers:
+          - ["admin_alert_type", "=~", ".+"]
+          - ["alertname", "!~", "Datasource(Error|NoData)"]
+        continue: true
+        group_by: ["..."]
+        group_wait: 10s
+        group_interval: 1m
+        repeat_interval: 1m
+      # 관리자 알림 중 Slack 에도 알릴 것만 severity: critical 을 단다. severity 가 없는 관리자 알림은 허브로만 간다
+      - receiver: chatbot-sns
+        object_matchers:
+          - ["admin_alert_type", "=~", ".+"]
+          - ["severity", "=", "critical"]
       - receiver: chatbot-sns-warning
         object_matchers:
           - ["severity", "=", "warning"]

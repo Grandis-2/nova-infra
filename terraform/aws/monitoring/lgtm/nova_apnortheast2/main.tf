@@ -132,6 +132,8 @@ locals {
 
   # 경보 토픽은 monitoring/cloudwatch 스택이 만든다 (Chatbot → Slack 이 이미 구독)
   alerts_topic_arn = data.aws_sns_topic.alerts.arn
+  # 관리자 알림 주제는 sqs 스택이 만든다 (admin-alert-grafana 큐가 구독하고 member 가 그 큐를 받는다)
+  admin_alert_topic_arn = data.aws_sns_topic.admin_alert.arn
 
   obs_containers = concat(
     [
@@ -282,6 +284,7 @@ locals {
           { name = "PYROSCOPE_URL", value = "http://localhost:${local.obs_ports.pyroscope}" },
           { name = "MIMIR_URL", value = "http://localhost:${local.obs_ports.mimir_http}/prometheus" },
           { name = "SNS_TOPIC_ARN", value = local.alerts_topic_arn },
+          { name = "ADMIN_ALERT_TOPIC_ARN", value = local.admin_alert_topic_arn },
           { name = "AWS_REGION", value = var.aws_region },
         ]
         # 최초 기동 때만 admin 에 쓰인다. 이미 있는 admin 의 비밀번호 교체는 config/README.md
@@ -574,4 +577,8 @@ resource "aws_cloudwatch_metric_alarm" "obs_cpu_credits" {
 
 data "aws_sns_topic" "alerts" {
   name = "${local.name_prefix}-alerts"
+}
+
+data "aws_sns_topic" "admin_alert" {
+  name = "${local.name_prefix}-admin-alert"
 }

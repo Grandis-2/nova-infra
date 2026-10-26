@@ -1,9 +1,10 @@
-# Grafana 관리 경보 규칙. 알림은 notify.yaml(SNS → Chatbot → Slack)로 간다.
+# Grafana 관리 경보 규칙. nova 그룹 등은 notify.yaml(SNS → Chatbot → Slack)로, admin-alert 그룹은 관리자 알림 주제(→ member 허브)로 간다.
 # 질의는 Mimir(PromQL)다. 프런트 경보 둘은 Loki(LogQL)다. 지표 이름 · 라벨은 ../../../README.md "지표" 와 대시보드(grafana/dashboards/**/*.json)와 같다.
-# 트래픽이 없어 질의가 비면(NoData) 정상으로 본다. 질의가 실패하면 Error 상태 경보가 따로 간다.
+# 질의가 비거나(NoData) 실패할 때의 처리는 그룹마다 다르다. nova 그룹은 비면 정상으로 보고 실패하면 Error 상태 경보가 따로 간다. admin-alert 는 그 그룹의 머리 설명을 본다.
 # summary 는 Grafana 템플릿이다. 달러 기호를 쓰지 않고 .Values · .Labels 로 쓴다.
 # .Values 에는 쿼리(A)가 아니라 식(reduce · threshold)만 들어간다. 그래서 A → B(reduce: last) → C(threshold) 로 두고 B 를 찍는다.
-# 이 파일은 프로비저닝 때 환경 변수로 펼쳐진다. 달러 변수는 빈 값이 되고, 두 번 써서 막으면 그대로 남아 템플릿이 깨진다(운영에서 확인).
+# 프로비저닝은 환경 변수를 달러 변수로 펼친다(Grafana 12.4). 라벨 · 제목 · uid · for · keepFiringFor 같은 값 하나짜리 칸은 펼치고, 주석과 질의 model 은 펼치지 않는다.
+# 펼치는 칸에서 달러 변수는 빈 값이 되고 두 번 쓰면 하나로 남는다. 헷갈리지 않게 어느 칸에도 달러 기호를 쓰지 않는다.
 apiVersion: 1
 
 groups:
@@ -749,6 +750,542 @@ groups:
               expression: B
               conditions:
                 - evaluator: {type: gt, params: [0.5]}
+  # 관리자 알림 (NV-825). admin_alert_type 이 붙은 규칙은 notify.yaml 이 관리자 알림 주제(→ admin-alert-grafana 큐 → member 허브)로 보낸다.
+  # 라벨 · 주석 · 메시지 모양은 be contracts/admin-alert-grafana.md 가 정한다. 값은 주석 metric_* 으로 싣는다(허브는 빈 값 · NaN 을 null 로 읽는다).
+  # 허브는 type · 대상마다 알림 인스턴스가 하나라고 본다. 결과에 인스턴스 라벨이 남지 않게 끝을 max · min · sum 이나 by (job) 으로 묶는다.
+  # 해소는 keepFiringFor 만큼 기준 아래로 머문 뒤에 간다. 질의가 실패하면 앞 상태를 둔다(KeepLast) — 실패를 해소로 보내 허브의 알림이 끊기지 않게.
+  # NoData: 게이지 규칙 6종은 데이터가 잠깐 비어도 앞 상태를 둔다(KeepLast) — 해소됐다 새 사건으로 다시 열려 읽음이 풀리지 않게. 지표가 아예 사라지면 '서비스 지표 끊김'이 Slack 으로 간다.
+  #   요청량 기반인 SERVICE_* 2종은 요청이 없으면 정상이다(OK).
+  # 데이터소스 질의가 하나라도 비면 평가 전체가 NoData 가 된다. 그래서 라벨 없는 규칙의 값 주석용 질의는 or vector(NaN) 으로 끝낸다(허브는 NaN 을 null 로 읽는다).
+  # Slack 에도 보내는 것만 severity: critical 을 단다. 지표는 60초마다 들어오므로 비율 창은 샘플이 둘 들어가는 2분이고, 2분 증가량은 그 둘로 외삽한 값이다.
+  - orgId: 1
+    name: admin-alert
+    folder: nova
+    interval: 1m
+    rules:
+      - uid: admin-register-failed
+        title: "관리자 알림: 재처리가 필요한 예약"
+        condition: C
+        for: 0s
+        keepFiringFor: 1m
+        noDataState: KeepLast
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: REGISTER_FAILED
+          admin_alert_target_kind: NONE
+        annotations:
+          summary: "외부 예약 등록을 포기한 작업이 있다 — 관리자 재처리가 필요하다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_deadLetters: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 게이지는 태스크마다 같은 값이라 max 로 묶는다(nova-preorder-dead-letter 와 같은 지표)
+              expr: "max(preorder_sync_dead_letter{jobType=\"REGISTER\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+      - uid: admin-event-dlq-waiting
+        title: "관리자 알림: 예약에 반영 안 된 이벤트"
+        condition: C
+        for: 0s
+        keepFiringFor: 1m
+        noDataState: KeepLast
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: EVENT_DLQ_WAITING
+          admin_alert_target_kind: NONE
+        annotations:
+          summary: "preorder 이벤트 DLQ 에 처리를 기다리는 메시지가 있다 — 결제 · 만료가 예약에 반영되지 않았다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_waiting: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+          metric_oldestAgeSeconds: '{{ with .Values.E }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              expr: "max(preorder_dlq_waiting)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+          - refId: D
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: D
+              instant: true
+              expr: "max(preorder_dlq_waiting_oldest_age_seconds) or vector(NaN)"
+          - refId: E
+            datasourceUid: __expr__
+            model:
+              refId: E
+              type: reduce
+              reducer: last
+              expression: D
+      - uid: admin-queue-braking
+        title: "관리자 알림: 서버 부하로 입장을 줄이는 중"
+        condition: C
+        for: 0s
+        keepFiringFor: 1m
+        noDataState: KeepLast
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: QUEUE_BRAKING
+          admin_alert_target_kind: NONE
+          severity: critical
+        annotations:
+          summary: "waitingroom 이 preorder 의 나쁜 응답 때문에 입장 속도에 브레이크를 걸었다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_brakeFactor: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+          metric_preorderBadRatio: '{{ with .Values.E }}{{ .Value }}{{ end }}'
+          metric_preorderP95Seconds: '{{ with .Values.G }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 판정 재료가 없으면 NaN 이라 비교가 거짓이다. 원인 값은 브레이크 입력과 같은 waitingroom → preorder 호출 지표다
+              # preorderBadRatio 는 5xx · 오류(상태 코드 없음 = 연결 오류)만 센다. 브레이크가 함께 세는 2초 넘는 느린 응답은 preorderP95Seconds 로 본다
+              expr: "min(waitingroom_brake_factor)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+          - refId: D
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: D
+              instant: true
+              expr: "(sum(rate(http_client_request_duration_seconds_count{job=\"nova/waitingroom\", server_address=~\"preorder.*\", http_response_status_code=~\"5..|\"}[2m])) / sum(rate(http_client_request_duration_seconds_count{job=\"nova/waitingroom\", server_address=~\"preorder.*\"}[2m]))) or vector(NaN)"
+          - refId: E
+            datasourceUid: __expr__
+            model:
+              refId: E
+              type: reduce
+              reducer: last
+              expression: D
+          - refId: F
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: F
+              instant: true
+              expr: "histogram_quantile(0.95, sum by (le) (rate(http_client_request_duration_seconds_bucket{job=\"nova/waitingroom\", server_address=~\"preorder.*\"}[2m]))) or vector(NaN)"
+          - refId: G
+            datasourceUid: __expr__
+            model:
+              refId: G
+              type: reduce
+              reducer: last
+              expression: F
+      - uid: admin-queue-server-unhealthy
+        title: "관리자 알림: 대기열 서버 점검 필요"
+        condition: C
+        for: 1m
+        keepFiringFor: 1m
+        noDataState: KeepLast
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: QUEUE_SERVER_UNHEALTHY
+          admin_alert_target_kind: NONE
+        annotations:
+          summary: "대기열의 판정 재료가 오래됐거나 리더 · 게이트웨이가 없다 — 새로 오는 사람을 모두 줄 세운다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_snapshotAgeSeconds: '{{ with .Values.E }}{{ .Value }}{{ end }}'
+          metric_leaders: '{{ with .Values.G }}{{ .Value }}{{ end }}'
+          metric_gateways: '{{ with .Values.I }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 재료가 5초 넘게 묵음 · 재료 없음(음수) · 리더 없음 · 게이트웨이 0 중 하나면 1. 늘 0 이나 1 이다
+              # 재료 나이 · 게이트웨이 항은 지표가 없으면 0(그 항으로는 판정하지 않음), 리더 항은 1 이다 — waitingroom 지표가 5분(조회 lookback) 넘게 없으면 서비스가 내려간 것이라 리더 없음으로 본다
+              # 5분 넘게 이어질 때의 긴급 승격은 허브가 startsAt 으로 한다
+              expr: "clamp_max(((max(waitingroom_snapshot_age_seconds) > bool 5) or vector(0)) + ((max(waitingroom_snapshot_age_seconds) < bool 0) or vector(0)) + ((sum(waitingroom_leader) == bool 0) or vector(1)) + ((max(waitingroom_gateways) == bool 0) or vector(0)), 1)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+          - refId: D
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: D
+              instant: true
+              expr: "max(waitingroom_snapshot_age_seconds) or vector(NaN)"
+          - refId: E
+            datasourceUid: __expr__
+            model:
+              refId: E
+              type: reduce
+              reducer: last
+              expression: D
+          - refId: F
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: F
+              instant: true
+              expr: "sum(waitingroom_leader) or vector(NaN)"
+          - refId: G
+            datasourceUid: __expr__
+            model:
+              refId: G
+              type: reduce
+              reducer: last
+              expression: F
+          - refId: H
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: H
+              instant: true
+              expr: "max(waitingroom_gateways) or vector(NaN)"
+          - refId: I
+            datasourceUid: __expr__
+            model:
+              refId: I
+              type: reduce
+              reducer: last
+              expression: H
+      - uid: admin-external-system-down
+        title: "관리자 알림: 외부 예약 시스템 응답 실패"
+        condition: C
+        for: 0s
+        keepFiringFor: 1m
+        noDataState: KeepLast
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: EXTERNAL_SYSTEM_DOWN
+          admin_alert_target_kind: NONE
+        annotations:
+          summary: "worker 의 외부 mock 차단기가 열렸다 — 외부 예약 등록 · 취소가 잠시 멈춘다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_openWorkers: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+          metric_mockFailureRatio: '{{ with .Values.E }}{{ .Value }}{{ end }}'
+          metric_mockCalls: '{{ with .Values.G }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 차단기는 worker 마다 따로 판단한다. 열림 · 반쯤 열림인 worker 수다. 닫혀야(회복) 0 이 된다
+              expr: "sum(resilience4j_circuitbreaker_state{job=\"nova/worker\", name=\"mock\", state=~\"open|half_open|forced_open\"})"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+          - refId: D
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: D
+              instant: true
+              expr: "sum(rate(worker_mock_calls_total{verdict=~\"TRANSIENT|UNKNOWN\"}[2m])) / sum(rate(worker_mock_calls_total[2m])) or vector(NaN)"
+          - refId: E
+            datasourceUid: __expr__
+            model:
+              refId: E
+              type: reduce
+              reducer: last
+              expression: D
+          - refId: F
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: F
+              instant: true
+              expr: "sum(increase(worker_mock_calls_total[2m])) or vector(NaN)"
+          - refId: G
+            datasourceUid: __expr__
+            model:
+              refId: G
+              type: reduce
+              reducer: last
+              expression: F
+      - uid: admin-service-incident
+        title: "관리자 알림: 서비스 장애"
+        condition: C
+        for: 0s
+        keepFiringFor: 5m
+        missing_series_evals_to_resolve: 5
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: SERVICE_INCIDENT
+          admin_alert_target_kind: SERVICE
+          admin_alert_target_id: '{{ reReplaceAll "^nova/" "" .Labels.job }}'
+        annotations:
+          summary: "서비스가 5분 내내 5xx 를 5% 넘게 냈거나 결제 · 예약 접수에서 5xx 를 냈다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_errorRatio: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+          metric_errors: '{{ with .Values.G }}{{ .Value }}{{ end }}'
+          metric_requests: '{{ with .Values.I }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 900, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 오류 급증(아래 규칙과 같은 식)이 1분 간격 다섯 점 모두 있고 모두 5% 를 넘었거나(하한 아래로 빠진 분이 있으면 판정하지 않는다),
+              # 결제 승인 · 예약 접수 경로가 2분에 받은 요청(5xx 만이 아니라 전체, 외삽값)이 5건 이상이고 그중 5xx 가 5% 를 넘었다
+              # 울리던 job 의 시계열이 빠질 때: 결과 전체가 비면 NoData(OK)가 되고 해소는 keepFiringFor 5m 이 미룬다.
+              # 다른 job 이 남아 결과가 비지 않으면 빠진 job 은 missing_series_evals_to_resolve(5번 평가) 뒤에 풀린다
+              # metric_errorRatio 는 울린 값(B)이다 — 1분 간격 다섯 점의 2분 비율 중 최솟값, 또는 핵심 경로의 2분 비율. errors · requests 는 5분 증가량이다
+              expr: "(min_over_time((sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[2m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m])) and on (job) sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m])) >= 0.1666)[5m:1m]) > 0.05 and on (job) count_over_time((sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[2m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m])) and on (job) sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m])) >= 0.1666)[5m:1m]) >= 5) or (sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_request_method=\"POST\", http_route=~\"/api/v1/preorders|/api/v1/orders/.+/payment-attempts/.+/confirm|/api/v1/draws/.+/entries/me/payment-attempts/.+/confirm\", http_response_status_code=~\"5..\"}[2m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_request_method=\"POST\", http_route=~\"/api/v1/preorders|/api/v1/orders/.+/payment-attempts/.+/confirm|/api/v1/draws/.+/entries/me/payment-attempts/.+/confirm\"}[2m])) > 0.05 and on (job) sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_request_method=\"POST\", http_route=~\"/api/v1/preorders|/api/v1/orders/.+/payment-attempts/.+/confirm|/api/v1/draws/.+/entries/me/payment-attempts/.+/confirm\"}[2m])) >= 5)"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.05]}
+          - refId: F
+            datasourceUid: mimir
+            relativeTimeRange: {from: 900, to: 0}
+            model:
+              refId: F
+              instant: true
+              expr: "sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[5m]))"
+          - refId: G
+            datasourceUid: __expr__
+            model:
+              refId: G
+              type: reduce
+              reducer: last
+              expression: F
+          - refId: H
+            datasourceUid: mimir
+            relativeTimeRange: {from: 900, to: 0}
+            model:
+              refId: H
+              instant: true
+              expr: "sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[5m]))"
+          - refId: I
+            datasourceUid: __expr__
+            model:
+              refId: I
+              type: reduce
+              reducer: last
+              expression: H
+      - uid: admin-service-error-spike
+        title: "관리자 알림: 서비스 오류 급증"
+        condition: C
+        for: 0s
+        keepFiringFor: 1m
+        noDataState: OK
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: SERVICE_ERROR_SPIKE
+          admin_alert_target_kind: SERVICE
+          admin_alert_target_id: '{{ reReplaceAll "^nova/" "" .Labels.job }}'
+        annotations:
+          summary: "서비스의 5xx 비율이 2분 동안 5% 를 넘었다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_errorRatio: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+          metric_errors: '{{ with .Values.G }}{{ .Value }}{{ end }}'
+          metric_requests: '{{ with .Values.I }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 분당 10건(초당 0.1666) 넘게 받는 서비스만 본다(slo.yaml 의 하한과 같다). 몇 건의 5xx 로 울리지 않게
+              expr: "sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[2m])) / sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m])) and on (job) sum by (job) (rate(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m])) >= 0.1666"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.05]}
+          - refId: F
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: F
+              instant: true
+              expr: "sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_response_status_code=~\"5..\"}[2m]))"
+          - refId: G
+            datasourceUid: __expr__
+            model:
+              refId: G
+              type: reduce
+              reducer: last
+              expression: F
+          - refId: H
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: H
+              instant: true
+              expr: "sum by (job) (increase(http_server_request_duration_seconds_count{service_namespace=\"nova\", http_route!~\"/actuator.*\"}[2m]))"
+          - refId: I
+            datasourceUid: __expr__
+            model:
+              refId: I
+              type: reduce
+              reducer: last
+              expression: H
+      - uid: admin-shipping-backlog
+        title: "관리자 알림: 배송 처리 대기 쌓임"
+        condition: C
+        for: 1m
+        keepFiringFor: 1m
+        noDataState: KeepLast
+        execErrState: KeepLast
+        labels:
+          admin_alert_type: SHIPPING_BACKLOG
+          admin_alert_target_kind: NONE
+        annotations:
+          summary: "상품 준비 · 출고 대기 주문이 50건 이상이다"
+          runbook_url: "https://github.com/Grandis-2/nova-infra/blob/main/terraform/aws/monitoring/lgtm/nova_apnortheast2/config/README.md#관리자-알림"
+          metric_total: '{{ with .Values.B }}{{ .Value }}{{ end }}'
+          metric_preparingItems: '{{ with .Values.E }}{{ .Value }}{{ end }}'
+          metric_readyToShip: '{{ with .Values.G }}{{ .Value }}{{ end }}'
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              instant: true
+              # 인스턴스마다 같은 값이라 상태별 max 를 더한다(contracts/admin-alert-events.md). 첫 갱신 전 NaN 은 비교가 거짓이다
+              expr: "sum(max by (status) (order_status_count{status=~\"PREPARING_ITEMS|READY_TO_SHIP\"}))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              reducer: last
+              expression: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [49]}
+          - refId: D
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: D
+              instant: true
+              expr: "max(order_status_count{status=\"PREPARING_ITEMS\"}) or vector(NaN)"
+          - refId: E
+            datasourceUid: __expr__
+            model:
+              refId: E
+              type: reduce
+              reducer: last
+              expression: D
+          - refId: F
+            datasourceUid: mimir
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: F
+              instant: true
+              expr: "max(order_status_count{status=\"READY_TO_SHIP\"}) or vector(NaN)"
+          - refId: G
+            datasourceUid: __expr__
+            model:
+              refId: G
+              type: reduce
+              reducer: last
+              expression: F
 
 # 파일에서 규칙을 빼도 Grafana 는 지우지 않는다. 지울 규칙은 여기 적는다.
 #   nova-http-5xx(5분 5xx 5%) — SLO 가용성 소진 속도 경보(slo.yaml)로 대신한다(NV-541)
