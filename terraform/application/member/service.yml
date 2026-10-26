@@ -6,6 +6,10 @@ memory: 2048
 port: 8080
 management_port: 9080          # 앱 기본값(MemberDefaults)과 맞춘다
 deployment: blue_green
+# SQS 소비기 3개(notification · admin-alert · admin-alert-grafana)가 롱 폴링(20초)을 하나씩 끝내며 멈춘다. 최악 3 × 20 = 60초에 웹 서버 정상 종료가 이어져
+# 기본 30초 · 60초로는 모자란다(NV-824 실측 약 53초). ALB 비우기 30초를 더해 태스크 하나가 멈추는 데 최대 약 2분이다. Blue/Green 은 bake 뒤 옛 태스크를 내려 배포 시간에는 영향이 없다.
+# 처리 중 메시지는 멱등이라 강제 종료돼도 가시성 시간 뒤 다시 받아 끝난다. Fargate 상한은 120초다
+stop_timeout: 90
 
 scaling:
   desired: 1
@@ -23,15 +27,18 @@ routes:
   - priority: 90
     paths: ["/api/v1/auth*", "/api/v1/me*", "/api/v1/session*", "/api/v1/notifications*"]
   - priority: 91
-    paths: ["/api/v1/admin/members*", "/api/v1/admin/session*", "/.well-known/*"]
+    paths: ["/api/v1/admin/members*", "/api/v1/admin/session*", "/api/v1/admin/notifications*", "/.well-known/*"]
 
 jwt: sign                       # JWKS 를 게시한다. verify 인 서비스는 member 접근이 자동으로 열린다
+calls:
+  spring.http.serviceclient.catalog.base-url: catalog   # 관리자 알림의 상품 이름
+  spring.http.serviceclient.order.base-url: order       # 관리자 알림의 드로우 회차 이름
 db: shop
 redis: main                     # 리프레시 폐기 표식, 관리자 로그인 시도 수
 
 queues:
-  consume: [notification, admin-alert]    # preorder · order 가 보낸 회원 알림 · 관리자 알림을 저장한다
-  dlq_send: [notification, admin-alert]   # 계약 위반 메시지를 재시도 없이 각 큐의 DLQ 에 바로 넣는다
+  consume: [notification, admin-alert, admin-alert-grafana]    # preorder · order 가 보낸 회원 알림 · 관리자 알림, Grafana 경보(SNS 경유)를 저장한다
+  dlq_send: [notification, admin-alert, admin-alert-grafana]   # 계약 위반 메시지를 재시도 없이 각 큐의 DLQ 에 바로 넣는다
 
 # Terraform 이 만들어 넣는다 (사람이 값을 다루지 않는다). 버전을 올릴 때만 다시 만든다 (secretsmanager 의 secret_versions)
 # 관리자 비밀번호 원문은 nova-prod/ops/member/admin-password (관리자만 조회)

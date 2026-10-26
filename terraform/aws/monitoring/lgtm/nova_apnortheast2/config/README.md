@@ -267,7 +267,7 @@ Grafana 가 1분마다 평가해서 SNS, AWS Chatbot 을 거쳐 Slack 으로 보
 | 응답 시간 | 95% 가 0.5초 이내 | 5% (0.5초는 히스토그램 버킷 경계라 근사가 없다) |
 
 - 헬스체크(`/actuator`)는 뺀다.
-- 응답 시간을 보는 패널(0.5초 초과, 느린 요청 표, 시간 구성, 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 응답 시간 SLO 도 분자와 분모 모두에서 이 연결을 뺀다. 요청 수와 5xx 에는 남겨 둔다. API 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
+- 응답 시간을 보는 패널(0.5초 초과, 느린 요청 표, 시간 구성, 엣지 응답 시간)에서는 실시간 알림 연결(`GET /api/v1/notifications/stream` 과 관리자 알림의 `GET /api/v1/admin/notifications/stream`, SSE)도 뺀다. 연결 하나가 최대 30분 동안 열려 있어서 그대로 두면 모두 느린 요청이 된다. 응답 시간 SLO 는 0.5초 넘은 요청 수(`nova:http_slow:*`)에서 이 연결을 뺀다. 분모인 요청 수(`nova:http_requests:*`)와 5xx 에는 남겨 둔다. API 상세는 경로 하나를 골라 보는 화면이라 빼지 않는다. 게이트웨이의 tail sampling 에서도 빼지 않아서 연결마다 트레이스 하나가 1초 초과로 남는다.
 - **기록 규칙**(`slo.yaml` 의 `nova-slo-rec`): 5분 · 30분 · 1시간 · 6시간 창마다 요청 · 5xx · 0.5초 초과 요청의 초당 수를 1분마다 미리 계산해 Mimir 에 기록한다(`nova:http_requests:rate1h` 등). Grafana 가 관리하는 기록 규칙이다. 경보와 SLO 대시보드가 이 값을 읽으므로 긴 창을 매번 다시 계산하지 않는다.
 - **소진 속도 경보**: 예산을 평소 속도의 몇 배로 쓰는지 본다. 긴 창과 짧은 창이 모두 기준을 넘어야 울린다. 문제가 끝나면 짧은 창이 먼저 기준 아래로 내려가므로 경보가 빨리 풀린다.
 
@@ -324,6 +324,7 @@ flowchart LR
 - ECS 서비스 상태도 CloudWatch 로 감시한다(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/`). 서비스별 "태스크 0개" 경보(`AWS/ECS` `LiveTaskCount` < 1, 5분)와 ECS 이벤트 경보(`terraform/aws/monitoring/cloudwatch/nova_apnortheast2/ecs_events.tf`)가 있다. 증설 경보(순간 폭주 `<서비스>-burst-*`: 증설을 시작할 때만 알림, 증설 한계 `<서비스>-at-max`: 최대 대수에서 CPU 가 3분 높음)는 기준값인 max 와 함께 바뀌도록 ecs 모듈(`terraform/aws/ecs/_modules/service/burst.tf`)에 있다. 서비스가 직접 돌려준 5xx(`<서비스>-5xx`: 1분에 50건 이상이고 요청의 2% 초과, 최근 2분 중 한 번)도 대상 그룹이 있는 ecs 모듈(`alb.tf`)에 있어, 어느 서비스가 사용자에게 오류를 냈는지 이름으로 온다. 계정 전체 `alb-5xx` 는 ALB 가 직접 만든 5xx(대상 없음 · 시간 초과)만 센다.
   ECS 이벤트 경보는 배포 실패(되돌림), 태스크 배치 · 설정 실패, 태스크 비정상 종료를 알린다. 비정상 종료는 필수 컨테이너 종료 · 기동 실패 · 헬스체크 실패이고, 배포 · 스케일 인 · Spot 회수는 뺀다.
 - Chatbot 은 SNS 메시지가 사용자 지정 알림 JSON 형식이어야 내용을 그대로 보여 준다. `notify.yaml` 의 템플릿이 이 JSON 을 만든다.
+- 관리자 알림(`rules.yaml` 의 `admin-alert` 그룹, NV-825)은 관리자 화면의 알림창으로 간다. Slack 에는 QUEUE_BRAKING 만 같이 간다. 아래 [관리자 알림](#관리자-알림)에 있다.
 
 </details>
 
@@ -515,6 +516,7 @@ Tempo · Mimir 의 링은 메모리에 둔다. Mimir 3 는 memberlist 를 켜므
 | loki · tempo · mimir | `*_S3_ENDPOINT` · `*_FORCE_PATH_STYLE` · `*_INSECURE` 등 | 운영에서는 넘기지 않는다. MinIO 같은 S3 호환 저장소를 쓸 때 넘긴다 |
 | grafana | `LOKI_URL` · `TEMPO_URL` · `MIMIR_URL` · `PYROSCOPE_URL` | `http://localhost:3100` · `http://localhost:3200` · `http://localhost:9009/prometheus` · `http://localhost:4040` |
 | grafana | `SNS_TOPIC_ARN` · `AWS_REGION` | 알림 주제와 리전. 비어 있으면 연락처 검증에 실패해 Grafana 가 뜨지 않는다. 태스크 역할에 `sns:Publish` 가 있어야 한다 |
+| grafana | `ADMIN_ALERT_TOPIC_ARN` | 관리자 알림 주제(sqs 스택 `nova-prod-admin-alert`). 비면 Grafana 가 뜨지 않는 것은 위와 같다 |
 | grafana | `GF_SECURITY_ADMIN_PASSWORD` | Secrets Manager `nova-prod/ops/grafana/admin-password` |
 
 버킷 · 보존 기간 · 엔드포인트는 환경 변수로 받는다(`-config.expand-env=true`). 이미지는 태그와 다이제스트로 고정한다.
@@ -739,3 +741,28 @@ MySQL 대시보드의 계정별 연결로 어느 서비스가 연결을 많이 �
 ### MySQL 오래 도는 쿼리
 
 MySQL 대시보드의 쿼리 상태별 스레드 · 상위 SQL 로 오래 실행 중인 쿼리를 찾는다. 잠금 대기라면 잠금 패널을 본다.
+
+### 관리자 알림
+
+`rules.yaml` 의 `admin-alert` 그룹이다. 관리자 화면의 알림창(관리자용 · 개발자용 탭)에 띄울 서버 상태를 판정한다. 알림은 Grafana → SNS `nova-prod-admin-alert` → SQS `admin-alert-grafana` → member(관리자 알림 허브)로 간다. 받는 사람 · 심각도 · 묶음은 허브가 `admin_alert_type` 으로 정하고, 메시지 모양은 be `contracts/admin-alert-grafana.md` 에 있다. Slack 에는 `severity: critical` 이 붙은 QUEUE_BRAKING 만 같이 간다.
+
+| type | 조건 | 지속 · 해소 유지 |
+|---|---|---|
+| REGISTER_FAILED | 포기한 외부 예약 등록 `preorder_sync_dead_letter{jobType="REGISTER"}` > 0 | 0 · 1분 |
+| EVENT_DLQ_WAITING | 이벤트 DLQ 대기 `preorder_dlq_waiting` > 0 | 0 · 1분 |
+| QUEUE_BRAKING | 브레이크 배율 `waitingroom_brake_factor` < 1 (Slack 에도 보냄) | 0 · 1분 |
+| QUEUE_SERVER_UNHEALTHY | 판정 재료가 5초 넘게 묵음 · 재료 없음(나이가 음수) · 리더 없음 · 게이트웨이 0 중 하나. waitingroom 지표가 5분 넘게 없으면 리더 없음으로 본다(서비스가 내려간 경우) | 1분 · 1분 |
+| EXTERNAL_SYSTEM_DOWN | worker 의 mock 차단기가 열림 · 반쯤 열림 | 0 · 1분 |
+| SERVICE_INCIDENT | 아래 오류 급증이 1분 간격 다섯 점 모두 5% 초과, 또는 결제 승인 · 예약 접수 경로가 2분에 받은 요청 5건 이상이고 그중 5xx 5% 초과 | 0 · 5분 |
+| SERVICE_ERROR_SPIKE | 서비스별 5xx 비율 2분 > 5% (분당 10건 이상 받는 서비스만) | 0 · 1분 |
+| SHIPPING_BACKLOG | 상품 준비 + 출고 대기 주문 `order_status_count` ≥ 50 | 1분 · 1분 |
+
+- 허브로는 값이 바뀌지 않아도 다시 보낸다. `repeat_interval` 이 `group_interval`(1분)과 같아 실제로는 약 2분마다다(한 번 걸러 보냄).
+- 5xx 고정 기준 경보를 Slack 에 두지 않는 결정(위 "경보 규칙 전체")은 그대로다. SERVICE_INCIDENT · SERVICE_ERROR_SPIKE 는 알림창에만 간다.
+- SERVICE_INCIDENT 의 첫 갈래는 분당 10건 하한 아래로 빠진 분이 하나라도 있으면 판정하지 않는다. 남은 한두 분만 보고 5분 장애로 울리지 않게 하려는 것이다. 오류 때문에 트래픽이 하한 아래로 떨어지는 장애는 SERVICE_ERROR_SPIKE 와 핵심 경로 갈래가 잡는다.
+- 핵심 경로 갈래의 "5건" 은 5xx 수가 아니라 그 경로가 받은 전체 요청 수다. 2분 증가량(이 "5건" 과 SERVICE_ERROR_SPIKE 의 `metric_errors` · `metric_requests`)은 60초 샘플 둘로 외삽한 값이라 정수가 아닐 수 있다.
+- SERVICE_INCIDENT 의 `metric_errorRatio` 는 울린 값이다. 1분 간격 다섯 점의 2분 비율 중 최솟값, 또는 핵심 경로의 2분 비율이다. `metric_errors` · `metric_requests` 는 5분 증가량이다.
+- 질의가 실패하면 앞 상태를 둔다(`execErrState: KeepLast`). 실패를 해소로 보내면 허브의 알림이 끊긴다. 게이지 규칙 6종(SERVICE_* 를 뺀 전부)은 데이터가 잠깐 비어도 앞 상태를 둔다(`noDataState: KeepLast`). 요청량 기반인 SERVICE_* 2종은 요청이 없으면 정상이다(`OK`). 해소됐다 새 사건으로 다시 열려 읽음이 풀리지 않게 하려는 것이다. 지표가 아예 사라지면 서비스 지표 끊김 경보가 Slack 으로 간다. 데이터소스 질의가 하나라도 비면 평가 전체가 NoData 가 되므로, 값을 싣는 보조 질의는 `or vector(NaN)` 으로 끝낸다(허브는 null 로 읽는다).
+- QUEUE_BRAKING 의 `metric_preorderBadRatio` 는 5xx · 오류(연결 오류)만 센다. 브레이크가 함께 세는 2초 넘는 느린 응답은 `metric_preorderP95Seconds` 로 본다.
+- 브레이크가 걸리면 오픈 상황판의 "접수 전달 응답 (waitingroom → preorder, 분당)" 패널에서 상태 코드 · 오류를 보고, preorder 서비스 상세에서 원인을 찾는다. 브레이크는 나쁜 응답 비율이 내려가면 스스로 풀린다.
+- Grafana 화면에서 `admin-alert-sns` 연락처의 테스트를 누르면 계약에 맞지 않는 메시지가 가서 허브가 DLQ 로 보낸다(DLQ 경보가 울린다).

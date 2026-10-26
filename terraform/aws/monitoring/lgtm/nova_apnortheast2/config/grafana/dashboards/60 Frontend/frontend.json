@@ -428,7 +428,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" | unwrap event_data_duration_ns | __error__=\"\" [$__range]) by () / 1e9",
+          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1(/admin)?/notifications/stream([?].*)?\" | unwrap event_data_duration_ns | __error__=\"\" [$__range]) by () / 1e9",
           "legendFormat": "",
           "queryType": "instant",
           "instant": true,
@@ -1064,7 +1064,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" | unwrap event_data_duration_ns | __error__=\"\" [$__auto]) by () / 1e9",
+          "expr": "quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1(/admin)?/notifications/stream([?].*)?\" | unwrap event_data_duration_ns | __error__=\"\" [$__auto]) by () / 1e9",
           "legendFormat": "브라우저"
         },
         {
@@ -1073,7 +1073,7 @@
             "uid": "mimir"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_route!=\"/api/v1/notifications/stream\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_namespace=\"nova\", http_route!~\"/actuator.*\", http_route!~\"/api/v1(/admin)?/notifications/stream\"}[$__rate_interval])))",
           "legendFormat": "서버"
         }
       ],
@@ -1178,7 +1178,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "topk(15, quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" | unwrap event_data_duration_ns | __error__=\"\" [$__range]) by (event_data_http_request_method, event_data_url_full) / 1e9)",
+          "expr": "topk(15, quantile_over_time(0.95, {service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1(/admin)?/notifications/stream([?].*)?\" | unwrap event_data_duration_ns | __error__=\"\" [$__range]) by (event_data_http_request_method, event_data_url_full) / 1e9)",
           "legendFormat": "",
           "queryType": "instant",
           "instant": true,
@@ -1190,7 +1190,7 @@
             "uid": "loki"
           },
           "refId": "B",
-          "expr": "sum by (event_data_http_request_method, event_data_url_full) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1/notifications/stream\" [$__range]))",
+          "expr": "sum by (event_data_http_request_method, event_data_url_full) (count_over_time({service_name=\"nova-web\"} | kind=\"event\" |= \"event_name=faro.tracing.fetch\" | logfmt | event_data_url_full !~ \".*/api/v1(/admin)?/notifications/stream([?].*)?\" [$__range]))",
           "legendFormat": "",
           "queryType": "instant",
           "instant": true,

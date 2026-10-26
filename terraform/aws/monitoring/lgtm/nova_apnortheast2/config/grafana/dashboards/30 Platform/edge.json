@@ -717,7 +717,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "quantile_over_time(0.5, {service_name=\"cloudfront\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "expr": "quantile_over_time(0.5, {service_name=\"cloudfront\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
           "legendFormat": "p50"
         },
         {
@@ -726,7 +726,7 @@
             "uid": "loki"
           },
           "refId": "B",
-          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
           "legendFormat": "p95"
         },
         {
@@ -735,7 +735,7 @@
             "uid": "loki"
           },
           "refId": "C",
-          "expr": "quantile_over_time(0.99, {service_name=\"cloudfront\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "expr": "quantile_over_time(0.99, {service_name=\"cloudfront\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
           "legendFormat": "p99"
         }
       ],
@@ -784,7 +784,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by ()",
           "legendFormat": "CloudFront 전체"
         },
         {
@@ -793,7 +793,7 @@
             "uid": "loki"
           },
           "refId": "B",
-          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_cloudfront_time_to_first_byte | __error__=\"\" [$__auto]) by ()",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_cloudfront_time_to_first_byte | __error__=\"\" [$__auto]) by ()",
           "legendFormat": "CloudFront 첫 바이트"
         },
         {
@@ -802,7 +802,7 @@
             "uid": "loki"
           },
           "refId": "C",
-          "expr": "quantile_over_time(0.95, {service_name=\"alb\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_alb_target_processing_time | __error__=\"\" [$__auto]) by ()",
+          "expr": "quantile_over_time(0.95, {service_name=\"alb\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_alb_target_processing_time | __error__=\"\" [$__auto]) by ()",
           "legendFormat": "앱 처리 (ALB 대상)"
         }
       ],
@@ -903,7 +903,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path != \"/api/v1/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by (aws_cloudfront_edge_location)",
+          "expr": "quantile_over_time(0.95, {service_name=\"cloudfront\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | unwrap aws_cloudfront_time_taken | __error__=\"\" [$__auto]) by (aws_cloudfront_edge_location)",
           "legendFormat": "{{aws_cloudfront_edge_location}}"
         }
       ],
@@ -937,7 +937,7 @@
             "uid": "loki"
           },
           "refId": "A",
-          "expr": "{service_namespace=\"edge\"} | url_path != \"/api/v1/notifications/stream\" | aws_cloudfront_time_taken > 1 or aws_alb_target_processing_time > 1",
+          "expr": "{service_namespace=\"edge\"} | url_path !~ \"/api/v1(/admin)?/notifications/stream\" | aws_cloudfront_time_taken > 1 or aws_alb_target_processing_time > 1",
           "legendFormat": ""
         }
       ],

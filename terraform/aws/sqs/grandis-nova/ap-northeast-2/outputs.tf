@@ -18,3 +18,11 @@ output "scheduler_dlq" {
     name = aws_sqs_queue.scheduler_dlq.name
   }
 }
+
+output "admin_alert_topic" {
+  description = "관리자 알림 주제. Grafana 가 게시하고 admin-alert-grafana 큐가 구독한다"
+  value = {
+    arn  = aws_sns_topic.admin_alert.arn
+    name = aws_sns_topic.admin_alert.name
+  }
+}
