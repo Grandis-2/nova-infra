@@ -124,6 +124,10 @@ limits:
   otel_metric_suffixes_enabled: true
   # OTLP 리소스 속성 중 대시보드가 거르는 것만 시계열 라벨로 올린다(나머지는 target_info 에만 남는다)
   promote_otel_resource_attributes: "service.namespace,deployment.environment"
+  # OTLP 누적 지표의 시작 시각에 0 샘플을 넣는다. 부하 도중 처음 생긴 시계열(처음 받는 경로 · 새 태스크)은 첫 값에 이미
+  # 수천 건이 들어 있는데, rate() · increase() 는 시계열의 첫 값을 빼서 그 건수가 대시보드에서 통째로 사라졌다(부하 시험 10-22).
+  # Java SDK(1.66) 는 시작 시각을 그 시계열이 처음 기록된 시각으로 보내고, Mimir 는 시작 시각이 샘플보다 5분 넘게 이르면 넣지 않는다
+  otel_created_timestamp_zero_ingestion_enabled: true
   # 쿼리 샤딩을 끈다. 켜면 쿼리 하나를 최대 16개로 쪼개 대기열에 넣는데, 한 대 · querier 8개에서는 빨라지지 않고
   # 대기열만 그만큼 찬다(위 query_scheduler 한도)
   query_sharding_total_shards: 0
