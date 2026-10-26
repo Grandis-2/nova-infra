@@ -86,6 +86,8 @@ nova:
     # 받지 못했다(부하 시험 10-26 rush) — 몰림이 오픈 직후 10초에 들어온다고 보고 1대에 1,000명으로 둔다
     waitingroom:
       visitors-per-task: 1000
+      # 예상 방문자 수를 넣지 않은 회차도 오픈 때 이 대수까지 올린다. waitingroom service.yml 의 min 이상 · max 이하
+      surge: 5
   # 태스크 하나가 버티는 초당 접수 수(공유 Redis 하트비트로 waitingroom 이 읽는다). 임시값 — NV-761 실측 뒤 바꾼다
   capacity:
     heartbeat:
